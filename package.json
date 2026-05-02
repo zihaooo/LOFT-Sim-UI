@@ -1,0 +1,25 @@
+{
+  "name": "loft-sim-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "stats.js": "^0.17.0",
+    "three": "^0.180.0",
+    "tweakpane": "^4.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/stats.js": "^0.17.4",
+    "@types/three": "^0.184.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  }
+}
