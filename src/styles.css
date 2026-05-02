@@ -31,16 +31,14 @@ select {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  position: relative;
   background: #dce7ef;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .scene-shell {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
 .scene-host {
@@ -60,14 +58,20 @@ select {
 }
 
 .control-panel {
-  position: relative;
+  position: absolute;
+  top: 16px;
+  right: 16px;
   z-index: 3;
+  width: 320px;
   min-width: 0;
+  max-height: calc(100vh - 32px);
   padding: 16px;
   overflow-y: auto;
   overflow-x: hidden;
   background: #142126;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(11, 20, 24, 0.24);
 }
 
 .hud {
@@ -233,20 +237,11 @@ select {
 }
 
 @media (max-width: 820px) {
-  body {
-    overflow: auto;
-  }
-
-  .app-shell {
-    min-height: 100vh;
-    height: auto;
-    grid-template-columns: 1fr;
-    grid-template-rows: 68vh auto;
-  }
-
   .control-panel {
-    border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    top: 12px;
+    right: 12px;
+    width: min(320px, calc(100vw - 24px));
+    max-height: min(560px, calc(100vh - 24px));
   }
 
   .control-panel .tp-dfwv {

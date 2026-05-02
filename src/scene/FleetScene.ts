@@ -32,11 +32,13 @@ type ControlState = {
 };
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const HIDDEN_UAV_SCALE = new THREE.Vector3(0, 0, 0);
 const LABEL_LIMIT = 140;
 const ROUTE_LINE_RADIUS = 0.3;
 const ROUTE_CONE_RADIUS = 1.2;
 const ROUTE_CONE_HEIGHT = 3.2;
-const ROAD_RENDER_Y = 0.08;
+const ROAD_RENDER_Y = 0.1;
+const CAMERA_MIN_Y = 0;
 const DRONE_MODEL_CANDIDATES = ["/asset/model/drone.gltf"];
 const DRONE_MODEL_SPAN_METERS = 22;
 
@@ -101,6 +103,7 @@ export class FleetScene {
   private previousCameraMode: CameraMode = "Free";
   private previousSelectedUavId = "";
   private lastFollowPosition = new THREE.Vector3();
+  private activeUavCount = 0;
   private readonly params: ControlState;
 
   /** Wires DOM hosts, builds the fleet from scene data, and configures renderer, controls, UI, and scene. */
@@ -562,8 +565,9 @@ export class FleetScene {
     this.applyKeyboardNavigation(delta);
     this.updateFleetInstances();
     this.updateCameraMode(delta);
-    this.updateLabels();
     this.controls.update();
+    this.constrainCameraAboveHorizon();
+    this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateStats();
     this.updateReadoutPanels();
@@ -573,7 +577,8 @@ export class FleetScene {
   /** Re-samples each UAV's position/orientation and writes its instance matrix and tint color. */
   private updateFleetInstances(): void {
     const routeColor = new THREE.Color();
-    const selectedColor = new THREE.Color("#ffffff");
+    const selectedColor = new THREE.Color("#ff2f2f");
+    this.activeUavCount = 0;
 
     this.fleet.forEach((uav, index) => {
       const route = this.routeById.get(uav.routeId);
@@ -584,6 +589,19 @@ export class FleetScene {
       const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, this.params.speed);
       const position = toVector3(sampled.position);
       const tangent = toVector3(sampled.tangent).normalize();
+
+      if (!sampled.active) {
+        this.matrix.compose(position, this.quaternion.identity(), HIDDEN_UAV_SCALE);
+        this.uavMesh.setMatrixAt(index, this.matrix);
+
+        if (uav.id === this.params.selectedUavId) {
+          this.selectedPosition.copy(position);
+          this.selectedTangent.copy(tangent);
+        }
+        return;
+      }
+
+      this.activeUavCount += 1;
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       this.uavMesh.setMatrixAt(index, this.matrix);
@@ -647,6 +665,11 @@ export class FleetScene {
       }
 
       const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, this.params.speed);
+      label.hidden = !sampled.active;
+      if (!sampled.active) {
+        return;
+      }
+
       const screenPoint = toScreenPosition(toVector3(sampled.position), this.camera, this.host);
       label.style.transform = `translate(${screenPoint.x}px, ${screenPoint.y}px)`;
       label.classList.toggle("uav-label--selected", uav.id === this.params.selectedUavId);
@@ -662,7 +685,7 @@ export class FleetScene {
       ? `${selectedUav.id} · ${selectedUav.type} · ${selectedRoute.from} to ${selectedRoute.to}`
       : "No UAV selected";
 
-    this.stats.textContent = `${mode} · ${this.params.speed}x · ${this.fleet.length.toLocaleString()} UAVs · ${this.sceneData.routes.length} routes · ${this.sceneData.buildings.length.toLocaleString()} buildings · ${this.sceneData.roads.length.toLocaleString()} roads · ${this.sceneData.trees.length.toLocaleString()} trees · ${selectedText}`;
+    this.stats.textContent = `${mode} · ${this.params.speed}x · ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled UAVs · ${this.sceneData.routes.length} routes · ${this.sceneData.buildings.length.toLocaleString()} buildings · ${this.sceneData.roads.length.toLocaleString()} roads · ${this.sceneData.trees.length.toLocaleString()} trees · ${selectedText}`;
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
@@ -690,6 +713,12 @@ export class FleetScene {
     direction.normalize().multiplyScalar(360 * delta);
     this.camera.position.add(direction);
     this.controls.target.add(direction);
+  }
+
+  private constrainCameraAboveHorizon(): void {
+    if (this.camera.position.y < CAMERA_MIN_Y) {
+      this.camera.position.y = CAMERA_MIN_Y;
+    }
   }
 
   /** Left-click selects the UAV under the cursor via raycasting against the InstancedMesh. */
@@ -738,18 +767,15 @@ export class FleetScene {
     this.renderer.setSize(width, height);
   };
 
-  /** Picks a starting camera position/target by framing the bounding box of all route points. */
+  /** Starts at the middle of the ground plane's south edge, looking at the ground center. */
   private setInitialCameraFrame(): void {
-    const routePoints = this.sceneData.routes.flatMap((route) => route.points.map(toVector3));
-    const focusBox = new THREE.Box3().setFromPoints(routePoints);
-    const focus = focusBox.getCenter(new THREE.Vector3());
-    const size = focusBox.getSize(new THREE.Vector3());
-    const distance = Math.max(size.x, size.z, 700);
+    const bounds = this.sceneData.mapBounds;
+    const centerX = (bounds.min.x + bounds.max.x) / 2;
+    const centerZ = (bounds.min.z + bounds.max.z) / 2;
 
-    focus.x = focusBox.max.x;
-    focus.y = 70;
-    this.initialTarget.copy(focus);
-    this.initialCameraPosition.set(focus.x - distance * 0.9, focus.y + distance * 0.55, focus.z + distance * 0.9);
+    this.initialTarget.set(centerX, 0, centerZ);
+    // this.initialCameraPosition.set(bounds.min.x, 700, centerZ);
+    this.initialCameraPosition.set(centerX-1, 3000, centerZ);
 
     this.camera.position.copy(this.initialCameraPosition);
     this.controls.target.copy(this.initialTarget);

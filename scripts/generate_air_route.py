@@ -19,6 +19,7 @@ Example:
 """
 
 import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -34,6 +35,9 @@ def lng_lat(value: str) -> tuple[float, float]:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate an air-route OSM file.")
+    # Allow values like "-83.71,42.29" after -s/-e: argparse's default negative-
+    # number regex rejects them because of the comma, then treats them as flags.
+    p._negative_number_matcher = re.compile(r"^-?\d+(\.\d+)?(,-?\d+(\.\d+)?)?$")
     p.add_argument("-i", "--input", required=True, type=Path, help="Input map.osm path.")
     p.add_argument("-s", "--start", required=True, type=lng_lat, help="Start 'lng,lat'.")
     p.add_argument("-e", "--end", required=True, type=lng_lat, help="End 'lng,lat'.")
@@ -51,19 +55,28 @@ def fmt_elev(v: float) -> str:
     return str(int(v)) if float(v).is_integer() else str(v)
 
 
-def build_osm(start, end, middle, elevation):
+def next_negative_id(root: ET.Element, tag: str) -> int:
+    ids = []
+    for e in root.findall(tag):
+        try:
+            ids.append(int(e.get("id", "0")))
+        except ValueError:
+            continue
+    floor = min(ids) if ids else 0
+    return min(floor, 0) - 1
+
+
+def append_route(root, start, end, middle, elevation, first_node_id, way_id):
     if middle < 0:
         raise ValueError("--num must be >= 0")
 
     s_lng, s_lat = start
     e_lng, e_lat = end
-
-    osm = ET.Element("osm", {"version": "0.6", "generator": "generate_air_route.py"})
     n_total = middle + 2
     node_ids = []
 
     for i in range(n_total):
-        nid = -(i + 1)
+        nid = first_node_id - i
         node_ids.append(nid)
         t = i / (n_total - 1)
         lng = lerp(s_lng, e_lng, t)
@@ -71,7 +84,7 @@ def build_osm(start, end, middle, elevation):
         is_endpoint = i == 0 or i == n_total - 1
         elev = 0 if is_endpoint else elevation
 
-        node = ET.SubElement(osm, "node", {
+        node = ET.SubElement(root, "node", {
             "id": str(nid),
             "lat": f"{lat:.7f}",
             "lon": f"{lng:.7f}",
@@ -79,11 +92,10 @@ def build_osm(start, end, middle, elevation):
         })
         ET.SubElement(node, "tag", {"k": "elevation", "v": fmt_elev(elev)})
 
-    way = ET.SubElement(osm, "way", {"id": "-1", "version": "1"})
+    way = ET.SubElement(root, "way", {"id": str(way_id), "version": "1"})
     for nid in node_ids:
         ET.SubElement(way, "nd", {"ref": str(nid)})
     ET.SubElement(way, "tag", {"k": "route", "v": "air"})
-    return ET.ElementTree(osm)
 
 
 def indent(elem, level=0):
@@ -115,10 +127,20 @@ def main() -> int:
         print(f"input map not found: {args.input}", file=sys.stderr)
         return 2
 
-    tree = build_osm(args.start, args.end, args.num, args.elevation)
-    indent(tree.getroot())
+    if args.output.exists():
+        tree = ET.parse(args.output)
+        root = tree.getroot()
+    else:
+        root = ET.Element("osm", {"version": "0.6", "generator": "generate_air_route.py"})
+        tree = ET.ElementTree(root)
+
+    first_node_id = next_negative_id(root, "node")
+    way_id = next_negative_id(root, "way")
+    append_route(root, args.start, args.end, args.num, args.elevation, first_node_id, way_id)
+
+    indent(root)
     tree.write(args.output, encoding="UTF-8", xml_declaration=True)
-    print(f"wrote {args.output}")
+    print(f"wrote {args.output} (nodes start at {first_node_id}, way id {way_id})")
     return 0
 
 

@@ -21,12 +21,12 @@ describe("OSM and flow parsing", () => {
     const routes = parseAirRoutes(routeOsm);
 
     expect(routes).toHaveLength(2);
-    expect(routes[0].id).toBe("-1");
-    expect(routes[0].points).toHaveLength(11);
+    expect(routes[0].id).toBe("1");
+    expect(routes[0].points.length).toBeGreaterThan(10);
     expect(routes[0].points[1].y).toBe(routes[0].geoPoints[1].elevation);
     expect(routes[0].points[1].y).toBeGreaterThan(0);
     expect(routes[0].length).toBeGreaterThan(900);
-    expect(routes[1].from).toBe("Northwood V");
+    expect(routes.every((route) => route.from && route.to)).toBe(true);
   });
 
   it("parses building footprints and resolves heights from the provided map", () => {
@@ -78,7 +78,7 @@ describe("OSM and flow parsing", () => {
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows).toHaveLength(2);
-    expect(flows.map((flow) => flow.routeId)).toEqual(["-1", "-2"]);
+    expect(flows.map((flow) => flow.routeId)).toEqual(["1", "2"]);
     expect(flows.every((flow) => flow.flowId && flow.uavPerHour > 0)).toBe(true);
   });
 

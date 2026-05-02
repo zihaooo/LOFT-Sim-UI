@@ -70,6 +70,8 @@ export type UavState = {
   platoonId: string;
   speedMetersPerSecond: number;
   offsetMeters: number;
+  departureTimeSeconds: number;
+  cycleSeconds: number;
   status: "active";
 };
 
@@ -78,6 +80,7 @@ export type SampledRoutePosition = {
   tangent: ScenePoint;
   distance: number;
   progress: number;
+  active: boolean;
 };
 
 export type SceneData = {

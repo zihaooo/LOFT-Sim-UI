@@ -2,7 +2,7 @@ import type { AirRoute, FlowDefinition, SampledRoutePosition, ScenePoint, UavSta
 
 const DEFAULT_UAV_SPEED_METERS_PER_SECOND = 12;
 
-/** Expands flow definitions into one UavState per hourly UAV, spaced evenly along their route. */
+/** Expands flow definitions into one scheduled UavState per departure in a repeating flow cycle. */
 export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavState[] {
   const routeById = new Map(routes.map((route) => [route.id, route]));
   const fleet: UavState[] = [];
@@ -13,8 +13,10 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSta
       return;
     }
 
-    const count = Math.round(flow.uavPerHour);
     const speedMetersPerSecond = DEFAULT_UAV_SPEED_METERS_PER_SECOND + flowIndex * 3;
+    const departureIntervalSeconds = 3600 / flow.uavPerHour;
+    const count = Math.max(1, Math.ceil(flow.uavPerHour));
+    const cycleSeconds = count * departureIntervalSeconds;
 
     for (let index = 0; index < count; index += 1) {
       fleet.push({
@@ -23,7 +25,9 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSta
         routeId: route.id,
         platoonId: `P-${flow.flowId}`,
         speedMetersPerSecond,
-        offsetMeters: (route.length * index) / count,
+        offsetMeters: 0,
+        departureTimeSeconds: index * departureIntervalSeconds,
+        cycleSeconds,
         status: "active",
       });
     }
@@ -40,6 +44,7 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
       tangent: { x: 1, y: 0, z: 0 },
       distance: 0,
       progress: 0,
+      active: false,
     };
   }
 
@@ -65,6 +70,7 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
         tangent,
         distance: loopedDistance,
         progress: loopedDistance / route.length,
+        active: true,
       };
     }
   }
@@ -75,17 +81,31 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
     tangent: { x: 1, y: 0, z: 0 },
     distance: loopedDistance,
     progress: loopedDistance / route.length,
+    active: true,
   };
 }
 
-/** Computes a UAV's current route sample by converting elapsed sim time + speed multiplier into arc-length. */
+/** Computes a UAV's current route sample from its scheduled departure cadence and elapsed sim time. */
 export function getUavRoutePosition(
   uav: UavState,
   route: AirRoute,
   elapsedSeconds: number,
   speedMultiplier: number,
 ): SampledRoutePosition {
-  return sampleRoutePosition(route, uav.offsetMeters + elapsedSeconds * uav.speedMetersPerSecond * speedMultiplier);
+  const scheduledSeconds = positiveModulo(elapsedSeconds * speedMultiplier - uav.departureTimeSeconds, uav.cycleSeconds);
+  const flightDurationSeconds = route.length / uav.speedMetersPerSecond;
+
+  if (scheduledSeconds >= flightDurationSeconds) {
+    return {
+      position: route.points[0] ?? { x: 0, y: 0, z: 0 },
+      tangent: route.points.length > 1 ? normalize(subtractPoints(route.points[1], route.points[0])) : { x: 1, y: 0, z: 0 },
+      distance: 0,
+      progress: 0,
+      active: false,
+    };
+  }
+
+  return sampleRoutePosition(route, scheduledSeconds * uav.speedMetersPerSecond);
 }
 
 /** Returns a remainder always in [0, divisor) — JS `%` returns negative results for negative operands. */
@@ -99,6 +119,14 @@ function lerpPoint(start: ScenePoint, end: ScenePoint, t: number): ScenePoint {
     x: start.x + (end.x - start.x) * t,
     y: start.y + (end.y - start.y) * t,
     z: start.z + (end.z - start.z) * t,
+  };
+}
+
+function subtractPoints(a: ScenePoint, b: ScenePoint): ScenePoint {
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y,
+    z: a.z - b.z,
   };
 }
 
