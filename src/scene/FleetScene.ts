@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import Stats from "stats.js";
 import { Pane } from "tweakpane";
@@ -12,6 +13,7 @@ type FleetSceneOptions = {
   labelLayer: HTMLDivElement;
   stats: HTMLDivElement;
   sceneData: SceneData;
+  uavGeometry?: THREE.BufferGeometry | null;
 };
 
 type CameraMode = "Free" | "Follow selected UAV";
@@ -29,12 +31,30 @@ type ControlState = {
   uavLabelsVisible: boolean;
 };
 
-const BASE_UAV_FORWARD = new THREE.Vector3(0, 0, 1);
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const LABEL_LIMIT = 140;
 const ROUTE_LINE_RADIUS = 0.3;
 const ROUTE_CONE_RADIUS = 1.2;
 const ROUTE_CONE_HEIGHT = 3.2;
 const ROAD_RENDER_Y = 0.08;
+const DRONE_MODEL_CANDIDATES = ["/asset/model/drone.gltf"];
+const DRONE_MODEL_SPAN_METERS = 22;
+
+export async function loadDroneGeometry(): Promise<THREE.BufferGeometry | null> {
+  const modelPath = await findExistingDroneModelPath();
+  if (!modelPath) {
+    return null;
+  }
+
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync(modelPath);
+    return createDroneModelGeometry(gltf.scene);
+  } catch (error) {
+    console.warn(`Failed to load drone model from ${modelPath}; falling back to cone.`, error);
+    return null;
+  }
+}
 
 export class FleetScene {
   private readonly host: HTMLDivElement;
@@ -45,6 +65,7 @@ export class FleetScene {
   private readonly routeById: Map<string, AirRoute>;
   private readonly fleet: UavState[];
   private readonly fleetById: Map<string, UavState>;
+  private readonly customUavGeometry: THREE.BufferGeometry | null;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly performanceStats = new Stats();
   private readonly scene = new THREE.Scene();
@@ -92,6 +113,7 @@ export class FleetScene {
     this.routeById = new Map(this.sceneData.routes.map((route) => [route.id, route]));
     this.fleet = createFleet(this.sceneData.routes, this.sceneData.flows);
     this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
+    this.customUavGeometry = options.uavGeometry ?? null;
 
     this.params = {
       running: true,
@@ -430,8 +452,7 @@ export class FleetScene {
 
   /** Builds the single InstancedMesh used to draw the entire fleet — one draw call for all UAVs. */
   private createUavMesh(): THREE.InstancedMesh {
-    const geometry = new THREE.ConeGeometry(7, 22, 8);
-    geometry.rotateX(Math.PI / 2);
+    const geometry = this.customUavGeometry ?? createFallbackUavGeometry();
     const material = new THREE.MeshStandardMaterial({
       color: "#ffffff",
       roughness: 0.38,
@@ -560,7 +581,7 @@ export class FleetScene {
       const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, this.params.speed);
       const position = toVector3(sampled.position);
       const tangent = toVector3(sampled.tangent).normalize();
-      this.quaternion.setFromUnitVectors(BASE_UAV_FORWARD, tangent);
+      setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       this.uavMesh.setMatrixAt(index, this.matrix);
       this.uavMesh.setColorAt(index, index === this.selectedInstanceId ? selectedColor : routeColor.set(route.color));
@@ -786,6 +807,96 @@ export class FleetScene {
     this.cameraPositionValue.textContent = formatVector(this.camera.position);
     this.cameraLookAtValue.textContent = formatVector(this.controls.target);
   }
+}
+
+async function findExistingDroneModelPath(): Promise<string | null> {
+  for (const path of DRONE_MODEL_CANDIDATES) {
+    if (await assetExists(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
+async function assetExists(path: string): Promise<boolean> {
+  try {
+    const response = await fetch(path, { method: "HEAD", cache: "no-store" });
+    const contentType = response.headers.get("content-type") ?? "";
+    return response.ok && !contentType.includes("text/html");
+  } catch {
+    return false;
+  }
+}
+
+function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | null {
+  const geometries: THREE.BufferGeometry[] = [];
+  root.updateWorldMatrix(true, true);
+
+  root.traverse((object) => {
+    if (!isMeshWithGeometry(object)) {
+      return;
+    }
+
+    const geometry = object.geometry.clone();
+    geometry.applyMatrix4(object.matrixWorld);
+    geometries.push(geometry);
+  });
+
+  if (geometries.length === 0) {
+    return null;
+  }
+
+  const merged = mergeGeometries(geometries, false);
+  geometries.forEach((geometry) => geometry.dispose());
+
+  if (!merged) {
+    return null;
+  }
+
+  normalizeDroneGeometry(merged);
+  return merged;
+}
+
+function isMeshWithGeometry(object: THREE.Object3D): object is THREE.Mesh {
+  const candidate = object as THREE.Mesh;
+  return candidate.isMesh === true && Boolean(candidate.geometry);
+}
+
+function normalizeDroneGeometry(geometry: THREE.BufferGeometry): void {
+  geometry.computeBoundingBox();
+  const bounds = geometry.boundingBox;
+  if (!bounds) {
+    return;
+  }
+
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const footprint = Math.max(size.x, size.z, 0.0001);
+  const scale = DRONE_MODEL_SPAN_METERS / footprint;
+
+  geometry.translate(-center.x, -center.y, -center.z);
+  geometry.scale(scale, scale, scale);
+  geometry.rotateY(Math.PI);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+}
+
+function createFallbackUavGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.ConeGeometry(7, 22, 8);
+  geometry.rotateX(Math.PI / 2);
+  return geometry;
+}
+
+function setUavYawQuaternion(quaternion: THREE.Quaternion, tangent: THREE.Vector3): void {
+  const horizontalLength = Math.hypot(tangent.x, tangent.z);
+  if (horizontalLength < 0.000001) {
+    quaternion.identity();
+    return;
+  }
+
+  quaternion.setFromAxisAngle(WORLD_UP, Math.atan2(tangent.x, tangent.z));
 }
 
 /** Extrudes a 2D footprint into a 3D building geometry; returns null when the footprint has no points. */

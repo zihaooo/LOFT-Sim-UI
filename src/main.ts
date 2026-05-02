@@ -1,6 +1,6 @@
 import "./styles.css";
 import { createSceneData } from "./data/osm";
-import { FleetScene } from "./scene/FleetScene";
+import { FleetScene, loadDroneGeometry } from "./scene/FleetScene";
 
 const root = document.querySelector<HTMLDivElement>("#root");
 
@@ -36,6 +36,7 @@ async function start(): Promise<void> {
   ]);
 
   const sceneData = createSceneData(routeOsm, buildingOsm, flowJson);
+  const uavGeometry = await loadDroneGeometry();
   const host = requireElement<HTMLDivElement>("#scene-host");
   const panel = requireElement<HTMLDivElement>("#control-panel");
   const labelLayer = requireElement<HTMLDivElement>("#label-layer");
@@ -47,6 +48,7 @@ async function start(): Promise<void> {
     labelLayer,
     stats,
     sceneData,
+    uavGeometry,
   });
 
   fleetScene.start();
