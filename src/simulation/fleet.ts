@@ -1,6 +1,5 @@
 import type { AirRoute, FlowDefinition, SampledRoutePosition, ScenePoint, UavState } from "../types";
-
-const DEFAULT_UAV_SPEED_METERS_PER_SECOND = 12;
+import { DEFAULT_UAV_SPEED_METERS_PER_SECOND } from "../constant";
 
 /** Expands flow definitions into one scheduled UavState per departure in a repeating flow cycle. */
 export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavState[] {

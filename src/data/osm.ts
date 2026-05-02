@@ -10,32 +10,7 @@ import type {
   ScenePoint,
   TreePoint,
 } from "../types";
-
-const METERS_PER_DEGREE_LAT = 111_320;
-const ROUTE_COLORS = ["#47c2ff", "#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
-const ROAD_STYLES: Record<string, { width: number; color: string }> = {
-  motorway: { width: 13, color: "#d4c7b6" },
-  motorway_link: { width: 8, color: "#d4c7b6" },
-  trunk: { width: 11, color: "#d4c7b6" },
-  trunk_link: { width: 7, color: "#d4c7b6" },
-  primary: { width: 10, color: "#d3cab8" },
-  primary_link: { width: 6.5, color: "#d3cab8" },
-  secondary: { width: 8.5, color: "#cfc8b8" },
-  secondary_link: { width: 5.5, color: "#cfc8b8" },
-  tertiary: { width: 7, color: "#c9c5b4" },
-  tertiary_link: { width: 5, color: "#c9c5b4" },
-  residential: { width: 5.2, color: "#bfc0b1" },
-  unclassified: { width: 5, color: "#bfc0b1" },
-  living_street: { width: 4.2, color: "#bfc0b1" },
-  road: { width: 4.5, color: "#bfc0b1" },
-  service: { width: 3.4, color: "#afb6a8" },
-  track: { width: 2.6, color: "#a8b59b" },
-  pedestrian: { width: 2.8, color: "#a8b59b" },
-  footway: { width: 1.7, color: "#91a482" },
-  path: { width: 1.6, color: "#91a482" },
-  cycleway: { width: 1.7, color: "#91a482" },
-  steps: { width: 1.5, color: "#91a482" },
-};
+import { METERS_PER_DEGREE_LAT, ROAD_STYLES, ROUTE_COLORS } from "../constant";
 
 type OsmNode = GeoPoint & {
   id: string;
