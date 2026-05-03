@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { AirRoute, UavState } from "../types";
-import { getUavRoutePosition } from "../simulation/fleet";
+import { getUavRoutePosition } from "../animation/fleet";
 import { toScreenPosition, toVector3 } from "../geometry/coordinates";
 
 export type RouteLabelNode = {
@@ -17,7 +17,6 @@ type UpdateLabelOptions = {
   camera: THREE.Camera;
   host: HTMLElement;
   elapsedSeconds: number;
-  speed: number;
   selectedUavId: string;
   routesVisible: boolean;
   envelopesVisible: boolean;
@@ -69,7 +68,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
       return;
     }
 
-    const sampled = getUavRoutePosition(uav, route, options.elapsedSeconds, options.speed);
+    const sampled = getUavRoutePosition(uav, route, options.elapsedSeconds, 1);
     if (sampled.status === "destroyed") {
       label.remove();
       options.uavLabelNodes.delete(uav.id);

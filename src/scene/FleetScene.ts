@@ -3,7 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import { Pane } from "tweakpane";
 import type { AirRoute, SceneData, UavState } from "../types";
-import { createFleet, getUavRoutePosition } from "../simulation/fleet";
+import { createFleet, getUavRoutePosition } from "../animation/fleet";
 import {
   CAMERA_FAR_METERS,
   CAMERA_FOV_DEGREES,
@@ -260,7 +260,7 @@ export class FleetScene {
     const delta = Math.min(this.clock.getDelta(), FRAME_DELTA_MAX_SECONDS);
 
     if (this.params.running) {
-      this.elapsedSeconds += delta;
+      this.elapsedSeconds += delta * this.params.speed;
     }
 
     this.applyKeyboardNavigation(delta);
@@ -287,7 +287,7 @@ export class FleetScene {
         return;
       }
 
-      const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, this.params.speed);
+      const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, 1);
       const position = toVector3(sampled.position);
       const tangent = toVector3(sampled.tangent).normalize();
 
@@ -359,7 +359,6 @@ export class FleetScene {
       camera: this.camera,
       host: this.host,
       elapsedSeconds: this.elapsedSeconds,
-      speed: this.params.speed,
       selectedUavId: this.params.selectedUavId,
       routesVisible: this.params.routesVisible,
       envelopesVisible: this.params.envelopesVisible,
