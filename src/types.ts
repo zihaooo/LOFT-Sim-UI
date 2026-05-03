@@ -63,7 +63,7 @@ export type FlowDefinition = {
   uavPerHour: number;
 };
 
-export type UavState = {
+export type UavSchedule = {
   id: string;
   type: string;
   routeId: string;
@@ -72,15 +72,13 @@ export type UavState = {
   offsetMeters: number;
   departureTimeSeconds: number;
   cycleSeconds: number;
-  status: "active";
 };
 
-export type SampledRoutePosition = {
+export type UavState = {
   position: ScenePoint;
   tangent: ScenePoint;
   distance: number;
   progress: number;
-  active: boolean;
   status: "pending" | "active" | "destroyed";
 };
 

@@ -1,10 +1,10 @@
-import type { AirRoute, FlowDefinition, SampledRoutePosition, ScenePoint, UavState } from "../types";
+import type { AirRoute, FlowDefinition, ScenePoint, UavSchedule, UavState } from "../types";
 import { DEFAULT_UAV_SPEED_METERS_PER_SECOND } from "../constant";
 
-/** Expands flow definitions into one scheduled UavState per departure in the configured hour. */
-export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavState[] {
+/** Expands flow definitions into one UavSchedule per departure in the configured hour. */
+export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSchedule[] {
   const routeById = new Map(routes.map((route) => [route.id, route]));
-  const fleet: UavState[] = [];
+  const fleet: UavSchedule[] = [];
 
   flows.forEach((flow, flowIndex) => {
     const route = routeById.get(flow.routeId);
@@ -27,7 +27,6 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSta
         offsetMeters: 0,
         departureTimeSeconds: index * departureIntervalSeconds,
         cycleSeconds,
-        status: "active",
       });
     }
   });
@@ -35,15 +34,14 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSta
   return fleet;
 }
 
-/** Returns the position and tangent at a given arc-length; inactive means the one-shot flight has ended. */
-export function sampleRoutePosition(route: AirRoute, distance: number): SampledRoutePosition {
+/** Returns the position and tangent at a given arc-length; non-active status means the one-shot flight has not started or has ended. */
+export function sampleRoutePosition(route: AirRoute, distance: number): UavState {
   if (route.points.length === 0 || route.length <= 0) {
     return {
       position: { x: 0, y: 0, z: 0 },
       tangent: { x: 1, y: 0, z: 0 },
       distance: 0,
       progress: 0,
-      active: false,
       status: "destroyed",
     };
   }
@@ -66,7 +64,6 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
       if (groundContactDistance !== null && groundContactDistance <= targetDistance) {
         return {
           ...sampleRouteSegment(route, index, groundContactDistance),
-          active: false,
           status: "destroyed",
         };
       }
@@ -74,11 +71,13 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
 
     if (targetDistance <= segmentEndDistance || index === route.points.length - 1) {
       const sample = sampleRouteSegment(route, index, targetDistance);
-      const active = distance < route.length && (sample.position.y > 0 || (targetDistance === 0 && sample.position.y === 0));
+      const status =
+        distance < route.length && (sample.position.y > 0 || (targetDistance === 0 && sample.position.y === 0))
+          ? "active"
+          : "destroyed";
       return {
         ...sample,
-        active,
-        status: active ? "active" : "destroyed",
+        status,
       };
     }
 
@@ -88,13 +87,13 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
   return createInactiveRouteSample(route, route.length, "destroyed");
 }
 
-/** Computes a UAV's one-shot route sample from its scheduled departure time and elapsed sim time. */
+/** Computes a UAV's one-shot route position from its scheduled departure time and elapsed sim time. */
 export function getUavRoutePosition(
-  uav: UavState,
+  uav: UavSchedule,
   route: AirRoute,
   elapsedSeconds: number,
   speedMultiplier: number,
-): SampledRoutePosition {
+): UavState {
   const flightSeconds = elapsedSeconds * speedMultiplier - uav.departureTimeSeconds;
 
   if (flightSeconds < 0) {
@@ -107,11 +106,10 @@ export function getUavRoutePosition(
 function createInactiveRouteSample(
   route: AirRoute,
   distance: number,
-  status: SampledRoutePosition["status"],
-): SampledRoutePosition {
+  status: UavState["status"],
+): UavState {
   return {
     ...sampleRouteSegment(route, findSegmentIndex(route, distance), Math.min(Math.max(distance, 0), route.length)),
-    active: false,
     status,
   };
 }
@@ -120,7 +118,7 @@ function sampleRouteSegment(
   route: AirRoute,
   segmentIndex: number,
   distance: number,
-): Omit<SampledRoutePosition, "active" | "status"> {
+): Omit<UavState, "status"> {
   const start = route.points[Math.max(segmentIndex - 1, 0)] ?? { x: 0, y: 0, z: 0 };
   const end = route.points[segmentIndex] ?? start;
   const segmentStartDistance = route.cumulativeLengths[Math.max(segmentIndex - 1, 0)] ?? 0;

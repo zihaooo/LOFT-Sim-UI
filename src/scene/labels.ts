@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { AirRoute, SampledRoutePosition } from "../types";
+import type { AirRoute, UavState } from "../types";
 import { UAV_LABEL_MAX_ACTIVE } from "../constant";
 import { toScreenPosition, toVector3 } from "../geometry/coordinates";
 
@@ -12,7 +12,7 @@ type UpdateLabelOptions = {
   labelLayer: HTMLDivElement;
   routeLabelNodes: RouteLabelNode[];
   uavLabelNodes: Map<string, HTMLDivElement>;
-  activeSamplesByUavId: Map<string, SampledRoutePosition>;
+  uavStateById: Map<string, UavState>;
   camera: THREE.Camera;
   host: HTMLElement;
   selectedUavId: string;
@@ -50,7 +50,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
   });
 
   options.uavLabelNodes.forEach((label, uavId) => {
-    if (!options.activeSamplesByUavId.has(uavId)) {
+    if (!options.uavStateById.has(uavId)) {
       label.remove();
       options.uavLabelNodes.delete(uavId);
     }
@@ -64,13 +64,13 @@ export function updateLabels(options: UpdateLabelOptions): void {
   }
 
   const visibleUavIds = new Set<string>();
-  const selectedSample = options.activeSamplesByUavId.get(options.selectedUavId);
-  if (selectedSample) {
-    updateUavLabel(options, options.selectedUavId, selectedSample);
+  const selectedUavState = options.uavStateById.get(options.selectedUavId);
+  if (selectedUavState) {
+    updateUavLabel(options, options.selectedUavId, selectedUavState);
     visibleUavIds.add(options.selectedUavId);
   }
 
-  for (const [uavId, sampled] of options.activeSamplesByUavId) {
+  for (const [uavId, uavState] of options.uavStateById) {
     if (visibleUavIds.size >= UAV_LABEL_MAX_ACTIVE) {
       break;
     }
@@ -78,7 +78,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
       continue;
     }
 
-    updateUavLabel(options, uavId, sampled);
+    updateUavLabel(options, uavId, uavState);
     visibleUavIds.add(uavId);
   }
 
@@ -87,7 +87,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
   });
 }
 
-function updateUavLabel(options: UpdateLabelOptions, uavId: string, sampled: SampledRoutePosition): void {
+function updateUavLabel(options: UpdateLabelOptions, uavId: string, uavState: UavState): void {
   let label = options.uavLabelNodes.get(uavId);
   if (!label) {
     label = document.createElement("div");
@@ -97,12 +97,12 @@ function updateUavLabel(options: UpdateLabelOptions, uavId: string, sampled: Sam
     options.uavLabelNodes.set(uavId, label);
   }
 
-  if (!sampled.active) {
+  if (uavState.status !== "active") {
     label.hidden = true;
     return;
   }
 
-  const screenPoint = toScreenPosition(toVector3(sampled.position), options.camera, options.host);
+  const screenPoint = toScreenPosition(toVector3(uavState.position), options.camera, options.host);
   label.hidden = false;
   label.style.transform = `translate(${screenPoint.x}px, ${screenPoint.y}px)`;
   label.classList.toggle("uav-label--selected", uavId === options.selectedUavId);

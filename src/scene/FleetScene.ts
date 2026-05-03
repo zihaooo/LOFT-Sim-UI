@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import { Pane } from "tweakpane";
-import type { AirRoute, SampledRoutePosition, SceneData, UavState } from "../types";
+import type { AirRoute, SceneData, UavSchedule, UavState } from "../types";
 import { createFleet, getUavRoutePosition } from "../animation/fleet";
 import {
   CAMERA_FAR_METERS,
@@ -70,8 +70,8 @@ export class FleetScene {
   private readonly stats: HTMLDivElement;
   private readonly sceneData: SceneData;
   private readonly routeById: Map<string, AirRoute>;
-  private readonly fleet: UavState[];
-  private readonly fleetById: Map<string, UavState>;
+  private readonly fleet: UavSchedule[];
+  private readonly fleetById: Map<string, UavSchedule>;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly performanceStats = new Stats();
   private readonly scene = new THREE.Scene();
@@ -92,7 +92,7 @@ export class FleetScene {
   private readonly routeLabelNodes: RouteLabelNode[];
   private readonly pendingUavIndices: number[];
   private readonly activeUavIndices: number[] = [];
-  private readonly activeSamplesByUavId = new Map<string, SampledRoutePosition>();
+  private readonly uavStateById = new Map<string, UavState>();
   private readonly renderSlotToFleetIndex: number[] = [];
   private readonly simulationClockValue: HTMLDivElement;
   private readonly cameraPositionValue: HTMLDivElement;
@@ -257,7 +257,7 @@ export class FleetScene {
       this.elapsedSeconds = 0;
       this.nextPendingUavIndex = 0;
       this.activeUavIndices.length = 0;
-      this.activeSamplesByUavId.clear();
+      this.uavStateById.clear();
       this.renderSlotToFleetIndex.length = 0;
       this.uavMesh.count = 0;
       this.clearUavLabels();
@@ -317,12 +317,12 @@ export class FleetScene {
     this.labelNodes.clear();
   }
 
-  /** Re-samples each UAV's position/orientation and writes its instance matrix and tint color. */
+  /** Updates each active UAV's position/orientation and writes its instance matrix and tint color. */
   private updateFleetInstances(): void {
     const routeColor = new THREE.Color();
     const selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
     this.activateDepartedUavs();
-    this.activeSamplesByUavId.clear();
+    this.uavStateById.clear();
     this.activeUavCount = 0;
 
     for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
@@ -334,11 +334,11 @@ export class FleetScene {
         continue;
       }
 
-      const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, 1);
-      const position = toVector3(sampled.position);
-      const tangent = toVector3(sampled.tangent).normalize();
+      const uavState = getUavRoutePosition(uav, route, this.elapsedSeconds, 1);
+      const position = toVector3(uavState.position);
+      const tangent = toVector3(uavState.tangent).normalize();
 
-      if (sampled.status === "destroyed") {
+      if (uavState.status === "destroyed") {
         if (uav.id === this.params.selectedUavId) {
           this.selectedPosition.copy(position);
           this.selectedTangent.copy(tangent);
@@ -347,7 +347,7 @@ export class FleetScene {
         continue;
       }
 
-      if (!sampled.active) {
+      if (uavState.status !== "active") {
         activeIndex += 1;
         continue;
       }
@@ -355,7 +355,7 @@ export class FleetScene {
       const renderSlot = this.activeUavCount;
       this.activeUavCount += 1;
       this.renderSlotToFleetIndex[renderSlot] = index;
-      this.activeSamplesByUavId.set(uav.id, sampled);
+      this.uavStateById.set(uav.id, uavState);
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       this.uavMesh.setMatrixAt(renderSlot, this.matrix);
@@ -410,7 +410,7 @@ export class FleetScene {
       labelLayer: this.labelLayer,
       routeLabelNodes: this.routeLabelNodes,
       uavLabelNodes: this.labelNodes,
-      activeSamplesByUavId: this.activeSamplesByUavId,
+      uavStateById: this.uavStateById,
       camera: this.camera,
       host: this.host,
       selectedUavId: this.params.selectedUavId,
