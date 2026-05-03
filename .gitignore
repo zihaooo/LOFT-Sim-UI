@@ -49,3 +49,4 @@ asset/**
 !asset/**/.gitkeep
 
 *.md
+!README.md
