@@ -104,7 +104,7 @@ export class FleetScene {
 
   private animationFrame = 0;
   private elapsedSeconds = 0;
-  private selectedInstanceId = 0;
+  private selectedInstanceId = -1;
   private selectedPosition = new THREE.Vector3();
   private selectedTangent = new THREE.Vector3(1, 0, 0);
   private previousCameraMode: CameraMode = CAMERA_MODES.FREE;
@@ -130,7 +130,7 @@ export class FleetScene {
     this.params = {
       running: true,
       speedLevelIndex: 0,
-      selectedUavId: this.fleet[0]?.id ?? "",
+      selectedUavId: "",
       cameraMode: CAMERA_MODES.FREE,
       routesVisible: true,
       envelopesVisible: true,
