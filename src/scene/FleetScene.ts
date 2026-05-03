@@ -371,8 +371,14 @@ export class FleetScene {
 
     this.renderSlotToFleetIndex.length = this.activeUavCount;
     this.uavMesh.count = this.activeUavCount;
+    if (this.activeUavCount === 0) {
+      return;
+    }
+
+    this.uavMesh.instanceMatrix.addUpdateRange(0, this.activeUavCount * 16);
     this.uavMesh.instanceMatrix.needsUpdate = true;
     if (this.uavMesh.instanceColor) {
+      this.uavMesh.instanceColor.addUpdateRange(0, this.activeUavCount * 3);
       this.uavMesh.instanceColor.needsUpdate = true;
     }
   }
