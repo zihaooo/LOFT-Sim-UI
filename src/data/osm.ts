@@ -138,6 +138,7 @@ export function parseTrees(osmText: string, origin: ProjectionOrigin): TreePoint
     });
 }
 
+/** Computes the axis-aligned scene bounds covering all OSM nodes in the file under the given projection origin. */
 export function parseMapBounds(osmText: string, origin: ProjectionOrigin): SceneBounds {
   const { nodes } = parseOsm(osmText);
   return createSceneBounds(Array.from(nodes.values()).map((node) => projectGeoPoint(node, origin)));
@@ -297,6 +298,7 @@ function averageOrigin(points: GeoPoint[]): ProjectionOrigin {
   };
 }
 
+/** Builds a SceneBounds from projected x/z extrema, with a unit-square fallback when the input is empty. */
 function createSceneBounds(points: ScenePoint[]): SceneBounds {
   if (points.length === 0) {
     return {

@@ -39,6 +39,7 @@ import {
   getCachedColor,
 } from "../geometry/map";
 
+/** Builds the ground plane sized to scene bounds plus an overlaid reference grid. */
 export function createGroundGroup(bounds: SceneBounds): THREE.Group {
   const group = new THREE.Group();
   const centerX = (bounds.min.x + bounds.max.x) / 2;
@@ -58,6 +59,7 @@ export function createGroundGroup(bounds: SceneBounds): THREE.Group {
   return group;
 }
 
+/** Merges all building footprints into one shadowed mesh for cheap rendering. */
 export function createBuildingGroup(buildings: BuildingFootprint[]): THREE.Group {
   const group = new THREE.Group();
   const geometries: THREE.BufferGeometry[] = [];
@@ -92,6 +94,7 @@ export function createBuildingGroup(buildings: BuildingFootprint[]): THREE.Group
   return group;
 }
 
+/** Builds road quads from polyline segments, clipped to scene bounds, into a single vertex-colored mesh. */
 export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.Group {
   const group = new THREE.Group();
   const positions: number[] = [];
@@ -170,6 +173,7 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
   return group;
 }
 
+/** Creates instanced trunk and canopy meshes per tree, sized from per-tree radius/height with hue variation. */
 export function createTreeGroup(trees: TreePoint[]): THREE.Group {
   const group = new THREE.Group();
   if (trees.length === 0) {

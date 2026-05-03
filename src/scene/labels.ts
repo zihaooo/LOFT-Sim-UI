@@ -20,6 +20,7 @@ type UpdateLabelOptions = {
   uavLabelsVisible: boolean;
 };
 
+/** Creates one DOM label per route anchored above its midpoint, returning anchor positions for projection. */
 export function createRouteLabels(routes: AirRoute[], labelLayer: HTMLDivElement): RouteLabelNode[] {
   return routes.map((route) => {
     const position = toVector3(route.points[Math.floor(route.points.length / 2)] ?? { x: 0, y: 0, z: 0 });
@@ -35,10 +36,12 @@ export function createRouteLabels(routes: AirRoute[], labelLayer: HTMLDivElement
   });
 }
 
+/** Returns an empty UAV-id → label DOM-node map; entries are added lazily as UAVs become selected. */
 export function createUavLabels(): Map<string, HTMLDivElement> {
   return new Map<string, HTMLDivElement>();
 }
 
+/** Per-frame: re-projects route labels, prunes stale UAV labels, and refreshes the selected UAV's label. */
 export function updateLabels(options: UpdateLabelOptions): void {
   options.labelLayer.classList.toggle("label-layer--uav-visible", options.uavLabelsVisible);
 
@@ -69,6 +72,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
   }
 }
 
+/** Lazily creates the label for a UAV and positions it on screen, hiding it when the UAV is not active. */
 function updateUavLabel(options: UpdateLabelOptions, uavId: string, uavState: UavState): void {
   let label = options.uavLabelNodes.get(uavId);
   if (!label) {

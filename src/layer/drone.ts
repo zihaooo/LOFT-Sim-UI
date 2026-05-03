@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { UAV_COLOR, UAV_METALNESS, UAV_ROUGHNESS } from "../constant";
 import { createFallbackUavGeometry } from "../geometry/drone";
 
+/** Builds the InstancedMesh that renders all UAVs, sized to the fleet and using the loaded model or fallback. */
 export function createUavMesh(fleetSize: number, customGeometry: THREE.BufferGeometry | null): THREE.InstancedMesh {
   const geometry = customGeometry ?? createFallbackUavGeometry();
   const material = new THREE.MeshStandardMaterial({

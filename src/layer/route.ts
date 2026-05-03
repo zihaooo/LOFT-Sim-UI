@@ -16,6 +16,7 @@ import {
 import { toVector3 } from "../geometry/coordinates";
 import { createPolylineTubeGeometry } from "../geometry/route";
 
+/** Builds the visible centerline tube and direction-indicator cones for each air route. */
 export function createRouteGroup(routes: AirRoute[]): THREE.Group {
   const group = new THREE.Group();
 
@@ -56,6 +57,7 @@ export function createRouteGroup(routes: AirRoute[]): THREE.Group {
   return group;
 }
 
+/** Builds translucent tube meshes around each route to visualize its flight envelope. */
 export function createFlightEnvelopeGroup(routes: AirRoute[]): THREE.Group {
   const group = new THREE.Group();
 

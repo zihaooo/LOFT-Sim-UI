@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { WORLD_UP } from "../constant";
 
+/** Builds a tube BufferGeometry around a polyline using parallel-transport frames; returns null if too few points. */
 export function createPolylineTubeGeometry(
   rawPoints: THREE.Vector3[],
   radius: number,
@@ -65,6 +66,7 @@ export function createPolylineTubeGeometry(
   return geometry;
 }
 
+/** Drops consecutive duplicate vectors so the tube generator never gets a zero-length segment. */
 function removeDuplicateVectorPoints(points: THREE.Vector3[]): THREE.Vector3[] {
   const filtered: THREE.Vector3[] = [];
 
@@ -77,6 +79,7 @@ function removeDuplicateVectorPoints(points: THREE.Vector3[]): THREE.Vector3[] {
   return filtered;
 }
 
+/** Tangent at a polyline vertex: forward edge at the start, back edge at the end, averaged elsewhere. */
 function getPolylineTangent(points: THREE.Vector3[], point: THREE.Vector3, index: number): THREE.Vector3 {
   if (index === 0) {
     return points[1].clone().sub(point).normalize();
@@ -97,6 +100,7 @@ function getPolylineTangent(points: THREE.Vector3[], point: THREE.Vector3, index
   return tangent.normalize();
 }
 
+/** Picks an initial normal perpendicular to the tangent, falling back to +X when the tangent is nearly vertical. */
 function chooseTubeNormal(tangent: THREE.Vector3): THREE.Vector3 {
   const reference = Math.abs(tangent.dot(WORLD_UP)) > 0.94 ? new THREE.Vector3(1, 0, 0) : WORLD_UP;
   return new THREE.Vector3().crossVectors(reference, tangent).normalize();

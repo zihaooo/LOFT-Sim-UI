@@ -10,6 +10,7 @@ import {
   WORLD_UP,
 } from "../constant";
 
+/** Tries to load and merge a drone GLTF model into a single normalized geometry; returns null if unavailable. */
 export async function loadDroneGeometry(): Promise<THREE.BufferGeometry | null> {
   const modelPath = await findExistingDroneModelPath();
   if (!modelPath) {
@@ -26,6 +27,7 @@ export async function loadDroneGeometry(): Promise<THREE.BufferGeometry | null> 
   }
 }
 
+/** Creates a forward-pointing cone used in place of the drone model when the GLTF asset can't be loaded. */
 export function createFallbackUavGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.ConeGeometry(
     FALLBACK_UAV_RADIUS_METERS,
@@ -36,6 +38,7 @@ export function createFallbackUavGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
+/** Writes a yaw-only quaternion that turns the UAV to face the horizontal projection of its tangent. */
 export function setUavYawQuaternion(quaternion: THREE.Quaternion, tangent: THREE.Vector3): void {
   const horizontalLength = Math.hypot(tangent.x, tangent.z);
   if (horizontalLength < 0.000001) {
@@ -46,6 +49,7 @@ export function setUavYawQuaternion(quaternion: THREE.Quaternion, tangent: THREE
   quaternion.setFromAxisAngle(WORLD_UP, Math.atan2(tangent.x, tangent.z));
 }
 
+/** Returns the first drone-model candidate path that exists, or null when none can be fetched. */
 async function findExistingDroneModelPath(): Promise<string | null> {
   for (const path of DRONE_MODEL_CANDIDATES) {
     if (await assetExists(path)) {
@@ -56,6 +60,7 @@ async function findExistingDroneModelPath(): Promise<string | null> {
   return null;
 }
 
+/** HEAD-checks an asset URL and rejects HTML responses (which usually indicate a dev-server fallback page). */
 async function assetExists(path: string): Promise<boolean> {
   try {
     const response = await fetch(path, { method: "HEAD", cache: "no-store" });
@@ -66,6 +71,7 @@ async function assetExists(path: string): Promise<boolean> {
   }
 }
 
+/** Walks the GLTF scene, baking world transforms into a single merged-and-normalized geometry. */
 function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | null {
   const geometries: THREE.BufferGeometry[] = [];
   root.updateWorldMatrix(true, true);
@@ -95,11 +101,13 @@ function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | 
   return merged;
 }
 
+/** Type guard: true when an Object3D is a THREE.Mesh that actually carries geometry. */
 function isMeshWithGeometry(object: THREE.Object3D): object is THREE.Mesh {
   const candidate = object as THREE.Mesh;
   return candidate.isMesh === true && Boolean(candidate.geometry);
 }
 
+/** Centers the drone geometry on its origin and scales it so its widest horizontal span matches the configured size. */
 function normalizeDroneGeometry(geometry: THREE.BufferGeometry): void {
   geometry.computeBoundingBox();
   const bounds = geometry.boundingBox;

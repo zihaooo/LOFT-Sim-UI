@@ -103,6 +103,7 @@ export function getUavRoutePosition(
   return computeUavState(route, flightSeconds * uavSchedule.speedMetersPerSecond);
 }
 
+/** Builds a UavState with the given non-active status, sampled at the clamped distance along the route. */
 function createNonActiveUavState(
   route: AirRoute,
   distance: number,
@@ -114,6 +115,7 @@ function createNonActiveUavState(
   };
 }
 
+/** Interpolates position, tangent, and progress within a single route segment at the given arc-length. */
 function interpolateUavState(
   route: AirRoute,
   segmentIndex: number,
@@ -135,6 +137,7 @@ function interpolateUavState(
   };
 }
 
+/** Returns the index of the route segment containing the given arc-length distance. */
 function findSegmentIndex(route: AirRoute, distance: number): number {
   const clampedDistance = Math.min(Math.max(distance, 0), route.length);
 
@@ -148,6 +151,7 @@ function findSegmentIndex(route: AirRoute, distance: number): number {
   return Math.max(route.points.length - 1, 0);
 }
 
+/** Returns the arc-length where the segment crosses y=0 (ground), or null if it never descends to ground. */
 function getGroundContactDistance(
   start: ScenePoint,
   end: ScenePoint,
@@ -171,6 +175,7 @@ function lerpPoint(start: ScenePoint, end: ScenePoint, t: number): ScenePoint {
   };
 }
 
+/** Componentwise vector subtraction (a - b) between two scene points. */
 function subtractPoints(a: ScenePoint, b: ScenePoint): ScenePoint {
   return {
     x: a.x - b.x,

@@ -261,10 +261,12 @@ export class FleetScene {
     });
   }
 
+  /** Returns the simulation-speed multiplier for the given speed-level slider index. */
   private getSimulationSpeed(speedLevelIndex = this.params.speedLevelIndex): number {
     return SIMULATION_SPEED_LEVELS[this.toSpeedLevelIndex(speedLevelIndex)] ?? SIMULATION_SPEED_LEVELS[0];
   }
 
+  /** Rounds and clamps a raw slider value into a valid SIMULATION_SPEED_LEVELS index. */
   private toSpeedLevelIndex(speedLevelIndex: number): number {
     return Math.min(Math.max(Math.round(speedLevelIndex), 0), SIMULATION_SPEED_LEVELS.length - 1);
   }
@@ -291,6 +293,7 @@ export class FleetScene {
     this.performanceStats.end();
   };
 
+  /** Promotes any pending UAVs whose departure time has been reached into the active set. */
   private activateDepartedUavs(): void {
     while (this.nextPendingUavIndex < this.pendingUavIndices.length) {
       const fleetIndex = this.pendingUavIndices[this.nextPendingUavIndex];
@@ -304,6 +307,7 @@ export class FleetScene {
     }
   }
 
+  /** O(1) removal from the active list by swapping the last entry into the freed slot. */
   private removeActiveUavAt(activeIndex: number): void {
     const lastIndex = this.activeUavIndices.pop();
     if (lastIndex !== undefined && activeIndex < this.activeUavIndices.length) {
@@ -311,6 +315,7 @@ export class FleetScene {
     }
   }
 
+  /** Detaches every cached UAV label DOM node and clears the lookup map. */
   private clearUavLabels(): void {
     this.labelNodes.forEach((label) => {
       label.remove();
@@ -466,6 +471,7 @@ export class FleetScene {
     this.controls.target.add(direction);
   }
 
+  /** Clamps the camera's height to CAMERA_MIN_Y so it can't drop below the ground plane. */
   private constrainCameraAboveHorizon(): void {
     if (this.camera.position.y < CAMERA_MIN_Y) {
       this.camera.position.y = CAMERA_MIN_Y;

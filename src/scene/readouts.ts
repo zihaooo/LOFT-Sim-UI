@@ -8,6 +8,7 @@ export type ReadoutPanels = {
   cameraLookAtValue: HTMLDivElement;
 };
 
+/** Mounts the stats.js FPS panel above the scene host with the configured offsets. */
 export function mountStatsPanel(host: HTMLElement, performanceStats: Stats): void {
   performanceStats.showPanel(0);
   performanceStats.dom.classList.add("stats-panel");
@@ -20,6 +21,7 @@ export function mountStatsPanel(host: HTMLElement, performanceStats: Stats): voi
   host.parentElement?.appendChild(performanceStats.dom);
 }
 
+/** Builds the simulation-clock and camera-debug readout DOM into the control panel and returns their value nodes. */
 export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   const simulationPanel = document.createElement("section");
   simulationPanel.className = "control-readout";

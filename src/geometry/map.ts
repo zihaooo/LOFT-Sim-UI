@@ -25,6 +25,7 @@ export function createBuildingGeometry(building: BuildingFootprint): THREE.Buffe
   return geometry;
 }
 
+/** Builds a LineSegments grid of horizontal/vertical lines at adaptive spacing covering the scene bounds. */
 export function createBoundedGrid(bounds: SceneBounds): THREE.LineSegments {
   const positions: number[] = [];
   const spacing = chooseGridSpacing(Math.max(bounds.width, bounds.depth));
@@ -51,6 +52,7 @@ export function createBoundedGrid(bounds: SceneBounds): THREE.LineSegments {
   return new THREE.LineSegments(geometry, material);
 }
 
+/** Clips a polygon (in x/z) against the four scene-bounds edges using Sutherland-Hodgman. */
 export function clipHorizontalPolygonToBounds(polygon: ScenePoint[], bounds: SceneBounds): ScenePoint[] {
   return clipPolygonEdge(
     clipPolygonEdge(
@@ -79,6 +81,7 @@ export function getCachedColor(cache: Map<string, THREE.Color>, value: string): 
   return color;
 }
 
+/** Picks a reference grid spacing in meters based on the longest scene dimension. */
 function chooseGridSpacing(size: number): number {
   if (size > 6_000) return 200;
   if (size > 3_000) return 100;
@@ -86,6 +89,7 @@ function chooseGridSpacing(size: number): number {
   return 25;
 }
 
+/** Sutherland-Hodgman one-edge clip: keeps inside vertices and inserts intersections where edges cross the clip line. */
 function clipPolygonEdge(
   polygon: ScenePoint[],
   isInside: (point: ScenePoint) => boolean,
@@ -116,18 +120,21 @@ function clipPolygonEdge(
   return output;
 }
 
+/** Returns the point where segment a-b crosses the vertical clip plane at x. */
 function intersectAtX(a: ScenePoint, b: ScenePoint, x: number): ScenePoint {
   const denominator = b.x - a.x;
   const t = Math.abs(denominator) < 0.000001 ? 0 : (x - a.x) / denominator;
   return interpolatePoint(a, b, t);
 }
 
+/** Returns the point where segment a-b crosses the vertical clip plane at z. */
 function intersectAtZ(a: ScenePoint, b: ScenePoint, z: number): ScenePoint {
   const denominator = b.z - a.z;
   const t = Math.abs(denominator) < 0.000001 ? 0 : (z - a.z) / denominator;
   return interpolatePoint(a, b, t);
 }
 
+/** Componentwise linear interpolation between two scene points by parameter t. */
 function interpolatePoint(a: ScenePoint, b: ScenePoint, t: number): ScenePoint {
   return {
     x: a.x + (b.x - a.x) * t,

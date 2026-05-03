@@ -12,6 +12,7 @@ import {
   SUN_SHADOW_MAP_SIZE,
 } from "../constant";
 
+/** Combines hemisphere ambient light and a shadow-casting directional sun into one group. */
 export function createLightingGroup(): THREE.Group {
   const group = new THREE.Group();
   const hemisphere = new THREE.HemisphereLight(HEMISPHERE_SKY_COLOR, HEMISPHERE_GROUND_COLOR, HEMISPHERE_LIGHT_INTENSITY);
@@ -30,6 +31,7 @@ export function createLightingGroup(): THREE.Group {
   return group;
 }
 
+/** Returns a large inward-facing sphere that paints the sky color behind the scene. */
 export function createSkyDome(): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(SKY_DOME_RADIUS_METERS, 32, 16);
   const material = new THREE.MeshBasicMaterial({
