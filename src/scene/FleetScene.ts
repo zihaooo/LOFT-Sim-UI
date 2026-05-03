@@ -25,8 +25,7 @@ import {
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
   SELECTED_UAV_COLOR,
-  SIMULATION_SPEED_OPTIONS,
-  UAV_SELECTOR_OPTION_LIMIT,
+  SIMULATION_SPEED_LEVELS,
   WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
@@ -53,7 +52,7 @@ type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
 
 type ControlState = {
   running: boolean;
-  speed: number;
+  speedLevelIndex: number;
   selectedUavId: string;
   cameraMode: CameraMode;
   routesVisible: boolean;
@@ -130,7 +129,7 @@ export class FleetScene {
 
     this.params = {
       running: true,
-      speed: 1,
+      speedLevelIndex: 0,
       selectedUavId: this.fleet[0]?.id ?? "",
       cameraMode: CAMERA_MODES.FREE,
       routesVisible: true,
@@ -138,7 +137,7 @@ export class FleetScene {
       buildingsVisible: true,
       roadsVisible: true,
       treesVisible: true,
-      uavLabelsVisible: false,
+      uavLabelsVisible: true,
     };
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -209,25 +208,19 @@ export class FleetScene {
     );
   }
 
-  /** Wires Tweakpane bindings for play/speed/selection/visibility toggles and the reset button. */
+  /** Wires Tweakpane bindings for play/speed/camera/visibility toggles and the reset button. */
   private createControls(): void {
     this.pane.addBinding(this.params, "running", { label: "Play" });
-    this.pane.addBinding(this.params, "speed", {
+    this.pane.addBinding(this.params, "speedLevelIndex", {
       label: "Speed",
-      options: SIMULATION_SPEED_OPTIONS,
+      min: 0,
+      max: SIMULATION_SPEED_LEVELS.length - 1,
+      step: 1,
+      format: (value: number) => `${this.getSimulationSpeed(value)}x`,
+    }).on("change", () => {
+      this.params.speedLevelIndex = this.toSpeedLevelIndex(this.params.speedLevelIndex);
+      this.pane.refresh();
     });
-
-    this.pane
-      .addBinding(this.params, "selectedUavId", {
-        label: "UAV",
-        options: Object.fromEntries(this.fleet.slice(0, UAV_SELECTOR_OPTION_LIMIT).map((uav) => [uav.id, uav.id])),
-      })
-      .on("change", () => {
-        this.selectedInstanceId = Math.max(
-          0,
-          this.fleet.findIndex((uav) => uav.id === this.params.selectedUavId),
-        );
-      });
 
     this.pane.addBinding(this.params, "cameraMode", {
       label: "Camera",
@@ -268,6 +261,14 @@ export class FleetScene {
     });
   }
 
+  private getSimulationSpeed(speedLevelIndex = this.params.speedLevelIndex): number {
+    return SIMULATION_SPEED_LEVELS[this.toSpeedLevelIndex(speedLevelIndex)] ?? SIMULATION_SPEED_LEVELS[0];
+  }
+
+  private toSpeedLevelIndex(speedLevelIndex: number): number {
+    return Math.min(Math.max(Math.round(speedLevelIndex), 0), SIMULATION_SPEED_LEVELS.length - 1);
+  }
+
   /** Per-frame loop: advances sim time, updates fleet/camera/labels, then renders. Bound as arrow for rAF. */
   private animate = (): void => {
     this.animationFrame = window.requestAnimationFrame(this.animate);
@@ -275,7 +276,7 @@ export class FleetScene {
     const delta = Math.min(this.clock.getDelta(), FRAME_DELTA_MAX_SECONDS);
 
     if (this.params.running) {
-      this.elapsedSeconds += delta * this.params.speed;
+      this.elapsedSeconds += delta * this.getSimulationSpeed();
     }
 
     this.applyKeyboardNavigation(delta);
@@ -429,7 +430,7 @@ export class FleetScene {
       ? `${selectedUav.id} · ${selectedUav.type} · ${selectedRoute.from} to ${selectedRoute.to}`
       : "No UAV selected";
 
-    this.stats.textContent = `${mode} · ${this.params.speed}x · ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled UAVs · ${this.sceneData.routes.length} routes · ${this.sceneData.buildings.length.toLocaleString()} buildings · ${this.sceneData.roads.length.toLocaleString()} roads · ${this.sceneData.trees.length.toLocaleString()} trees · ${selectedText}`;
+    this.stats.textContent = `${mode} · ${this.getSimulationSpeed()}x · ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled UAVs · ${this.sceneData.routes.length} routes · ${this.sceneData.buildings.length.toLocaleString()} buildings · ${this.sceneData.roads.length.toLocaleString()} roads · ${this.sceneData.trees.length.toLocaleString()} trees · ${selectedText}`;
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
@@ -485,7 +486,6 @@ export class FleetScene {
 
     this.selectedInstanceId = fleetIndex;
     this.params.selectedUavId = this.fleet[fleetIndex].id;
-    this.pane.refresh();
   };
 
   /** Suppresses the browser context menu so right-drag is free to rotate the orbit camera. */

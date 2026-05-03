@@ -56,12 +56,7 @@ export const ORBIT_MOUSE_BUTTONS = {
   RIGHT: THREE.MOUSE.ROTATE,
 } as const;
 export const FRAME_DELTA_MAX_SECONDS = 0.08;
-export const SIMULATION_SPEED_OPTIONS = {
-  "0.5x": 0.5,
-  "1x": 1,
-  "2x": 2,
-  "5x": 5,
-} as const;
+export const SIMULATION_SPEED_LEVELS = [1, 2, 5, 10, 100] as const;
 
 // Shared vector math
 export const WORLD_UP = new THREE.Vector3(0, 1, 0);
@@ -141,8 +136,6 @@ export const UAV_ROUGHNESS = 0.38;
 export const UAV_METALNESS = 0.15;
 
 // Labels and readouts
-export const UAV_LABEL_MAX_ACTIVE = 160;
-export const UAV_SELECTOR_OPTION_LIMIT = 500;
 export const LABEL_SCREEN_Y_OFFSET_METERS = 16;
 export const STATS_PANEL_TOP_PX = "24px";
 export const STATS_PANEL_LEFT_PX = "24px";

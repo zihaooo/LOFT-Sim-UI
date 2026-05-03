@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import type { AirRoute, UavState } from "../types";
-import { UAV_LABEL_MAX_ACTIVE } from "../constant";
 import { toScreenPosition, toVector3 } from "../geometry/coordinates";
 
 export type RouteLabelNode = {
@@ -49,8 +48,10 @@ export function updateLabels(options: UpdateLabelOptions): void {
     element.hidden = !options.uavLabelsVisible || (!options.routesVisible && !options.envelopesVisible);
   });
 
+  const selectedUavState = options.uavStateById.get(options.selectedUavId);
+
   options.uavLabelNodes.forEach((label, uavId) => {
-    if (!options.uavStateById.has(uavId)) {
+    if (uavId !== options.selectedUavId || !selectedUavState) {
       label.remove();
       options.uavLabelNodes.delete(uavId);
     }
@@ -63,28 +64,9 @@ export function updateLabels(options: UpdateLabelOptions): void {
     return;
   }
 
-  const visibleUavIds = new Set<string>();
-  const selectedUavState = options.uavStateById.get(options.selectedUavId);
   if (selectedUavState) {
     updateUavLabel(options, options.selectedUavId, selectedUavState);
-    visibleUavIds.add(options.selectedUavId);
   }
-
-  for (const [uavId, uavState] of options.uavStateById) {
-    if (visibleUavIds.size >= UAV_LABEL_MAX_ACTIVE) {
-      break;
-    }
-    if (visibleUavIds.has(uavId)) {
-      continue;
-    }
-
-    updateUavLabel(options, uavId, uavState);
-    visibleUavIds.add(uavId);
-  }
-
-  options.uavLabelNodes.forEach((label, uavId) => {
-    label.hidden = !visibleUavIds.has(uavId);
-  });
 }
 
 function updateUavLabel(options: UpdateLabelOptions, uavId: string, uavState: UavState): void {
