@@ -104,7 +104,7 @@ function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | 
 /** Type guard: true when an Object3D is a THREE.Mesh that actually carries geometry. */
 function isMeshWithGeometry(object: THREE.Object3D): object is THREE.Mesh {
   const candidate = object as THREE.Mesh;
-  return candidate.isMesh === true && Boolean(candidate.geometry);
+  return candidate.isMesh && Boolean(candidate.geometry);
 }
 
 /** Centers the drone geometry on its origin and scales it so its widest horizontal span matches the configured size. */
