@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AirRoute } from "../types";
-import { createFleet, getUavRoutePosition, sampleRoutePosition } from "./fleet";
+import { computeUavState, createFleet, getUavRoutePosition } from "./fleet";
 
 const route: AirRoute = {
   id: "A",
@@ -45,15 +45,15 @@ describe("fleet creation", () => {
   });
 });
 
-describe("route sampling", () => {
-  it("samples positions across route segments", () => {
-    expect(sampleRoutePosition(route, 50).position).toEqual({ x: 50, y: 10, z: 0 });
-    expect(sampleRoutePosition(route, 150).position).toEqual({ x: 100, y: 10, z: 50 });
+describe("route state computation", () => {
+  it("computes positions across route segments", () => {
+    expect(computeUavState(route, 50).position).toEqual({ x: 50, y: 10, z: 0 });
+    expect(computeUavState(route, 150).position).toEqual({ x: 100, y: 10, z: 50 });
   });
 
   it("does not loop distances outside the one-shot route travel window", () => {
-    const afterArrival = sampleRoutePosition(route, 250);
-    const beforeDeparture = sampleRoutePosition(route, -50);
+    const afterArrival = computeUavState(route, 250);
+    const beforeDeparture = computeUavState(route, -50);
 
     expect(afterArrival.position).toEqual({ x: 100, y: 10, z: 100 });
     expect(afterArrival.progress).toBe(1);
@@ -62,7 +62,7 @@ describe("route sampling", () => {
     expect(beforeDeparture.status).toBe("pending");
   });
 
-  it("marks a route sample destroyed at the first ground contact", () => {
+  it("marks route state destroyed at the first ground contact", () => {
     const landingRoute: AirRoute = {
       ...route,
       points: [
@@ -75,15 +75,15 @@ describe("route sampling", () => {
       cumulativeLengths: [0, 100, 200],
     };
 
-    const beforeContact = sampleRoutePosition(landingRoute, 25);
-    const afterContact = sampleRoutePosition(landingRoute, 175);
+    const beforeContact = computeUavState(landingRoute, 25);
+    const afterContact = computeUavState(landingRoute, 175);
 
     expect(beforeContact.status).toBe("active");
     expect(afterContact.status).toBe("destroyed");
     expect(afterContact.position).toEqual({ x: 50, y: 0, z: 0 });
   });
 
-  it("samples a UAV using elapsed time and speed multiplier", () => {
+  it("computes a UAV using elapsed time and speed multiplier", () => {
     const uav = createFleet([route], [{ flowId: "1", routeId: "A", uavPerHour: 1 }])[0];
     const uavState = getUavRoutePosition(uav, route, 2, 2);
     const expectedDistance = 2 * uav.speedMetersPerSecond * 2;

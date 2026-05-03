@@ -30,9 +30,9 @@ void start();
 /** Bootstraps the app: fetches OSM/flow assets in parallel, builds scene data, and mounts the FleetScene. */
 async function start(): Promise<void> {
   const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-    loadText("/asset/map/stress_air_route.osm"),
+    loadText("/asset/map/air_route.osm"),
     loadText("/asset/map/map.osm"),
-    loadText("/asset/demand/stress_flow.json"),
+    loadText("/asset/demand/flow.json"),
   ]);
 
   const sceneData = createSceneData(routeOsm, buildingOsm, flowJson);

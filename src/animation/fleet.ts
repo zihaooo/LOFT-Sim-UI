@@ -35,7 +35,7 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSch
 }
 
 /** Returns the position and tangent at a given arc-length; non-active status means the one-shot flight has not started or has ended. */
-export function sampleRoutePosition(route: AirRoute, distance: number): UavState {
+export function computeUavState(route: AirRoute, distance: number): UavState {
   if (route.points.length === 0 || route.length <= 0) {
     return {
       position: { x: 0, y: 0, z: 0 },
@@ -47,7 +47,7 @@ export function sampleRoutePosition(route: AirRoute, distance: number): UavState
   }
 
   if (distance < 0) {
-    return createInactiveRouteSample(route, 0, "pending");
+    return createNonActiveUavState(route, 0, "pending");
   }
 
   const targetDistance = Math.min(distance, route.length);
@@ -63,20 +63,20 @@ export function sampleRoutePosition(route: AirRoute, distance: number): UavState
       const groundContactDistance = getGroundContactDistance(start, end, segmentStartDistance, segmentEndDistance);
       if (groundContactDistance !== null && groundContactDistance <= targetDistance) {
         return {
-          ...sampleRouteSegment(route, index, groundContactDistance),
+          ...interpolateUavState(route, index, groundContactDistance),
           status: "destroyed",
         };
       }
     }
 
     if (targetDistance <= segmentEndDistance || index === route.points.length - 1) {
-      const sample = sampleRouteSegment(route, index, targetDistance);
+      const uavState = interpolateUavState(route, index, targetDistance);
       const status =
-        distance < route.length && (sample.position.y > 0 || (targetDistance === 0 && sample.position.y === 0))
+        distance < route.length && (uavState.position.y > 0 || (targetDistance === 0 && uavState.position.y === 0))
           ? "active"
           : "destroyed";
       return {
-        ...sample,
+        ...uavState,
         status,
       };
     }
@@ -84,37 +84,37 @@ export function sampleRoutePosition(route: AirRoute, distance: number): UavState
     hasBeenAirborne = hasBeenAirborne || start.y > 0 || end.y > 0;
   }
 
-  return createInactiveRouteSample(route, route.length, "destroyed");
+  return createNonActiveUavState(route, route.length, "destroyed");
 }
 
 /** Computes a UAV's one-shot route position from its scheduled departure time and elapsed sim time. */
 export function getUavRoutePosition(
-  uav: UavSchedule,
+  uavSchedule: UavSchedule,
   route: AirRoute,
   elapsedSeconds: number,
   speedMultiplier: number,
 ): UavState {
-  const flightSeconds = elapsedSeconds * speedMultiplier - uav.departureTimeSeconds;
+  const flightSeconds = elapsedSeconds * speedMultiplier - uavSchedule.departureTimeSeconds;
 
   if (flightSeconds < 0) {
-    return createInactiveRouteSample(route, 0, "pending");
+    return createNonActiveUavState(route, 0, "pending");
   }
 
-  return sampleRoutePosition(route, flightSeconds * uav.speedMetersPerSecond);
+  return computeUavState(route, flightSeconds * uavSchedule.speedMetersPerSecond);
 }
 
-function createInactiveRouteSample(
+function createNonActiveUavState(
   route: AirRoute,
   distance: number,
   status: UavState["status"],
 ): UavState {
   return {
-    ...sampleRouteSegment(route, findSegmentIndex(route, distance), Math.min(Math.max(distance, 0), route.length)),
+    ...interpolateUavState(route, findSegmentIndex(route, distance), Math.min(Math.max(distance, 0), route.length)),
     status,
   };
 }
 
-function sampleRouteSegment(
+function interpolateUavState(
   route: AirRoute,
   segmentIndex: number,
   distance: number,
