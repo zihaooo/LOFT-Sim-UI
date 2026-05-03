@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import { Pane } from "tweakpane";
-import type { AirRoute, SceneData, UavState } from "../types";
+import type { AirRoute, SampledRoutePosition, SceneData, UavState } from "../types";
 import { createFleet, getUavRoutePosition } from "../animation/fleet";
 import {
   CAMERA_FAR_METERS,
@@ -14,7 +14,6 @@ import {
   FOLLOW_CAMERA_HEIGHT_METERS,
   FRAME_DELTA_MAX_SECONDS,
   FREE_CAMERA_PAN_METERS_PER_SECOND,
-  HIDDEN_UAV_SCALE,
   INITIAL_CAMERA_HEIGHT_METERS,
   INITIAL_CAMERA_X_OFFSET_METERS,
   MAX_DEVICE_PIXEL_RATIO,
@@ -27,6 +26,7 @@ import {
   SCENE_FOG_NEAR_METERS,
   SELECTED_UAV_COLOR,
   SIMULATION_SPEED_OPTIONS,
+  UAV_SELECTOR_OPTION_LIMIT,
   WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
@@ -90,6 +90,10 @@ export class FleetScene {
   private readonly buildingGroup: THREE.Group;
   private readonly labelNodes: Map<string, HTMLDivElement>;
   private readonly routeLabelNodes: RouteLabelNode[];
+  private readonly pendingUavIndices: number[];
+  private readonly activeUavIndices: number[] = [];
+  private readonly activeSamplesByUavId = new Map<string, SampledRoutePosition>();
+  private readonly renderSlotToFleetIndex: number[] = [];
   private readonly simulationClockValue: HTMLDivElement;
   private readonly cameraPositionValue: HTMLDivElement;
   private readonly cameraLookAtValue: HTMLDivElement;
@@ -108,6 +112,7 @@ export class FleetScene {
   private previousSelectedUavId = "";
   private lastFollowPosition = new THREE.Vector3();
   private activeUavCount = 0;
+  private nextPendingUavIndex = 0;
   private readonly params: ControlState;
 
   /** Wires DOM hosts, builds the fleet from scene data, and configures renderer, controls, UI, and scene. */
@@ -119,6 +124,9 @@ export class FleetScene {
     this.routeById = new Map(this.sceneData.routes.map((route) => [route.id, route]));
     this.fleet = createFleet(this.sceneData.routes, this.sceneData.flows);
     this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
+    this.pendingUavIndices = this.fleet
+      .map((_, index) => index)
+      .sort((a, b) => this.fleet[a].departureTimeSeconds - this.fleet[b].departureTimeSeconds);
 
     this.params = {
       running: true,
@@ -155,13 +163,14 @@ export class FleetScene {
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.routes);
     this.uavMesh = createUavMesh(this.fleet.length, options.uavGeometry ?? null);
+    this.uavMesh.count = 0;
     this.pane = new Pane({ container: options.panel, title: "Simulation Controls" });
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
     this.cameraPositionValue = readouts.cameraPositionValue;
     this.cameraLookAtValue = readouts.cameraLookAtValue;
     this.routeLabelNodes = createRouteLabels(this.sceneData.routes, this.labelLayer);
-    this.labelNodes = createUavLabels(this.fleet, this.labelLayer);
+    this.labelNodes = createUavLabels();
 
     this.buildScene();
     mountStatsPanel(this.host, this.performanceStats);
@@ -211,7 +220,7 @@ export class FleetScene {
     this.pane
       .addBinding(this.params, "selectedUavId", {
         label: "UAV",
-        options: Object.fromEntries(this.fleet.map((uav) => [uav.id, uav.id])),
+        options: Object.fromEntries(this.fleet.slice(0, UAV_SELECTOR_OPTION_LIMIT).map((uav) => [uav.id, uav.id])),
       })
       .on("change", () => {
         this.selectedInstanceId = Math.max(
@@ -246,6 +255,12 @@ export class FleetScene {
     this.pane.addBinding(this.params, "uavLabelsVisible", { label: "Labels" });
     this.pane.addButton({ title: "Reset simulation" }).on("click", () => {
       this.elapsedSeconds = 0;
+      this.nextPendingUavIndex = 0;
+      this.activeUavIndices.length = 0;
+      this.activeSamplesByUavId.clear();
+      this.renderSlotToFleetIndex.length = 0;
+      this.uavMesh.count = 0;
+      this.clearUavLabels();
       this.params.cameraMode = CAMERA_MODES.FREE;
       this.camera.position.copy(this.initialCameraPosition);
       this.controls.target.copy(this.initialTarget);
@@ -275,45 +290,86 @@ export class FleetScene {
     this.performanceStats.end();
   };
 
+  private activateDepartedUavs(): void {
+    while (this.nextPendingUavIndex < this.pendingUavIndices.length) {
+      const fleetIndex = this.pendingUavIndices[this.nextPendingUavIndex];
+      const uav = this.fleet[fleetIndex];
+      if (uav.departureTimeSeconds > this.elapsedSeconds) {
+        break;
+      }
+
+      this.activeUavIndices.push(fleetIndex);
+      this.nextPendingUavIndex += 1;
+    }
+  }
+
+  private removeActiveUavAt(activeIndex: number): void {
+    const lastIndex = this.activeUavIndices.pop();
+    if (lastIndex !== undefined && activeIndex < this.activeUavIndices.length) {
+      this.activeUavIndices[activeIndex] = lastIndex;
+    }
+  }
+
+  private clearUavLabels(): void {
+    this.labelNodes.forEach((label) => {
+      label.remove();
+    });
+    this.labelNodes.clear();
+  }
+
   /** Re-samples each UAV's position/orientation and writes its instance matrix and tint color. */
   private updateFleetInstances(): void {
     const routeColor = new THREE.Color();
     const selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
+    this.activateDepartedUavs();
+    this.activeSamplesByUavId.clear();
     this.activeUavCount = 0;
 
-    this.fleet.forEach((uav, index) => {
+    for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
+      const index = this.activeUavIndices[activeIndex];
+      const uav = this.fleet[index];
       const route = this.routeById.get(uav.routeId);
       if (!route) {
-        return;
+        this.removeActiveUavAt(activeIndex);
+        continue;
       }
 
       const sampled = getUavRoutePosition(uav, route, this.elapsedSeconds, 1);
       const position = toVector3(sampled.position);
       const tangent = toVector3(sampled.tangent).normalize();
 
-      if (!sampled.active) {
-        this.matrix.compose(position, this.quaternion.identity(), HIDDEN_UAV_SCALE);
-        this.uavMesh.setMatrixAt(index, this.matrix);
-
+      if (sampled.status === "destroyed") {
         if (uav.id === this.params.selectedUavId) {
           this.selectedPosition.copy(position);
           this.selectedTangent.copy(tangent);
         }
-        return;
+        this.removeActiveUavAt(activeIndex);
+        continue;
       }
 
+      if (!sampled.active) {
+        activeIndex += 1;
+        continue;
+      }
+
+      const renderSlot = this.activeUavCount;
       this.activeUavCount += 1;
+      this.renderSlotToFleetIndex[renderSlot] = index;
+      this.activeSamplesByUavId.set(uav.id, sampled);
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
-      this.uavMesh.setMatrixAt(index, this.matrix);
-      this.uavMesh.setColorAt(index, index === this.selectedInstanceId ? selectedColor : routeColor.set(route.color));
+      this.uavMesh.setMatrixAt(renderSlot, this.matrix);
+      this.uavMesh.setColorAt(renderSlot, index === this.selectedInstanceId ? selectedColor : routeColor.set(route.color));
 
       if (uav.id === this.params.selectedUavId) {
         this.selectedPosition.copy(position);
         this.selectedTangent.copy(tangent);
       }
-    });
+      activeIndex += 1;
+    }
 
+    this.renderSlotToFleetIndex.length = this.activeUavCount;
+    this.uavMesh.count = this.activeUavCount;
     this.uavMesh.instanceMatrix.needsUpdate = true;
     if (this.uavMesh.instanceColor) {
       this.uavMesh.instanceColor.needsUpdate = true;
@@ -354,11 +410,9 @@ export class FleetScene {
       labelLayer: this.labelLayer,
       routeLabelNodes: this.routeLabelNodes,
       uavLabelNodes: this.labelNodes,
-      fleet: this.fleet,
-      routeById: this.routeById,
+      activeSamplesByUavId: this.activeSamplesByUavId,
       camera: this.camera,
       host: this.host,
-      elapsedSeconds: this.elapsedSeconds,
       selectedUavId: this.params.selectedUavId,
       routesVisible: this.params.routesVisible,
       envelopesVisible: this.params.envelopesVisible,
@@ -424,12 +478,13 @@ export class FleetScene {
 
     const intersections = this.raycaster.intersectObject(this.uavMesh);
     const instanceId = intersections[0]?.instanceId;
-    if (instanceId === undefined || !this.fleet[instanceId]) {
+    const fleetIndex = instanceId === undefined ? undefined : this.renderSlotToFleetIndex[instanceId];
+    if (fleetIndex === undefined || !this.fleet[fleetIndex]) {
       return;
     }
 
-    this.selectedInstanceId = instanceId;
-    this.params.selectedUavId = this.fleet[instanceId].id;
+    this.selectedInstanceId = fleetIndex;
+    this.params.selectedUavId = this.fleet[fleetIndex].id;
     this.pane.refresh();
   };
 
