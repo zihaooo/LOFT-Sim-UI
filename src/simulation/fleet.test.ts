@@ -51,9 +51,40 @@ describe("route sampling", () => {
     expect(sampleRoutePosition(route, 150).position).toEqual({ x: 100, y: 10, z: 50 });
   });
 
-  it("loops distances beyond the route length", () => {
-    expect(sampleRoutePosition(route, 250).position).toEqual({ x: 50, y: 10, z: 0 });
-    expect(sampleRoutePosition(route, -50).position).toEqual({ x: 100, y: 10, z: 50 });
+  it("does not loop distances outside the one-shot route travel window", () => {
+    const afterArrival = sampleRoutePosition(route, 250);
+    const beforeDeparture = sampleRoutePosition(route, -50);
+
+    expect(afterArrival.position).toEqual({ x: 100, y: 10, z: 100 });
+    expect(afterArrival.progress).toBe(1);
+    expect(afterArrival.active).toBe(false);
+    expect(afterArrival.status).toBe("destroyed");
+    expect(beforeDeparture.position).toEqual({ x: 0, y: 10, z: 0 });
+    expect(beforeDeparture.active).toBe(false);
+    expect(beforeDeparture.status).toBe("pending");
+  });
+
+  it("marks a route sample inactive at the first ground contact", () => {
+    const landingRoute: AirRoute = {
+      ...route,
+      points: [
+        { x: 0, y: 10, z: 0 },
+        { x: 100, y: -10, z: 0 },
+        { x: 200, y: 10, z: 0 },
+      ],
+      length: 200,
+      segmentLengths: [100, 100],
+      cumulativeLengths: [0, 100, 200],
+    };
+
+    const beforeContact = sampleRoutePosition(landingRoute, 25);
+    const afterContact = sampleRoutePosition(landingRoute, 175);
+
+    expect(beforeContact.active).toBe(true);
+    expect(beforeContact.status).toBe("active");
+    expect(afterContact.active).toBe(false);
+    expect(afterContact.status).toBe("destroyed");
+    expect(afterContact.position).toEqual({ x: 50, y: 0, z: 0 });
   });
 
   it("samples a UAV using elapsed time and speed multiplier", () => {
@@ -73,8 +104,11 @@ describe("route sampling", () => {
     const afterArrival = getUavRoutePosition(uav, route, 330, 1);
 
     expect(beforeDeparture.active).toBe(false);
+    expect(beforeDeparture.status).toBe("pending");
     expect(afterDeparture.active).toBe(true);
+    expect(afterDeparture.status).toBe("active");
     expect(afterDeparture.position.x).toBe(24);
     expect(afterArrival.active).toBe(false);
+    expect(afterArrival.status).toBe("destroyed");
   });
 });

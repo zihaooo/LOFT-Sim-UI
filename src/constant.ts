@@ -141,7 +141,6 @@ export const UAV_ROUGHNESS = 0.38;
 export const UAV_METALNESS = 0.15;
 
 // Labels and readouts
-export const LABEL_LIMIT = 140;
 export const LABEL_SCREEN_Y_OFFSET_METERS = 16;
 export const STATS_PANEL_TOP_PX = "24px";
 export const STATS_PANEL_LEFT_PX = "24px";

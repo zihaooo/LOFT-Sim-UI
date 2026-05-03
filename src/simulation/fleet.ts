@@ -1,7 +1,7 @@
 import type { AirRoute, FlowDefinition, SampledRoutePosition, ScenePoint, UavState } from "../types";
 import { DEFAULT_UAV_SPEED_METERS_PER_SECOND } from "../constant";
 
-/** Expands flow definitions into one scheduled UavState per departure in a repeating flow cycle. */
+/** Expands flow definitions into one scheduled UavState per departure in the configured hour. */
 export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavState[] {
   const routeById = new Map(routes.map((route) => [route.id, route]));
   const fleet: UavState[] = [];
@@ -35,7 +35,7 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSta
   return fleet;
 }
 
-/** Returns the position and tangent at a given arc-length along the route, looping when distance exceeds route length. */
+/** Returns the position and tangent at a given arc-length; inactive means the one-shot flight has ended. */
 export function sampleRoutePosition(route: AirRoute, distance: number): SampledRoutePosition {
   if (route.points.length === 0 || route.length <= 0) {
     return {
@@ -44,72 +44,124 @@ export function sampleRoutePosition(route: AirRoute, distance: number): SampledR
       distance: 0,
       progress: 0,
       active: false,
+      status: "destroyed",
     };
   }
 
-  const loopedDistance = positiveModulo(distance, route.length);
+  if (distance < 0) {
+    return createInactiveRouteSample(route, 0, "pending");
+  }
+
+  const targetDistance = Math.min(distance, route.length);
+  let hasBeenAirborne = route.points[0]?.y > 0;
 
   for (let index = 1; index < route.points.length; index += 1) {
     const segmentStartDistance = route.cumulativeLengths[index - 1];
     const segmentEndDistance = route.cumulativeLengths[index];
+    const start = route.points[index - 1];
+    const end = route.points[index];
 
-    if (loopedDistance <= segmentEndDistance || index === route.points.length - 1) {
-      const start = route.points[index - 1];
-      const end = route.points[index];
-      const segmentLength = Math.max(segmentEndDistance - segmentStartDistance, 0.0001);
-      const t = (loopedDistance - segmentStartDistance) / segmentLength;
-      const tangent = normalize({
-        x: end.x - start.x,
-        y: end.y - start.y,
-        z: end.z - start.z,
-      });
+    if (hasBeenAirborne) {
+      const groundContactDistance = getGroundContactDistance(start, end, segmentStartDistance, segmentEndDistance);
+      if (groundContactDistance !== null && groundContactDistance <= targetDistance) {
+        return {
+          ...sampleRouteSegment(route, index, groundContactDistance),
+          active: false,
+          status: "destroyed",
+        };
+      }
+    }
 
+    if (targetDistance <= segmentEndDistance || index === route.points.length - 1) {
+      const sample = sampleRouteSegment(route, index, targetDistance);
+      const active = distance < route.length && (sample.position.y > 0 || (targetDistance === 0 && sample.position.y === 0));
       return {
-        position: lerpPoint(start, end, t),
-        tangent,
-        distance: loopedDistance,
-        progress: loopedDistance / route.length,
-        active: true,
+        ...sample,
+        active,
+        status: active ? "active" : "destroyed",
       };
     }
+
+    hasBeenAirborne = hasBeenAirborne || start.y > 0 || end.y > 0;
   }
 
-  const lastPoint = route.points[route.points.length - 1];
-  return {
-    position: lastPoint,
-    tangent: { x: 1, y: 0, z: 0 },
-    distance: loopedDistance,
-    progress: loopedDistance / route.length,
-    active: true,
-  };
+  return createInactiveRouteSample(route, route.length, "destroyed");
 }
 
-/** Computes a UAV's current route sample from its scheduled departure cadence and elapsed sim time. */
+/** Computes a UAV's one-shot route sample from its scheduled departure time and elapsed sim time. */
 export function getUavRoutePosition(
   uav: UavState,
   route: AirRoute,
   elapsedSeconds: number,
   speedMultiplier: number,
 ): SampledRoutePosition {
-  const scheduledSeconds = positiveModulo(elapsedSeconds * speedMultiplier - uav.departureTimeSeconds, uav.cycleSeconds);
-  const flightDurationSeconds = route.length / uav.speedMetersPerSecond;
+  const flightSeconds = elapsedSeconds * speedMultiplier - uav.departureTimeSeconds;
 
-  if (scheduledSeconds >= flightDurationSeconds) {
-    return {
-      position: route.points[0] ?? { x: 0, y: 0, z: 0 },
-      tangent: route.points.length > 1 ? normalize(subtractPoints(route.points[1], route.points[0])) : { x: 1, y: 0, z: 0 },
-      distance: 0,
-      progress: 0,
-      active: false,
-    };
+  if (flightSeconds < 0) {
+    return createInactiveRouteSample(route, 0, "pending");
   }
 
-  return sampleRoutePosition(route, scheduledSeconds * uav.speedMetersPerSecond);
+  return sampleRoutePosition(route, flightSeconds * uav.speedMetersPerSecond);
 }
 
-/** Returns a remainder always in [0, divisor) — JS `%` returns negative results for negative operands. */
-function positiveModulo(value: number, divisor: number): number {
-  return ((value % divisor) + divisor) % divisor;
+function createInactiveRouteSample(
+  route: AirRoute,
+  distance: number,
+  status: SampledRoutePosition["status"],
+): SampledRoutePosition {
+  return {
+    ...sampleRouteSegment(route, findSegmentIndex(route, distance), Math.min(Math.max(distance, 0), route.length)),
+    active: false,
+    status,
+  };
+}
+
+function sampleRouteSegment(
+  route: AirRoute,
+  segmentIndex: number,
+  distance: number,
+): Omit<SampledRoutePosition, "active" | "status"> {
+  const start = route.points[Math.max(segmentIndex - 1, 0)] ?? { x: 0, y: 0, z: 0 };
+  const end = route.points[segmentIndex] ?? start;
+  const segmentStartDistance = route.cumulativeLengths[Math.max(segmentIndex - 1, 0)] ?? 0;
+  const segmentEndDistance = route.cumulativeLengths[segmentIndex] ?? segmentStartDistance;
+  const segmentLength = Math.max(segmentEndDistance - segmentStartDistance, 0.0001);
+  const t = Math.min(Math.max((distance - segmentStartDistance) / segmentLength, 0), 1);
+  const tangent = normalize(subtractPoints(end, start));
+
+  return {
+    position: lerpPoint(start, end, t),
+    tangent,
+    distance,
+    progress: route.length > 0 ? distance / route.length : 0,
+  };
+}
+
+function findSegmentIndex(route: AirRoute, distance: number): number {
+  const clampedDistance = Math.min(Math.max(distance, 0), route.length);
+
+  for (let index = 1; index < route.points.length; index += 1) {
+    const segmentEndDistance = route.cumulativeLengths[index];
+    if (clampedDistance <= segmentEndDistance || index === route.points.length - 1) {
+      return index;
+    }
+  }
+
+  return Math.max(route.points.length - 1, 0);
+}
+
+function getGroundContactDistance(
+  start: ScenePoint,
+  end: ScenePoint,
+  segmentStartDistance: number,
+  segmentEndDistance: number,
+): number | null {
+  if (start.y <= 0 || end.y > 0) {
+    return null;
+  }
+
+  const t = start.y / (start.y - end.y);
+  return segmentStartDistance + (segmentEndDistance - segmentStartDistance) * t;
 }
 
 /** Componentwise linear interpolation between two scene points. */

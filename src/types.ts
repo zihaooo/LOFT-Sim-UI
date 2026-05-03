@@ -81,6 +81,7 @@ export type SampledRoutePosition = {
   distance: number;
   progress: number;
   active: boolean;
+  status: "pending" | "active" | "destroyed";
 };
 
 export type SceneData = {

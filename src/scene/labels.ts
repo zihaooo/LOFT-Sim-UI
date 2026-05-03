@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import type { AirRoute, UavState } from "../types";
 import { getUavRoutePosition } from "../simulation/fleet";
-import { LABEL_LIMIT } from "../constant";
 import { toScreenPosition, toVector3 } from "../geometry/coordinates";
 
 export type RouteLabelNode = {
@@ -43,7 +42,7 @@ export function createRouteLabels(routes: AirRoute[], labelLayer: HTMLDivElement
 export function createUavLabels(fleet: UavState[], labelLayer: HTMLDivElement): Map<string, HTMLDivElement> {
   const labelNodes = new Map<string, HTMLDivElement>();
 
-  fleet.slice(0, LABEL_LIMIT).forEach((uav) => {
+  fleet.forEach((uav) => {
     const label = document.createElement("div");
     label.className = "uav-label";
     label.textContent = uav.id;
@@ -63,7 +62,7 @@ export function updateLabels(options: UpdateLabelOptions): void {
     element.hidden = !options.routesVisible && !options.envelopesVisible;
   });
 
-  options.fleet.slice(0, LABEL_LIMIT).forEach((uav) => {
+  options.fleet.forEach((uav) => {
     const label = options.uavLabelNodes.get(uav.id);
     const route = options.routeById.get(uav.routeId);
     if (!label || !route) {
@@ -71,6 +70,12 @@ export function updateLabels(options: UpdateLabelOptions): void {
     }
 
     const sampled = getUavRoutePosition(uav, route, options.elapsedSeconds, options.speed);
+    if (sampled.status === "destroyed") {
+      label.remove();
+      options.uavLabelNodes.delete(uav.id);
+      return;
+    }
+
     label.hidden = !sampled.active;
     if (!sampled.active) {
       return;
