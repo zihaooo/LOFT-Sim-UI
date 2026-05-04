@@ -48,5 +48,8 @@ asset/**
 !asset/**/
 !asset/**/.gitkeep
 
+# Performance profiling
+profile
+
 *.md
 !README.md
