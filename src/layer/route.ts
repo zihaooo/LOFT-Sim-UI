@@ -10,8 +10,6 @@ import {
   ROUTE_DIRECTION_CONE_RADIUS_METERS,
   ROUTE_DIRECTION_CONE_STEP,
   ROUTE_LINE_RADIUS_METERS,
-  ROUTE_MIN_TUBE_SEGMENTS,
-  ROUTE_SEGMENTS_PER_POINT,
   ROUTE_TUBE_RADIAL_SEGMENTS,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
@@ -50,14 +48,14 @@ export function createRouteGroup(routes: AirRoute[]): THREE.Group {
       return;
     }
 
-    const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0);
-    const tubeGeometry = new THREE.TubeGeometry(
-      curve,
-      Math.max(route.points.length * ROUTE_SEGMENTS_PER_POINT, ROUTE_MIN_TUBE_SEGMENTS),
+    const tubeGeometry = createPolylineTubeGeometry(
+      points,
       ROUTE_LINE_RADIUS_METERS,
       ROUTE_TUBE_RADIAL_SEGMENTS,
-      false,
     );
+    if (!tubeGeometry) {
+      return;
+    }
     const routeColor = new THREE.Color(route.color);
     setUniformVertexColor(tubeGeometry, routeColor);
     centerlineGeometries.push(tubeGeometry);
