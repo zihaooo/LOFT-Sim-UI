@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
-import { Pane } from "tweakpane";
 import type { AirRoute, SceneData, UavSchedule, UavState } from "../types";
 import { createFleet, getUavRoutePosition } from "../animation/fleet";
 import {
@@ -34,6 +33,13 @@ import { createUavMesh } from "../layer/drone";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createRouteGroup } from "../layer/route";
+import {
+  createDefaultControlState,
+  createSimulationControls,
+  type CameraMode,
+  type LayerVisibilityState,
+  type SimulationControlState,
+} from "./control";
 import { createRouteLabels, createUavLabels, updateLabels, type RouteLabelNode } from "./labels";
 import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
 
@@ -46,21 +52,6 @@ type FleetSceneOptions = {
   stats: HTMLDivElement;
   sceneData: SceneData;
   uavGeometry?: THREE.BufferGeometry | null;
-};
-
-type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
-
-type ControlState = {
-  running: boolean;
-  speedLevelIndex: number;
-  selectedUavId: string;
-  cameraMode: CameraMode;
-  routesVisible: boolean;
-  envelopesVisible: boolean;
-  buildingsVisible: boolean;
-  roadsVisible: boolean;
-  treesVisible: boolean;
-  uavLabelsVisible: boolean;
 };
 
 export class FleetScene {
@@ -76,7 +67,6 @@ export class FleetScene {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEGREES, 1, CAMERA_NEAR_METERS, CAMERA_FAR_METERS);
   private readonly controls: OrbitControls;
-  private readonly pane: Pane;
   private readonly clock = new THREE.Clock();
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -111,7 +101,7 @@ export class FleetScene {
   private lastFollowPosition = new THREE.Vector3();
   private activeUavCount = 0;
   private nextPendingUavIndex = 0;
-  private readonly params: ControlState;
+  private readonly params: SimulationControlState;
 
   /** Wires DOM hosts, builds the fleet from scene data, and configures renderer, controls, UI, and scene. */
   constructor(options: FleetSceneOptions) {
@@ -126,18 +116,7 @@ export class FleetScene {
       .map((_, index) => index)
       .sort((a, b) => this.fleet[a].departureTimeSeconds - this.fleet[b].departureTimeSeconds);
 
-    this.params = {
-      running: true,
-      speedLevelIndex: 0,
-      selectedUavId: "",
-      cameraMode: CAMERA_MODES.FREE,
-      routesVisible: true,
-      envelopesVisible: true,
-      buildingsVisible: true,
-      roadsVisible: true,
-      treesVisible: true,
-      uavLabelsVisible: true,
-    };
+    this.params = createDefaultControlState();
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DEVICE_PIXEL_RATIO));
@@ -164,7 +143,7 @@ export class FleetScene {
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
     this.initializeStaticUavBoundingSphere();
-    this.pane = new Pane({ container: options.panel, title: "Simulation Controls" });
+    this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
     this.cameraPositionValue = readouts.cameraPositionValue;
@@ -174,7 +153,6 @@ export class FleetScene {
 
     this.buildScene();
     mountStatsPanel(this.host, this.performanceStats);
-    this.createControls();
     this.resize();
   }
 
@@ -209,57 +187,39 @@ export class FleetScene {
     );
   }
 
-  /** Wires Tweakpane bindings for play/speed/camera/visibility toggles and the reset button. */
-  private createControls(): void {
-    this.pane.addBinding(this.params, "running", { label: "Play" });
-    this.pane.addBinding(this.params, "speedLevelIndex", {
-      label: "Speed",
-      min: 0,
-      max: SIMULATION_SPEED_LEVELS.length - 1,
-      step: 1,
-      format: (value: number) => `${this.getSimulationSpeed(value)}x`,
-    }).on("change", () => {
-      this.params.speedLevelIndex = this.toSpeedLevelIndex(this.params.speedLevelIndex);
-      this.pane.refresh();
+  /** Mounts the control panel while keeping scene mutations inside FleetScene. */
+  private createControlPane(panel: HTMLElement): void {
+    createSimulationControls({
+      container: panel,
+      state: this.params,
+      formatSpeed: (speedLevelIndex) => `${this.getSimulationSpeed(speedLevelIndex)}x`,
+      normalizeSpeedLevelIndex: (speedLevelIndex) => this.toSpeedLevelIndex(speedLevelIndex),
+      onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
+      onResetSimulation: () => this.resetSimulation(),
     });
+  }
 
-    this.pane.addBinding(this.params, "cameraMode", {
-      label: "Camera",
-      options: {
-        Free: CAMERA_MODES.FREE,
-        Follow: CAMERA_MODES.FOLLOW_SELECTED_UAV,
-      },
-    });
+  /** Applies visibility toggles from the control panel to the corresponding scene groups. */
+  private applyLayerVisibility(visibility: LayerVisibilityState): void {
+    this.routeGroup.visible = visibility.routesVisible;
+    this.envelopeGroup.visible = visibility.envelopesVisible;
+    this.buildingGroup.visible = visibility.buildingsVisible;
+    this.roadGroup.visible = visibility.roadsVisible;
+    this.treeGroup.visible = visibility.treesVisible;
+  }
 
-    this.pane.addBinding(this.params, "routesVisible", { label: "Routes" }).on("change", () => {
-      this.routeGroup.visible = this.params.routesVisible;
-    });
-    this.pane.addBinding(this.params, "envelopesVisible", { label: "Envelopes" }).on("change", () => {
-      this.envelopeGroup.visible = this.params.envelopesVisible;
-    });
-    this.pane.addBinding(this.params, "buildingsVisible", { label: "Buildings" }).on("change", () => {
-      this.buildingGroup.visible = this.params.buildingsVisible;
-    });
-    this.pane.addBinding(this.params, "roadsVisible", { label: "Roads" }).on("change", () => {
-      this.roadGroup.visible = this.params.roadsVisible;
-    });
-    this.pane.addBinding(this.params, "treesVisible", { label: "Trees" }).on("change", () => {
-      this.treeGroup.visible = this.params.treesVisible;
-    });
-    this.pane.addBinding(this.params, "uavLabelsVisible", { label: "Labels" });
-    this.pane.addButton({ title: "Reset simulation" }).on("click", () => {
-      this.elapsedSeconds = 0;
-      this.nextPendingUavIndex = 0;
-      this.activeUavIndices.length = 0;
-      this.uavStateById.clear();
-      this.renderSlotToFleetIndex.length = 0;
-      this.uavMesh.count = 0;
-      this.clearUavLabels();
-      this.params.cameraMode = CAMERA_MODES.FREE;
-      this.camera.position.copy(this.initialCameraPosition);
-      this.controls.target.copy(this.initialTarget);
-      this.pane.refresh();
-    });
+  /** Resets mutable simulation state while preserving loaded scene assets and control bindings. */
+  private resetSimulation(): void {
+    this.elapsedSeconds = 0;
+    this.nextPendingUavIndex = 0;
+    this.activeUavIndices.length = 0;
+    this.uavStateById.clear();
+    this.renderSlotToFleetIndex.length = 0;
+    this.uavMesh.count = 0;
+    this.clearUavLabels();
+    this.params.cameraMode = CAMERA_MODES.FREE;
+    this.camera.position.copy(this.initialCameraPosition);
+    this.controls.target.copy(this.initialTarget);
   }
 
   /** Returns the simulation-speed multiplier for the given speed-level slider index. */
