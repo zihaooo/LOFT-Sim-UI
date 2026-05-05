@@ -45,7 +45,7 @@ void start();
 
 /** Bootstraps the app: fetches OSM/flow assets in parallel, builds scene data, and mounts the FleetScene. */
 async function start(): Promise<void> {
-  const loadingOverlay = requireElement<HTMLDivElement>("#loading-overlay");
+  const loadingOverlay = showLoadingOverlay();
 
   try {
     currentSources = await loadDefaultSources();
@@ -69,6 +69,7 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
   }
 
   const stats = requireElement<HTMLDivElement>("#hud-stats");
+  const loadingOverlay = showLoadingOverlay();
   reloadInProgress = true;
   stats.textContent = "Reloading scene data...";
 
@@ -89,6 +90,7 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
     console.error(error);
   } finally {
     reloadInProgress = false;
+    hideLoadingOverlay(loadingOverlay);
   }
 }
 
@@ -156,10 +158,49 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
-/** Fades the first-load overlay out after the initial scene frame has been scheduled. */
+/** Creates or restores the full-scene loading overlay used during initial load and scene reloads. */
+function showLoadingOverlay(): HTMLDivElement {
+  const existingOverlay = document.querySelector<HTMLDivElement>("#loading-overlay");
+  const loadingOverlay = existingOverlay ?? createLoadingOverlay();
+  loadingOverlay.classList.remove("loading-overlay--hidden", "loading-overlay--error");
+  loadingOverlay.replaceChildren(
+    createLoadingSpinner(),
+    createLoadingText(),
+  );
+  return loadingOverlay;
+}
+
+/** Builds the loading overlay if the static shell markup is unavailable. */
+function createLoadingOverlay(): HTMLDivElement {
+  const sceneShell = requireElement<HTMLElement>(".scene-shell");
+  const loadingOverlay = document.createElement("div");
+  loadingOverlay.id = "loading-overlay";
+  loadingOverlay.className = "loading-overlay";
+  loadingOverlay.setAttribute("role", "status");
+  loadingOverlay.setAttribute("aria-live", "polite");
+  sceneShell.appendChild(loadingOverlay);
+  return loadingOverlay;
+}
+
+/** Creates the loading spinner element with the same markup used by the initial shell. */
+function createLoadingSpinner(): HTMLDivElement {
+  const spinner = document.createElement("div");
+  spinner.className = "loading-overlay__spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  return spinner;
+}
+
+/** Creates the loading text element with the same text used by the initial shell. */
+function createLoadingText(): HTMLDivElement {
+  const text = document.createElement("div");
+  text.className = "loading-overlay__text";
+  text.textContent = "Loading scene";
+  return text;
+}
+
+/** Fades the loading overlay out after the scene frame has been scheduled. */
 function hideLoadingOverlay(loadingOverlay: HTMLDivElement): void {
   loadingOverlay.classList.add("loading-overlay--hidden");
-  window.setTimeout(() => loadingOverlay.remove(), 240);
 }
 
 /** Leaves a failed first load visible instead of spinning forever. */
