@@ -163,6 +163,7 @@ export class FleetScene {
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.routes);
     this.uavMesh = createUavMesh(this.fleet.length, options.uavGeometry ?? null);
     this.uavMesh.count = 0;
+    this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
     this.pane = new Pane({ container: options.panel, title: "Simulation Controls" });
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
