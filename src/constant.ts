@@ -121,7 +121,7 @@ export const ROUTE_DIRECTION_CONE_HEIGHT_METERS = 3.2;
 export const ROUTE_DIRECTION_CONE_RADIAL_SEGMENTS = 8;
 export const ROUTE_DIRECTION_CONE_STEP = 3;
 export const ENVELOPE_RADIAL_SEGMENTS = 18;
-export const ENVELOPE_OPACITY = 0.16;
+export const ENVELOPE_OPACITY = 0.1;
 export const ENVELOPE_ROUGHNESS = 0.45;
 
 // UAV rendering

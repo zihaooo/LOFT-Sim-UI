@@ -111,7 +111,7 @@ export function createFlightEnvelopeGroup(routes: AirRoute[]): THREE.Group {
     roughness: ENVELOPE_ROUGHNESS,
     metalness: 0,
     depthWrite: false,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
   }));
   if (mesh) {
     group.add(mesh);
