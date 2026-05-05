@@ -20,6 +20,10 @@ root.innerHTML = `
       <div class="help-panel">
         Right-drag rotate · Left-drag pan · Scroll zoom · WASD/arrows move · Click UAV to select
       </div>
+      <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
+        <div class="loading-overlay__spinner" aria-hidden="true"></div>
+        <div class="loading-overlay__text">Loading scene</div>
+      </div>
     </section>
     <aside id="control-panel" class="control-panel" aria-label="Simulation controls"></aside>
   </main>
@@ -29,6 +33,7 @@ void start();
 
 /** Bootstraps the app: fetches OSM/flow assets in parallel, builds scene data, and mounts the FleetScene. */
 async function start(): Promise<void> {
+  const loadingOverlay = requireElement<HTMLDivElement>("#loading-overlay");
   const [routeOsm, buildingOsm, flowJson] = await Promise.all([
     loadText("/asset/map/air_route.osm"),
     loadText("/asset/map/map.osm"),
@@ -52,6 +57,7 @@ async function start(): Promise<void> {
   });
 
   fleetScene.start();
+  hideLoadingOverlay(loadingOverlay);
 }
 
 /** Fetches a text asset and throws when the response is not OK so caller errors are explicit. */
@@ -72,4 +78,10 @@ function requireElement<T extends Element>(selector: string): T {
   }
 
   return element;
+}
+
+/** Fades the first-load overlay out after the initial scene frame has been scheduled. */
+function hideLoadingOverlay(loadingOverlay: HTMLDivElement): void {
+  loadingOverlay.classList.add("loading-overlay--hidden");
+  window.setTimeout(() => loadingOverlay.remove(), 240);
 }

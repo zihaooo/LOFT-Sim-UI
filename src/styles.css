@@ -120,6 +120,52 @@ select {
   overflow-wrap: anywhere;
 }
 
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #f6fbff;
+  background:
+    linear-gradient(rgba(220, 231, 239, 0.76), rgba(220, 231, 239, 0.76)),
+    #dce7ef;
+  opacity: 1;
+  transition: opacity 220ms ease;
+  pointer-events: all;
+}
+
+.loading-overlay--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-overlay__spinner {
+  width: 46px;
+  height: 46px;
+  border: 4px solid rgba(20, 33, 38, 0.18);
+  border-top-color: #142126;
+  border-radius: 50%;
+  animation: loading-spin 780ms linear infinite;
+}
+
+.loading-overlay__text {
+  margin-top: 14px;
+  color: #142126;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .label-layer {
   position: absolute;
   inset: 0;
