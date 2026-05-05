@@ -1,4 +1,5 @@
 import { Pane } from "tweakpane";
+import * as TweakpaneFileImportPlugin from "tweakpane-plugin-file-import";
 import { CAMERA_MODES, SIMULATION_SPEED_LEVELS } from "../constant";
 
 export type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
@@ -21,6 +22,20 @@ export type LayerVisibilityState = Pick<
   "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
 >;
 
+export type ConfigFileSelection = {
+  mapFile: File | null;
+  routeFile: File | null;
+  demandFile: File | null;
+};
+
+type ConfigFileInputValue = "" | File | null;
+
+type ConfigControlState = {
+  mapFile: ConfigFileInputValue;
+  routeFile: ConfigFileInputValue;
+  demandFile: ConfigFileInputValue;
+};
+
 type SimulationControlsOptions = {
   container: HTMLElement;
   state: SimulationControlState;
@@ -28,6 +43,7 @@ type SimulationControlsOptions = {
   normalizeSpeedLevelIndex: (speedLevelIndex: number) => number;
   onLayerVisibilityChange: (visibility: LayerVisibilityState) => void;
   onResetSimulation: () => void;
+  onReloadScene: (files: ConfigFileSelection) => Promise<void>;
 };
 
 /** Creates the default mutable control state shared by Tweakpane bindings and FleetScene. */
@@ -48,11 +64,49 @@ export function createDefaultControlState(): SimulationControlState {
 
 /** Mounts Tweakpane controls and delegates all scene mutations back to FleetScene through callbacks. */
 export function createSimulationControls(options: SimulationControlsOptions): Pane {
-  const pane = new Pane({ container: options.container, title: "Simulation Controls" });
+  const pane = new Pane({ container: options.container });
+  pane.registerPlugin(TweakpaneFileImportPlugin);
   const { state } = options;
+  const configState: ConfigControlState = {
+    mapFile: "",
+    routeFile: "",
+    demandFile: "",
+  };
 
-  pane.addBinding(state, "running", { label: "Play" });
-  pane.addBinding(state, "speedLevelIndex", {
+  const configFolder = pane.addFolder({ title: "Config Files", expanded: true });
+  configFolder.addBinding(configState, "mapFile", {
+    label: "Map",
+    view: "file-input",
+    lineCount: 1,
+    filetypes: [".osm"],
+    invalidFiletypeMessage: "Select an .osm file.",
+  });
+  configFolder.addBinding(configState, "routeFile", {
+    label: "Air route",
+    view: "file-input",
+    lineCount: 1,
+    filetypes: [".osm"],
+    invalidFiletypeMessage: "Select an .osm file.",
+  });
+  configFolder.addBinding(configState, "demandFile", {
+    label: "Demand",
+    view: "file-input",
+    lineCount: 1,
+    filetypes: [".json"],
+    invalidFiletypeMessage: "Select a .json file.",
+  });
+  configFolder.addButton({ title: "Reload scene" }).on("click", () => {
+    void options.onReloadScene({
+      mapFile: toFile(configState.mapFile),
+      routeFile: toFile(configState.routeFile),
+      demandFile: toFile(configState.demandFile),
+    });
+  });
+
+  const controlFolder = pane.addFolder({ title: "Controls", expanded: true });
+
+  controlFolder.addBinding(state, "running", { label: "Play" });
+  controlFolder.addBinding(state, "speedLevelIndex", {
     label: "Speed",
     min: 0,
     max: SIMULATION_SPEED_LEVELS.length - 1,
@@ -63,7 +117,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     pane.refresh();
   });
 
-  pane.addBinding(state, "cameraMode", {
+  controlFolder.addBinding(state, "cameraMode", {
     label: "Camera",
     options: {
       Free: CAMERA_MODES.FREE,
@@ -71,26 +125,31 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     },
   });
 
-  pane.addBinding(state, "routesVisible", { label: "Routes" }).on("change", () => {
+  controlFolder.addBinding(state, "routesVisible", { label: "Routes" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  pane.addBinding(state, "envelopesVisible", { label: "Envelopes" }).on("change", () => {
+  controlFolder.addBinding(state, "envelopesVisible", { label: "Envelopes" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  pane.addBinding(state, "buildingsVisible", { label: "Buildings" }).on("change", () => {
+  controlFolder.addBinding(state, "buildingsVisible", { label: "Buildings" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  pane.addBinding(state, "roadsVisible", { label: "Roads" }).on("change", () => {
+  controlFolder.addBinding(state, "roadsVisible", { label: "Roads" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  pane.addBinding(state, "treesVisible", { label: "Trees" }).on("change", () => {
+  controlFolder.addBinding(state, "treesVisible", { label: "Trees" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  pane.addBinding(state, "uavLabelsVisible", { label: "Labels" });
-  pane.addButton({ title: "Reset simulation" }).on("click", () => {
+  controlFolder.addBinding(state, "uavLabelsVisible", { label: "Labels" });
+  controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
     options.onResetSimulation();
     pane.refresh();
   });
 
   return pane;
+}
+
+/** Normalizes the file-input plugin's initial empty string and delete state into a File-or-null value. */
+function toFile(value: ConfigFileInputValue): File | null {
+  return value instanceof File ? value : null;
 }

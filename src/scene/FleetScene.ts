@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
+import type { Pane } from "tweakpane";
 import type { AirRoute, SceneData, UavSchedule, UavState } from "../types";
 import { createFleet, getUavRoutePosition } from "../animation/fleet";
 import {
@@ -37,6 +38,7 @@ import {
   createDefaultControlState,
   createSimulationControls,
   type CameraMode,
+  type ConfigFileSelection,
   type LayerVisibilityState,
   type SimulationControlState,
 } from "./control";
@@ -52,13 +54,16 @@ type FleetSceneOptions = {
   stats: HTMLDivElement;
   sceneData: SceneData;
   uavGeometry?: THREE.BufferGeometry | null;
+  onReloadScene: (files: ConfigFileSelection) => Promise<void>;
 };
 
 export class FleetScene {
   private readonly host: HTMLDivElement;
+  private readonly panel: HTMLDivElement;
   private readonly labelLayer: HTMLDivElement;
   private readonly stats: HTMLDivElement;
   private readonly sceneData: SceneData;
+  private readonly onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   private readonly routeById: Map<string, AirRoute>;
   private readonly fleet: UavSchedule[];
   private readonly fleetById: Map<string, UavSchedule>;
@@ -67,6 +72,7 @@ export class FleetScene {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEGREES, 1, CAMERA_NEAR_METERS, CAMERA_FAR_METERS);
   private readonly controls: OrbitControls;
+  private readonly controlPane: Pane;
   private readonly clock = new THREE.Clock();
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -101,14 +107,19 @@ export class FleetScene {
   private lastFollowPosition = new THREE.Vector3();
   private activeUavCount = 0;
   private nextPendingUavIndex = 0;
+  private animationFrame = 0;
+  private started = false;
+  private disposed = false;
   private readonly params: SimulationControlState;
 
   /** Wires DOM hosts, builds the fleet from scene data, and configures renderer, controls, UI, and scene. */
   constructor(options: FleetSceneOptions) {
     this.host = options.host;
+    this.panel = options.panel;
     this.labelLayer = options.labelLayer;
     this.stats = options.stats;
     this.sceneData = options.sceneData;
+    this.onReloadScene = options.onReloadScene;
     this.routeById = new Map(this.sceneData.routes.map((route) => [route.id, route]));
     this.fleet = createFleet(this.sceneData.routes, this.sceneData.flows);
     this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
@@ -143,7 +154,7 @@ export class FleetScene {
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
     this.initializeStaticUavBoundingSphere();
-    this.createControlPane(options.panel);
+    this.controlPane = this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
     this.cameraPositionValue = readouts.cameraPositionValue;
@@ -158,6 +169,10 @@ export class FleetScene {
 
   /** Registers window/canvas event listeners and kicks off the render loop. */
   start(): void {
+    if (this.started || this.disposed) {
+      return;
+    }
+    this.started = true;
     window.addEventListener("resize", this.resize);
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -165,6 +180,34 @@ export class FleetScene {
     this.renderer.domElement.addEventListener("contextmenu", this.handleContextMenu);
     this.clock.start();
     this.animate();
+  }
+
+  /** Stops rendering, detaches DOM/event handlers, and releases GPU resources before scene recreation. */
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+
+    if (this.animationFrame !== 0) {
+      window.cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = 0;
+    }
+
+    window.removeEventListener("resize", this.resize);
+    window.removeEventListener("keydown", this.handleKeyDown);
+    window.removeEventListener("keyup", this.handleKeyUp);
+    this.renderer.domElement.removeEventListener("pointerdown", this.handlePointerDown);
+    this.renderer.domElement.removeEventListener("contextmenu", this.handleContextMenu);
+    this.controls.dispose();
+    this.controlPane.dispose();
+    this.performanceStats.dom.remove();
+    this.clearUavLabels();
+    this.labelLayer.replaceChildren();
+    this.panel.replaceChildren();
+    this.disposeSceneResources();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
   }
 
   /** One-time scene assembly: background, fog, initial camera framing, and all geometry groups. */
@@ -188,14 +231,15 @@ export class FleetScene {
   }
 
   /** Mounts the control panel while keeping scene mutations inside FleetScene. */
-  private createControlPane(panel: HTMLElement): void {
-    createSimulationControls({
+  private createControlPane(panel: HTMLElement): Pane {
+    return createSimulationControls({
       container: panel,
       state: this.params,
       formatSpeed: (speedLevelIndex) => `${this.getSimulationSpeed(speedLevelIndex)}x`,
       normalizeSpeedLevelIndex: (speedLevelIndex) => this.toSpeedLevelIndex(speedLevelIndex),
       onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
       onResetSimulation: () => this.resetSimulation(),
+      onReloadScene: this.onReloadScene,
     });
   }
 
@@ -234,7 +278,10 @@ export class FleetScene {
 
   /** Per-frame loop: advances sim time, updates fleet/camera/labels, then renders. Bound as arrow for rAF. */
   private animate = (): void => {
-    window.requestAnimationFrame(this.animate);
+    if (this.disposed) {
+      return;
+    }
+    this.animationFrame = window.requestAnimationFrame(this.animate);
     this.performanceStats.begin();
     const delta = Math.min(this.clock.getDelta(), FRAME_DELTA_MAX_SECONDS);
 
@@ -475,6 +522,31 @@ export class FleetScene {
   private handleKeyUp = (event: KeyboardEvent): void => {
     this.keys.delete(event.key.toLowerCase());
   };
+
+  /** Disposes geometries and materials owned by the scene graph. */
+  private disposeSceneResources(): void {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+
+    this.scene.traverse((object) => {
+      const renderable = object as THREE.Object3D & {
+        geometry?: THREE.BufferGeometry;
+        material?: THREE.Material | THREE.Material[];
+      };
+
+      if (renderable.geometry) {
+        geometries.add(renderable.geometry);
+      }
+      if (Array.isArray(renderable.material)) {
+        renderable.material.forEach((material) => materials.add(material));
+      } else if (renderable.material) {
+        materials.add(renderable.material);
+      }
+    });
+
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+  }
 
   /** Keeps the camera aspect ratio and renderer size in sync with the host element on resize. */
   private resize = (): void => {

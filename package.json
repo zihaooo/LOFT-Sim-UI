@@ -12,7 +12,8 @@
   "dependencies": {
     "stats.js": "^0.17.0",
     "three": "^0.180.0",
-    "tweakpane": "^4.0.5"
+    "tweakpane": "^4.0.5",
+    "tweakpane-plugin-file-import": "^1.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

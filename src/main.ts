@@ -1,5 +1,6 @@
 import "./styles.css";
 import { createSceneData } from "./data/osm";
+import type { ConfigFileSelection } from "./scene/control";
 import { FleetScene, loadDroneGeometry } from "./scene/FleetScene";
 
 const root = document.querySelector<HTMLDivElement>("#root");
@@ -29,19 +30,70 @@ root.innerHTML = `
   </main>
 `;
 
+type SceneSourceTexts = {
+  routeOsm: string;
+  buildingOsm: string;
+  flowJson: string;
+};
+
+let currentSources: SceneSourceTexts | null = null;
+let activeScene: FleetScene | null = null;
+let uavGeometry: Awaited<ReturnType<typeof loadDroneGeometry>> = null;
+let reloadInProgress = false;
+
 void start();
 
 /** Bootstraps the app: fetches OSM/flow assets in parallel, builds scene data, and mounts the FleetScene. */
 async function start(): Promise<void> {
   const loadingOverlay = requireElement<HTMLDivElement>("#loading-overlay");
-  const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-    loadText("/asset/map/air_route.osm"),
-    loadText("/asset/map/map.osm"),
-    loadText("/asset/demand/flow.json"),
-  ]);
 
-  const sceneData = createSceneData(routeOsm, buildingOsm, flowJson);
-  const uavGeometry = await loadDroneGeometry();
+  try {
+    currentSources = await loadDefaultSources();
+    uavGeometry = await loadDroneGeometry();
+    activeScene = mountScene(createSceneData(
+      currentSources.routeOsm,
+      currentSources.buildingOsm,
+      currentSources.flowJson,
+    ));
+    hideLoadingOverlay(loadingOverlay);
+  } catch (error) {
+    showLoadingError(loadingOverlay, error);
+    throw error;
+  }
+}
+
+/** Rebuilds the scene from uploaded files, keeping existing source texts for any omitted file. */
+async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
+  if (!currentSources || reloadInProgress) {
+    return;
+  }
+
+  const stats = requireElement<HTMLDivElement>("#hud-stats");
+  reloadInProgress = true;
+  stats.textContent = "Reloading scene data...";
+
+  try {
+    const nextSources = await mergeUploadedSources(currentSources, files);
+    const sceneData = createSceneData(
+      nextSources.routeOsm,
+      nextSources.buildingOsm,
+      nextSources.flowJson,
+    );
+
+    activeScene?.dispose();
+    activeScene = null;
+    activeScene = mountScene(sceneData);
+    currentSources = nextSources;
+  } catch (error) {
+    stats.textContent = `Failed to reload scene: ${formatError(error)}`;
+    console.error(error);
+  } finally {
+    reloadInProgress = false;
+  }
+}
+
+/** Builds and starts a FleetScene against the current shared DOM hosts. */
+function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
   const host = requireElement<HTMLDivElement>("#scene-host");
   const panel = requireElement<HTMLDivElement>("#control-panel");
   const labelLayer = requireElement<HTMLDivElement>("#label-layer");
@@ -53,11 +105,35 @@ async function start(): Promise<void> {
     labelLayer,
     stats,
     sceneData,
-    uavGeometry,
+    uavGeometry: uavGeometry?.clone() ?? null,
+    onReloadScene: handleReloadScene,
   });
 
   fleetScene.start();
-  hideLoadingOverlay(loadingOverlay);
+  return fleetScene;
+}
+
+/** Reads the bundled startup files into the same shape used for later reloads. */
+async function loadDefaultSources(): Promise<SceneSourceTexts> {
+  const [routeOsm, buildingOsm, flowJson] = await Promise.all([
+    loadText("/asset/map/air_route.osm"),
+    loadText("/asset/map/map.osm"),
+    loadText("/asset/demand/flow.json"),
+  ]);
+
+  return { routeOsm, buildingOsm, flowJson };
+}
+
+/** Applies uploaded files over the existing source texts without mutating the current running scene. */
+async function mergeUploadedSources(
+  sources: SceneSourceTexts,
+  files: ConfigFileSelection,
+): Promise<SceneSourceTexts> {
+  return {
+    routeOsm: files.routeFile ? await files.routeFile.text() : sources.routeOsm,
+    buildingOsm: files.mapFile ? await files.mapFile.text() : sources.buildingOsm,
+    flowJson: files.demandFile ? await files.demandFile.text() : sources.flowJson,
+  };
 }
 
 /** Fetches a text asset and throws when the response is not OK so caller errors are explicit. */
@@ -84,4 +160,15 @@ function requireElement<T extends Element>(selector: string): T {
 function hideLoadingOverlay(loadingOverlay: HTMLDivElement): void {
   loadingOverlay.classList.add("loading-overlay--hidden");
   window.setTimeout(() => loadingOverlay.remove(), 240);
+}
+
+/** Leaves a failed first load visible instead of spinning forever. */
+function showLoadingError(loadingOverlay: HTMLDivElement, error: unknown): void {
+  loadingOverlay.classList.add("loading-overlay--error");
+  loadingOverlay.textContent = `Failed to load scene: ${formatError(error)}`;
+}
+
+/** Converts unknown thrown values into concise user-facing text. */
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
