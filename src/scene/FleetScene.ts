@@ -102,7 +102,6 @@ export class FleetScene {
   private readonly initialCameraPosition = new THREE.Vector3();
   private readonly initialTarget = new THREE.Vector3();
 
-  private animationFrame = 0;
   private elapsedSeconds = 0;
   private selectedInstanceId = -1;
   private selectedPosition = new THREE.Vector3();
@@ -164,6 +163,7 @@ export class FleetScene {
     this.uavMesh = createUavMesh(this.fleet.length, options.uavGeometry ?? null);
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
+    this.initializeStaticUavBoundingSphere();
     this.pane = new Pane({ container: options.panel, title: "Simulation Controls" });
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
@@ -274,7 +274,7 @@ export class FleetScene {
 
   /** Per-frame loop: advances sim time, updates fleet/camera/labels, then renders. Bound as arrow for rAF. */
   private animate = (): void => {
-    this.animationFrame = window.requestAnimationFrame(this.animate);
+    window.requestAnimationFrame(this.animate);
     this.performanceStats.begin();
     const delta = Math.min(this.clock.getDelta(), FRAME_DELTA_MAX_SECONDS);
 
@@ -524,6 +524,30 @@ export class FleetScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   };
+
+  /** Covers every possible UAV position so InstancedMesh raycasting does not depend on stale moving-instance bounds. */
+  private initializeStaticUavBoundingSphere(): void {
+    const bounds = this.sceneData.mapBounds;
+    const uavMovementBounds = new THREE.Box3(
+      toVector3(bounds.min),
+      toVector3(bounds.max),
+    );
+
+    this.sceneData.routes.forEach((route) => {
+      route.points.forEach((point) => {
+        uavMovementBounds.expandByPoint(toVector3(point));
+      });
+    });
+
+    const boundingSphere = new THREE.Sphere();
+    uavMovementBounds.getBoundingSphere(boundingSphere);
+
+    if (!this.uavMesh.geometry.boundingSphere) {
+      this.uavMesh.geometry.computeBoundingSphere();
+    }
+    boundingSphere.radius += this.uavMesh.geometry.boundingSphere?.radius ?? 0;
+    this.uavMesh.boundingSphere = boundingSphere;
+  }
 
   /** Starts at the middle of the ground plane's south edge, looking at the ground center. */
   private setInitialCameraFrame(): void {
