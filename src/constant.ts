@@ -132,6 +132,7 @@ export const UAV_COLOR = "#ffffff";
 export const SELECTED_UAV_COLOR = "#ff2f2f";
 export const UAV_ROUGHNESS = 0.38;
 export const UAV_METALNESS = 0.15;
+export const TELEMETRY_UAV_MESH_CAPACITY = 10_000;
 
 // Labels and readouts
 export const LABEL_SCREEN_Y_OFFSET_METERS = 16;

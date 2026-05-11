@@ -1,6 +1,6 @@
 import "./styles.css";
 import { createSceneData } from "./data/osm";
-import type { ConfigFileSelection } from "./scene/control";
+import type { ConfigFileSelection, DemoPreset } from "./scene/control";
 import { FleetScene, loadDroneGeometry } from "./scene/FleetScene";
 
 const root = document.querySelector<HTMLDivElement>("#root");
@@ -40,6 +40,7 @@ let currentSources: SceneSourceTexts | null = null;
 let activeScene: FleetScene | null = null;
 let uavGeometry: Awaited<ReturnType<typeof loadDroneGeometry>> = null;
 let reloadInProgress = false;
+let activeDemoPreset: DemoPreset | null = null;
 
 void start();
 
@@ -81,12 +82,46 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
       nextSources.flowJson,
     );
 
+    activeDemoPreset = null;
     activeScene?.dispose();
     activeScene = null;
     activeScene = mountScene(sceneData);
     currentSources = nextSources;
   } catch (error) {
     stats.textContent = `Failed to reload scene: ${formatError(error)}`;
+    console.error(error);
+  } finally {
+    reloadInProgress = false;
+    hideLoadingOverlay(loadingOverlay);
+  }
+}
+
+/** Loads a built-in frontend-only demo preset and disables telemetry for the remounted scene. */
+async function handleLoadDemoPreset(preset: DemoPreset): Promise<void> {
+  if (reloadInProgress) {
+    return;
+  }
+
+  const stats = requireElement<HTMLDivElement>("#hud-stats");
+  const loadingOverlay = showLoadingOverlay();
+  reloadInProgress = true;
+  stats.textContent = "Loading demo...";
+
+  try {
+    const nextSources = await loadDemoSources(preset);
+    const sceneData = createSceneData(
+      nextSources.routeOsm,
+      nextSources.buildingOsm,
+      nextSources.flowJson,
+    );
+
+    activeDemoPreset = preset;
+    activeScene?.dispose();
+    activeScene = null;
+    activeScene = mountScene(sceneData);
+    currentSources = nextSources;
+  } catch (error) {
+    stats.textContent = `Failed to load demo: ${formatError(error)}`;
     console.error(error);
   } finally {
     reloadInProgress = false;
@@ -109,6 +144,9 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
     sceneData,
     uavGeometry: uavGeometry?.clone() ?? null,
     onReloadScene: handleReloadScene,
+    onLoadDemoPreset: handleLoadDemoPreset,
+    activeDemoPreset,
+    telemetryUrl: activeDemoPreset === null ? "ws://127.0.0.1:8765/ws" : undefined,
   });
 
   fleetScene.start();
@@ -124,6 +162,21 @@ async function loadDefaultSources(): Promise<SceneSourceTexts> {
   ]);
 
   return { routeOsm, buildingOsm, flowJson };
+}
+
+/** Reads a built-in demo preset. Demo presets are always frontend-only. */
+async function loadDemoSources(preset: DemoPreset): Promise<SceneSourceTexts> {
+  if (preset === "stressTest") {
+    const [routeOsm, buildingOsm, flowJson] = await Promise.all([
+      loadText("/asset/map/stress_air_route.osm"),
+      loadText("/asset/map/map.osm"),
+      loadText("/asset/demand/stress_flow.json"),
+    ]);
+
+    return { routeOsm, buildingOsm, flowJson };
+  }
+
+  return loadDefaultSources();
 }
 
 /** Applies uploaded files over the existing source texts without mutating the current running scene. */

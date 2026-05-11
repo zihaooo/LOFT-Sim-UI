@@ -3,11 +3,14 @@ import * as TweakpaneFileImportPlugin from "tweakpane-plugin-file-import";
 import { CAMERA_MODES, SIMULATION_SPEED_LEVELS } from "../constant";
 
 export type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
+export type DemoPreset = "twoRoutes" | "stressTest";
 
 export type SimulationControlState = {
   running: boolean;
   speedLevelIndex: number;
   selectedUavId: string;
+  demoTwoRoutes: boolean;
+  demoStressTest: boolean;
   cameraMode: CameraMode;
   routesVisible: boolean;
   envelopesVisible: boolean;
@@ -41,17 +44,21 @@ type SimulationControlsOptions = {
   state: SimulationControlState;
   formatSpeed: (speedLevelIndex: number) => string;
   normalizeSpeedLevelIndex: (speedLevelIndex: number) => number;
+  onRunningChange: (running: boolean) => void;
   onLayerVisibilityChange: (visibility: LayerVisibilityState) => void;
   onResetSimulation: () => void;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
+  onLoadDemoPreset: (preset: DemoPreset) => Promise<void>;
 };
 
 /** Creates the default mutable control state shared by Tweakpane bindings and FleetScene. */
-export function createDefaultControlState(): SimulationControlState {
+export function createDefaultControlState(activeDemoPreset: DemoPreset | null = null): SimulationControlState {
   return {
     running: true,
     speedLevelIndex: 0,
     selectedUavId: "",
+    demoTwoRoutes: activeDemoPreset === "twoRoutes",
+    demoStressTest: activeDemoPreset === "stressTest",
     cameraMode: CAMERA_MODES.FREE,
     routesVisible: true,
     envelopesVisible: true,
@@ -105,7 +112,9 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
 
   const controlFolder = pane.addFolder({ title: "Controls", expanded: true });
 
-  controlFolder.addBinding(state, "running", { label: "Play" });
+  controlFolder.addBinding(state, "running", { label: "Play" }).on("change", () => {
+    options.onRunningChange(state.running);
+  });
   controlFolder.addBinding(state, "speedLevelIndex", {
     label: "Speed",
     min: 0,
@@ -144,6 +153,26 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
     options.onResetSimulation();
     pane.refresh();
+  });
+
+  const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
+  demoFolder.addBinding(state, "demoTwoRoutes", { label: "Two Routes" }).on("change", () => {
+    if (!state.demoTwoRoutes) {
+      return;
+    }
+
+    state.demoStressTest = false;
+    pane.refresh();
+    void options.onLoadDemoPreset("twoRoutes");
+  });
+  demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
+    if (!state.demoStressTest) {
+      return;
+    }
+
+    state.demoTwoRoutes = false;
+    pane.refresh();
+    void options.onLoadDemoPreset("stressTest");
   });
 
   return pane;
