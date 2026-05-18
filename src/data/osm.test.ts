@@ -29,6 +29,39 @@ describe("OSM and flow parsing", () => {
     expect(routes.every((route) => route.from && route.to)).toBe(true);
   });
 
+  it("falls back to all polyline ways when route tags are absent", () => {
+    const routeOsm = `
+      <osm version="0.6">
+        <node id="-1" lat="42.2900" lon="-83.7100">
+          <tag k="altitude" v="30" />
+        </node>
+        <node id="-2" lat="42.2910" lon="-83.7100">
+          <tag k="altitude" v="40" />
+        </node>
+        <node id="-3" lat="42.2910" lon="-83.7090">
+          <tag k="altitude" v="50" />
+        </node>
+        <way id="-10">
+          <nd ref="-1" />
+          <nd ref="-2" />
+          <tag k="airspace" v="yes" />
+        </way>
+        <way id="-11">
+          <nd ref="-2" />
+          <nd ref="-3" />
+          <tag k="airspace" v="yes" />
+        </way>
+      </osm>
+    `;
+
+    const routes = parseAirRoutes(routeOsm);
+
+    expect(routes).toHaveLength(2);
+    expect(routes.map((route) => route.id)).toEqual(["-10", "-11"]);
+    expect(routes.every((route) => route.points.length === 2)).toBe(true);
+    expect(routes[0].points[0].y).toBe(30);
+  });
+
   it("parses building footprints and resolves heights from the provided map", () => {
     const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
     const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");

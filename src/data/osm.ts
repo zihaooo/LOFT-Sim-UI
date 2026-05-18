@@ -34,13 +34,14 @@ export function parseFlowDefinitions(rawJson: string): FlowDefinition[] {
   }));
 }
 
-/** Extracts ways tagged route=air, projects their nodes to local meters, and computes routing metrics. */
+/** Extracts air-route ways, falling back to every polyline way for untagged airspace-network files. */
 export function parseAirRoutes(osmText: string, origin?: ProjectionOrigin): AirRoute[] {
   const { nodes, ways } = parseOsm(osmText);
   const routeOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
+  const taggedRouteWays = ways.filter((way) => way.tags.get("route") === "air");
+  const routeWays = taggedRouteWays.length > 0 ? taggedRouteWays : ways.filter((way) => way.nodeRefs.length >= 2);
 
-  return ways
-    .filter((way) => way.tags.get("route") === "air")
+  return routeWays
     .map((way, routeIndex) => {
       const geoPoints = way.nodeRefs
         .map((ref) => nodes.get(ref))
@@ -63,7 +64,8 @@ export function parseAirRoutes(osmText: string, origin?: ProjectionOrigin): AirR
         geoPoints,
         ...routeMetrics,
       };
-    });
+    })
+    .filter((route) => route.points.length >= 2);
 }
 
 /** Extracts building (or building:part) ways as planar footprints, dropping any with fewer than 3 vertices. */
