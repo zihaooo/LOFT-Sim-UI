@@ -1,7 +1,7 @@
 export type GeoPoint = {
   lat: number;
   lon: number;
-  elevation: number;
+  altitude: number;
 };
 
 export type ScenePoint = {

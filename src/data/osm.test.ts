@@ -23,7 +23,7 @@ describe("OSM and flow parsing", () => {
     expect(routes).toHaveLength(2);
     expect(routes[0].id).toBe("1");
     expect(routes[0].points.length).toBeGreaterThan(10);
-    expect(routes[0].points[1].y).toBe(routes[0].geoPoints[1].elevation);
+    expect(routes[0].points[1].y).toBe(routes[0].geoPoints[1].altitude);
     expect(routes[0].points[1].y).toBeGreaterThan(0);
     expect(routes[0].length).toBeGreaterThan(900);
     expect(routes.every((route) => route.from && route.to)).toBe(true);
@@ -103,7 +103,7 @@ describe("OSM and flow parsing", () => {
 describe("projection and polyline measurement", () => {
   it("keeps the projection origin at the scene center", () => {
     const projected = projectGeoPoint(
-      { lat: 42.29, lon: -83.71, elevation: 80 },
+      { lat: 42.29, lon: -83.71, altitude: 80 },
       { lat: 42.29, lon: -83.71 },
     );
 
@@ -112,8 +112,8 @@ describe("projection and polyline measurement", () => {
 
   it("aligns north to +X and east to +Z", () => {
     const origin = { lat: 42.29, lon: -83.71 };
-    const north = projectGeoPoint({ lat: 42.291, lon: -83.71, elevation: 0 }, origin);
-    const east = projectGeoPoint({ lat: 42.29, lon: -83.709, elevation: 0 }, origin);
+    const north = projectGeoPoint({ lat: 42.291, lon: -83.71, altitude: 0 }, origin);
+    const east = projectGeoPoint({ lat: 42.29, lon: -83.709, altitude: 0 }, origin);
 
     expect(north.x).toBeGreaterThan(0);
     expect(Math.abs(north.z)).toBeLessThan(0.000001);

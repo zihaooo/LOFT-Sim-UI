@@ -5,8 +5,8 @@ between a start point and an end point.
 
 Output format mirrors asset/map/air_route.osm:
   - Each waypoint is a <node> with a negative id (-1, -2, ...).
-  - Start and end nodes get tag elevation="0".
-  - Middle nodes get tag elevation="<-z>".
+  - Start and end nodes get tag altitude="0".
+  - Middle nodes get tag altitude="<-z>".
   - All nodes are joined by one <way> with tag route="air".
 
 Example:
@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("-s", "--start", required=True, type=lng_lat, help="Start 'lng,lat'.")
     p.add_argument("-e", "--end", required=True, type=lng_lat, help="End 'lng,lat'.")
     p.add_argument("-n", "--num", required=True, type=int, help="Number of middle waypoints (>= 0).")
-    p.add_argument("-z", "--elevation", required=True, type=float, help="Elevation for middle nodes.")
+    p.add_argument("-z", "--altitude", required=True, type=float, help="altitude for middle nodes.")
     p.add_argument("-o", "--output", required=True, type=Path, help="Output OSM file.")
     return p.parse_args()
 
@@ -66,7 +66,7 @@ def next_negative_id(root: ET.Element, tag: str) -> int:
     return min(floor, 0) - 1
 
 
-def append_route(root, start, end, middle, elevation, first_node_id, way_id):
+def append_route(root, start, end, middle, altitude, first_node_id, way_id):
     if middle < 0:
         raise ValueError("--num must be >= 0")
 
@@ -82,7 +82,7 @@ def append_route(root, start, end, middle, elevation, first_node_id, way_id):
         lng = lerp(s_lng, e_lng, t)
         lat = lerp(s_lat, e_lat, t)
         is_endpoint = i == 0 or i == n_total - 1
-        elev = 0 if is_endpoint else elevation
+        elev = 0 if is_endpoint else altitude
 
         node = ET.SubElement(root, "node", {
             "id": str(nid),
@@ -90,7 +90,7 @@ def append_route(root, start, end, middle, elevation, first_node_id, way_id):
             "lon": f"{lng:.7f}",
             "version": "1",
         })
-        ET.SubElement(node, "tag", {"k": "elevation", "v": fmt_elev(elev)})
+        ET.SubElement(node, "tag", {"k": "altitude", "v": fmt_elev(elev)})
 
     way = ET.SubElement(root, "way", {"id": str(way_id), "version": "1"})
     for nid in node_ids:
@@ -136,7 +136,7 @@ def main() -> int:
 
     first_node_id = next_negative_id(root, "node")
     way_id = next_negative_id(root, "way")
-    append_route(root, args.start, args.end, args.num, args.elevation, first_node_id, way_id)
+    append_route(root, args.start, args.end, args.num, args.altitude, first_node_id, way_id)
 
     indent(root)
     tree.write(args.output, encoding="UTF-8", xml_declaration=True)

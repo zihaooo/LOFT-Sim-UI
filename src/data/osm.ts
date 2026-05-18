@@ -45,7 +45,7 @@ export function parseAirRoutes(osmText: string, origin?: ProjectionOrigin): AirR
       const geoPoints = way.nodeRefs
         .map((ref) => nodes.get(ref))
         .filter((node): node is OsmNode => Boolean(node))
-        .map(({ lat, lon, elevation }) => ({ lat, lon, elevation }));
+        .map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
 
       const points = geoPoints.map((point) => projectGeoPoint(point, routeOrigin));
       const routeMetrics = measurePolyline(points);
@@ -169,7 +169,7 @@ export function projectGeoPoint(point: GeoPoint, origin: ProjectionOrigin): Scen
 
   return {
     x: (point.lat - origin.lat) * METERS_PER_DEGREE_LAT,
-    y: point.elevation,
+    y: point.altitude,
     z: (point.lon - origin.lon) * metersPerDegreeLon,
   };
 }
@@ -217,7 +217,7 @@ function parseOsm(osmText: string): { nodes: Map<string, OsmNode>; ways: OsmWay[
       id,
       lat,
       lon,
-      elevation: Number(tags.get("elevation") ?? 0),
+      altitude: Number(tags.get("altitude") ?? 0),
       tags,
     });
   }

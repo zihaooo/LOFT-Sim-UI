@@ -92,7 +92,7 @@ def main() -> int:
             points.append({
                 "x": (lon - origin_lon) * meters_per_degree_lon,
                 "y": (lat - origin_lat) * METERS_PER_DEGREE_LAT,
-                "z": parse_float(node_tags.get("elevation")),
+                "z": parse_float(node_tags.get("altitude")),
             })
 
         if len(points) < 2:

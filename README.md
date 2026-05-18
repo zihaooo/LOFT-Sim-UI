@@ -72,7 +72,7 @@ Camera and selection:
 
 ## Coordinate System
 
-City-scale flat-earth projection: latitude → `x`, elevation → `y`, longitude → `z`. The shared origin is computed from route and map OSM nodes so all geometry aligns. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
+City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from route and map OSM nodes so all geometry aligns. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
 
 ## Status
 
