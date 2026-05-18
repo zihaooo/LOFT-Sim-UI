@@ -307,13 +307,17 @@ export class FleetScene {
     this.renderSlotToFleetIndex.length = 0;
     this.renderSlotToTelemetryHandle.length = 0;
     this.uavMesh.count = 0;
-    this.selectedInstanceId = -1;
-    this.selectedTelemetryHandle = -1;
-    this.params.selectedUavId = "";
+    this.clearSelectedUav();
     this.clearUavLabels();
     this.params.cameraMode = CAMERA_MODES.FREE;
     this.camera.position.copy(this.initialCameraPosition);
     this.controls.target.copy(this.initialTarget);
+  }
+
+  private clearSelectedUav(): void {
+    this.selectedInstanceId = -1;
+    this.selectedTelemetryHandle = -1;
+    this.params.selectedUavId = "";
   }
 
   /** Returns the simulation-speed multiplier for the given speed-level slider index. */
@@ -709,10 +713,15 @@ export class FleetScene {
     const instanceId = intersections[0]?.instanceId;
     const telemetryHandle = instanceId === undefined ? undefined : this.renderSlotToTelemetryHandle[instanceId];
     if (telemetryHandle !== undefined) {
+      const droneId = this.telemetryClient?.getRegistry().dronesByHandle.get(telemetryHandle)?.id ?? `D${telemetryHandle}`;
+      if (telemetryHandle === this.selectedTelemetryHandle || droneId === this.params.selectedUavId) {
+        this.clearSelectedUav();
+        return;
+      }
+
       this.selectedTelemetryHandle = telemetryHandle;
       this.selectedInstanceId = -1;
-      this.params.selectedUavId =
-        this.telemetryClient?.getRegistry().dronesByHandle.get(telemetryHandle)?.id ?? `D${telemetryHandle}`;
+      this.params.selectedUavId = droneId;
       return;
     }
 
@@ -721,9 +730,15 @@ export class FleetScene {
       return;
     }
 
+    const uavId = this.fleet[fleetIndex].id;
+    if (fleetIndex === this.selectedInstanceId || uavId === this.params.selectedUavId) {
+      this.clearSelectedUav();
+      return;
+    }
+
     this.selectedTelemetryHandle = -1;
     this.selectedInstanceId = fleetIndex;
-    this.params.selectedUavId = this.fleet[fleetIndex].id;
+    this.params.selectedUavId = uavId;
   };
 
   /** Suppresses the browser context menu so right-drag is free to rotate the orbit camera. */
