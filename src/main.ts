@@ -174,6 +174,14 @@ async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTe
     ]);
 
     return { routeOsm, buildingOsm, flowJson };
+  } else if (preset === "twoRoutes") {
+      const [routeOsm, buildingOsm, flowJson] = await Promise.all([
+          loadText("/asset/map/two_air_route.osm"),
+          loadText("/asset/map/map.osm"),
+          loadText("/asset/demand/two_flow.json"),
+      ]);
+
+      return { routeOsm, buildingOsm, flowJson };
   }
 
   return loadDefaultSources();

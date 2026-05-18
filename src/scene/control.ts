@@ -80,7 +80,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     demandFile: "",
   };
 
-  const configFolder = pane.addFolder({ title: "Config Files", expanded: true });
+  const configFolder = pane.addFolder({ title: "Config Files", expanded: false });
   configFolder.addBinding(configState, "mapFile", {
     label: "Map",
     view: "file-input",
