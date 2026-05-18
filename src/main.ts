@@ -96,16 +96,16 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
   }
 }
 
-/** Loads a built-in frontend-only demo preset and disables telemetry for the remounted scene. */
-async function handleLoadDemoPreset(preset: DemoPreset): Promise<void> {
-  if (reloadInProgress) {
+/** Loads a frontend-only demo preset, or restores the default telemetry-backed scene when preset is null. */
+async function handleLoadDemoPreset(preset: DemoPreset | null): Promise<void> {
+  if (reloadInProgress || preset === activeDemoPreset) {
     return;
   }
 
   const stats = requireElement<HTMLDivElement>("#hud-stats");
   const loadingOverlay = showLoadingOverlay();
   reloadInProgress = true;
-  stats.textContent = "Loading demo...";
+  stats.textContent = preset ? "Loading demo..." : "Loading default scene...";
 
   try {
     const nextSources = await loadDemoSources(preset);
@@ -121,7 +121,7 @@ async function handleLoadDemoPreset(preset: DemoPreset): Promise<void> {
     activeScene = mountScene(sceneData);
     currentSources = nextSources;
   } catch (error) {
-    stats.textContent = `Failed to load demo: ${formatError(error)}`;
+    stats.textContent = `Failed to load ${preset ? "demo" : "default scene"}: ${formatError(error)}`;
     console.error(error);
   } finally {
     reloadInProgress = false;
@@ -165,7 +165,7 @@ async function loadDefaultSources(): Promise<SceneSourceTexts> {
 }
 
 /** Reads a built-in demo preset. Demo presets are always frontend-only. */
-async function loadDemoSources(preset: DemoPreset): Promise<SceneSourceTexts> {
+async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTexts> {
   if (preset === "stressTest") {
     const [routeOsm, buildingOsm, flowJson] = await Promise.all([
       loadText("/asset/map/stress_air_route.osm"),

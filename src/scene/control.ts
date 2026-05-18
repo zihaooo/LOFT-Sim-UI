@@ -48,7 +48,7 @@ type SimulationControlsOptions = {
   onLayerVisibilityChange: (visibility: LayerVisibilityState) => void;
   onResetSimulation: () => void;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
-  onLoadDemoPreset: (preset: DemoPreset) => Promise<void>;
+  onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
 };
 
 /** Creates the default mutable control state shared by Tweakpane bindings and FleetScene. */
@@ -155,23 +155,34 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     pane.refresh();
   });
 
+  let syncingDemoControls = false;
   const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
   demoFolder.addBinding(state, "demoTwoRoutes", { label: "Two Routes" }).on("change", () => {
     if (!state.demoTwoRoutes) {
+      if (!syncingDemoControls && !state.demoStressTest) {
+        void options.onLoadDemoPreset(null);
+      }
       return;
     }
 
+    syncingDemoControls = true;
     state.demoStressTest = false;
     pane.refresh();
+    syncingDemoControls = false;
     void options.onLoadDemoPreset("twoRoutes");
   });
   demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
     if (!state.demoStressTest) {
+      if (!syncingDemoControls && !state.demoTwoRoutes) {
+        void options.onLoadDemoPreset(null);
+      }
       return;
     }
 
+    syncingDemoControls = true;
     state.demoTwoRoutes = false;
     pane.refresh();
+    syncingDemoControls = false;
     void options.onLoadDemoPreset("stressTest");
   });
 

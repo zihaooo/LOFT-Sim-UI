@@ -60,7 +60,7 @@ type FleetSceneOptions = {
   sceneData: SceneData;
   uavGeometry?: THREE.BufferGeometry | null;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
-  onLoadDemoPreset: (preset: DemoPreset) => Promise<void>;
+  onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
   activeDemoPreset?: DemoPreset | null;
   telemetryUrl?: string;
 };
@@ -72,7 +72,7 @@ export class FleetScene {
   private readonly stats: HTMLDivElement;
   private readonly sceneData: SceneData;
   private readonly onReloadScene: (files: ConfigFileSelection) => Promise<void>;
-  private readonly onLoadDemoPreset: (preset: DemoPreset) => Promise<void>;
+  private readonly onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
   private readonly routeById: Map<string, AirRoute>;
   private readonly fleet: UavSchedule[];
   private readonly fleetById: Map<string, UavSchedule>;
