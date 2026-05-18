@@ -44,11 +44,12 @@ coverage/
 *.tsbuildinfo
 
 # Assets — keep dir structure, ignore contents
-asset/**
-!asset/**/
-!asset/**/.gitkeep
+public/data/**
+!public/data/**/
+!public/data/**/.gitkeep
 
 # Performance profiling
 profile
+mock
 
 context

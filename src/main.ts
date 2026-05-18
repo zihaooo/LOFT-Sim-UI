@@ -156,9 +156,9 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
 /** Reads the bundled startup files into the same shape used for later reloads. */
 async function loadDefaultSources(): Promise<SceneSourceTexts> {
   const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-    loadText("/asset/map/air_route.osm"),
-    loadText("/asset/map/map.osm"),
-    loadText("/asset/demand/flow.json"),
+    loadText("/data/map/air_route.osm"),
+    loadText("/data/map/map.osm"),
+    loadText("/data/demand/flow.json"),
   ]);
 
   return { routeOsm, buildingOsm, flowJson };
@@ -168,17 +168,17 @@ async function loadDefaultSources(): Promise<SceneSourceTexts> {
 async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTexts> {
   if (preset === "stressTest") {
     const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-      loadText("/asset/map/stress_air_route.osm"),
-      loadText("/asset/map/map.osm"),
-      loadText("/asset/demand/stress_flow.json"),
+      loadText("/data/map/stress_air_route.osm"),
+      loadText("/data/map/map.osm"),
+      loadText("/data/demand/stress_flow.json"),
     ]);
 
     return { routeOsm, buildingOsm, flowJson };
   } else if (preset === "twoRoutes") {
       const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-          loadText("/asset/map/two_air_route.osm"),
-          loadText("/asset/map/map.osm"),
-          loadText("/asset/demand/two_flow.json"),
+          loadText("/data/map/two_air_route.osm"),
+          loadText("/data/map/map.osm"),
+          loadText("/data/demand/two_flow.json"),
       ]);
 
       return { routeOsm, buildingOsm, flowJson };

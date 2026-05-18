@@ -14,8 +14,8 @@ METERS_PER_DEGREE_LAT = 111_320.0
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate mock telemetry route/drone data.")
-    parser.add_argument("--route", type=Path, default=Path("asset/map/air_route.osm"), help="Input air-route OSM.")
-    parser.add_argument("--output", type=Path, default=Path("asset/mock/mock_telemetry.json"), help="Output JSON path.")
+    parser.add_argument("--route", type=Path, default=Path("public/data/map/air_route.osm"), help="Input air-route OSM.")
+    parser.add_argument("--output", type=Path, default=Path("mock/mock_telemetry.json"), help="Output JSON path.")
     parser.add_argument("--drones", type=int, default=1000, help="Number of mock drones.")
     parser.add_argument("--speed", type=float, default=28.0, help="Base mock speed in m/s.")
     parser.add_argument("--noise", type=float, default=0.0, help="Position noise amplitude in meters.")

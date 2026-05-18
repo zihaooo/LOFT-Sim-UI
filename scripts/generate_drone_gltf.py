@@ -7,7 +7,7 @@ on the front face indicates orientation. Geometry is built from axis-aligned
 boxes with flat shading so it stays low-poly.
 
 Example:
-  python scripts/generate_drone_gltf.py -o asset/model/drone.gltf
+  python scripts/generate_drone_gltf.py -o public/data/model/drone.gltf
 """
 
 import argparse
@@ -325,7 +325,7 @@ def build_gltf(output_path: Path, prop_style: str = "blade") -> None:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate a low-poly quadcopter drone glTF.")
-    p.add_argument("-o", "--output", default=Path("asset/model/drone.gltf"), type=Path,
+    p.add_argument("-o", "--output", default=Path("public/data/model/drone.gltf"), type=Path,
                    help="Output .gltf path.")
     p.add_argument("--prop-style", choices=("blade", "disc"), default="blade",
                    help="Propeller appearance: 'blade' (static cuboid blades, default) "

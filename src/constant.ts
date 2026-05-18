@@ -123,7 +123,7 @@ export const ENVELOPE_OPACITY = 0.1;
 export const ENVELOPE_ROUGHNESS = 0.45;
 
 // UAV rendering
-export const DRONE_MODEL_CANDIDATES = ["/asset/model/drone.gltf"] as const;
+export const DRONE_MODEL_CANDIDATES = ["/data/model/drone.gltf"] as const;
 export const DRONE_MODEL_SPAN_METERS = 22;
 export const FALLBACK_UAV_RADIUS_METERS = 7;
 export const FALLBACK_UAV_HEIGHT_METERS = 22;

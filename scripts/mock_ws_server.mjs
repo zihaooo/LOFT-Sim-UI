@@ -10,7 +10,7 @@ const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const VALID_HZ = new Set([30, 60, 120]);
 
 const args = parseArgs(process.argv.slice(2));
-const dataPath = resolve(args.data ?? "asset/mock/mock_telemetry.json");
+const dataPath = resolve(args.data ?? "mock/mock_telemetry.json");
 const telemetryHz = Number(args.hz ?? 60);
 const port = Number(args.port ?? 8765);
 

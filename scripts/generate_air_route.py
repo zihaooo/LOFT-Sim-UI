@@ -3,7 +3,7 @@
 Generate an air-route OSM file with one way that linearly interpolates
 between a start point and an end point.
 
-Output format mirrors asset/map/air_route.osm:
+Output format mirrors public/data/map/air_route.osm:
   - Each waypoint is a <node> with a negative id (-1, -2, ...).
   - Start and end nodes get tag altitude="0".
   - Middle nodes get tag altitude="<-z>".
@@ -11,7 +11,7 @@ Output format mirrors asset/map/air_route.osm:
 
 Example:
   python scripts/generate_air_route.py \
-      -i asset/map/map.osm \
+      -i public/data/map/map.osm \
       -s -83.7129025,42.2929580 \
       -e -83.7032924,42.2985581 \
       -n 9 -z 60 \
@@ -115,8 +115,8 @@ def main() -> int:
     args = parse_args()
 
     protected = {
-        Path("asset/map/air_route.osm").resolve(),
-        Path("asset/map/map.osm").resolve(),
+        Path("public/data/map/air_route.osm").resolve(),
+        Path("public/data/map/map.osm").resolve(),
         args.input.resolve(),
     }
     if args.output.resolve() in protected:

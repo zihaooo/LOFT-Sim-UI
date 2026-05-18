@@ -14,10 +14,13 @@ import {
 } from "./osm";
 
 const root = resolve(__dirname, "../..");
+const twoRouteOsmPath = "public/data/map/two_air_route.osm";
+const defaultMapOsmPath = "public/data/map/map.osm";
+const twoFlowJsonPath = "public/data/demand/two_flow.json";
 
 describe("OSM and flow parsing", () => {
   it("parses the provided air routes with projected 3D points", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
     const routes = parseAirRoutes(routeOsm);
 
     expect(routes).toHaveLength(2);
@@ -63,8 +66,8 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses building footprints and resolves heights from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
-    const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
     const buildings = parseBuildings(mapOsm, origin);
 
@@ -74,8 +77,8 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses road ways from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
-    const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
     const roads = parseRoads(mapOsm, origin);
 
@@ -85,8 +88,8 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses tree nodes from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
-    const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
     const trees = parseTrees(mapOsm, origin);
 
@@ -95,8 +98,8 @@ describe("OSM and flow parsing", () => {
   });
 
   it("computes the scene-space map bounds from the provided map nodes", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
-    const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
     const bounds = parseMapBounds(mapOsm, origin);
 
@@ -107,7 +110,7 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses the provided flow definitions", () => {
-    const flowJson = readFileSync(resolve(root, "asset/demand/flow.json"), "utf8");
+    const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows).toHaveLength(2);
@@ -116,9 +119,9 @@ describe("OSM and flow parsing", () => {
   });
 
   it("builds a coherent scene data object from all provided assets", () => {
-    const routeOsm = readFileSync(resolve(root, "asset/map/air_route.osm"), "utf8");
-    const mapOsm = readFileSync(resolve(root, "asset/map/map.osm"), "utf8");
-    const flowJson = readFileSync(resolve(root, "asset/demand/flow.json"), "utf8");
+    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
+    const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
     const sceneData = createSceneData(routeOsm, mapOsm, flowJson);
 
     expect(sceneData.routes).toHaveLength(2);

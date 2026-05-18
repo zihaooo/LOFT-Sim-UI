@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
-    "mock:data": "python3 scripts/gen_mock_data.py --route asset/map/air_route.osm --output mock/mock_telemetry.json --drones 1000",
+    "mock:data": "python3 scripts/gen_mock_data.py --route public/data/map/air_route.osm --output mock/mock_telemetry.json --drones 1000",
     "mock:ws": "node scripts/mock_ws_server.mjs --data mock/mock_telemetry.json --hz 60"
   },
   "dependencies": {

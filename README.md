@@ -29,10 +29,11 @@ npm test         # run the Vitest suite
 ## Project Layout
 
 ```
-asset/
-  demand/    flow definition JSON (demand inputs)
-  map/       OSM map and air-route files
-  model/     optional drone glTF
+public/
+  data/
+    demand/  flow definition JSON (demand inputs)
+    map/     OSM map and air-route files
+    model/   optional drone glTF
 src/
   animation/ fleet simulation tick logic
   data/      OSM parsing and projection
@@ -46,14 +47,14 @@ src/
 
 ## Scene Inputs
 
-`src/main.ts` loads these static assets:
+Files under `public/data/` are served by Vite at `/data/...` in the browser and copied into `dist/data/` during production builds. `src/main.ts` loads these default scene assets:
 
-- `asset/map/stress_air_route.osm` — air routes
-- `asset/map/map.osm` — buildings, roads, trees
-- `asset/demand/stress_flow.json` — flow demand
-- `asset/model/drone.gltf` *(optional)* — falls back to a low-poly cone if missing
+- `public/data/map/air_route.osm` — default air-route network
+- `public/data/map/map.osm` — buildings, roads, trees
+- `public/data/demand/flow.json` — default flow demand
+- `public/data/model/drone.gltf` *(optional)* — falls back to a low-poly cone if missing
 
-Smaller demo files (`air_route.osm`, `flow.json`) live alongside the stress assets.
+Demo presets live alongside the default files, including `two_air_route.osm` / `two_flow.json` and `stress_air_route.osm` / `stress_flow.json`.
 
 ## Controls
 
