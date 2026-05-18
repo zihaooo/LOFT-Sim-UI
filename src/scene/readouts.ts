@@ -3,9 +3,20 @@ import Stats from "stats.js";
 import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX } from "../constant";
 
 export type ReadoutPanels = {
-  simulationClockValue: HTMLDivElement;
-  cameraPositionValue: HTMLDivElement;
-  cameraLookAtValue: HTMLDivElement;
+  simulationClockValue: HTMLElement;
+  sceneRoutesValue: HTMLElement;
+  sceneBuildingsValue: HTMLElement;
+  sceneRoadsValue: HTMLElement;
+  sceneTreesValue: HTMLElement;
+  cameraPositionValue: HTMLElement;
+  cameraLookAtValue: HTMLElement;
+  telemetryConnectionValue: HTMLElement;
+  telemetryFrequencyValue: HTMLElement;
+  telemetrySequenceValue: HTMLElement;
+  telemetryAgeValue: HTMLElement;
+  telemetryParseValue: HTMLElement;
+  telemetrySkippedValue: HTMLElement;
+  telemetryErrorValue: HTMLElement;
 };
 
 /** Mounts the stats.js FPS panel above the scene host with the configured offsets. */
@@ -21,7 +32,7 @@ export function mountStatsPanel(host: HTMLElement, performanceStats: Stats): voi
   host.parentElement?.appendChild(performanceStats.dom);
 }
 
-/** Builds the simulation-clock and camera-debug readout DOM into the control panel and returns their value nodes. */
+/** Builds the simulation and debug readout DOM into the control panel and returns their value nodes. */
 export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   const simulationPanel = document.createElement("section");
   simulationPanel.className = "control-readout";
@@ -30,9 +41,31 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
       <div class="control-readout__value" data-readout="simulation-clock">00:00:00.0</div>
     `;
 
-  const debugPanel = document.createElement("section");
-  debugPanel.className = "control-readout control-readout--debug";
-  debugPanel.innerHTML = `
+  const sceneDebugPanel = document.createElement("section");
+  sceneDebugPanel.className = "control-readout control-readout--debug";
+  sceneDebugPanel.innerHTML = `
+      <div class="control-readout__title">Scene Debug</div>
+      <div class="control-readout__row">
+        <span>Routes</span>
+        <code data-readout="scene-routes">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Buildings</span>
+        <code data-readout="scene-buildings">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Roads</span>
+        <code data-readout="scene-roads">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Trees</span>
+        <code data-readout="scene-trees">0</code>
+      </div>
+    `;
+
+  const cameraDebugPanel = document.createElement("section");
+  cameraDebugPanel.className = "control-readout control-readout--debug";
+  cameraDebugPanel.innerHTML = `
       <div class="control-readout__title">Camera Debug</div>
       <div class="control-readout__row">
         <span>Position</span>
@@ -44,12 +77,57 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
       </div>
     `;
 
-  panel.append(simulationPanel, debugPanel);
+  const telemetryDebugPanel = document.createElement("section");
+  telemetryDebugPanel.className = "control-readout control-readout--debug";
+  telemetryDebugPanel.innerHTML = `
+      <div class="control-readout__title">Telemetry Debug</div>
+      <div class="control-readout__row">
+        <span>Connection</span>
+        <code data-readout="telemetry-connection">disabled</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Hz</span>
+        <code data-readout="telemetry-frequency">-</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Seq</span>
+        <code data-readout="telemetry-sequence">-</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Age</span>
+        <code data-readout="telemetry-age">-</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Parse</span>
+        <code data-readout="telemetry-parse">-</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Skipped</span>
+        <code data-readout="telemetry-skipped">-</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Error</span>
+        <code data-readout="telemetry-error">-</code>
+      </div>
+    `;
+
+  panel.append(simulationPanel, sceneDebugPanel, cameraDebugPanel, telemetryDebugPanel);
 
   return {
     simulationClockValue: requireReadout(simulationPanel, "simulation-clock"),
-    cameraPositionValue: requireReadout(debugPanel, "camera-position"),
-    cameraLookAtValue: requireReadout(debugPanel, "camera-lookat"),
+    sceneRoutesValue: requireReadout(sceneDebugPanel, "scene-routes"),
+    sceneBuildingsValue: requireReadout(sceneDebugPanel, "scene-buildings"),
+    sceneRoadsValue: requireReadout(sceneDebugPanel, "scene-roads"),
+    sceneTreesValue: requireReadout(sceneDebugPanel, "scene-trees"),
+    cameraPositionValue: requireReadout(cameraDebugPanel, "camera-position"),
+    cameraLookAtValue: requireReadout(cameraDebugPanel, "camera-lookat"),
+    telemetryConnectionValue: requireReadout(telemetryDebugPanel, "telemetry-connection"),
+    telemetryFrequencyValue: requireReadout(telemetryDebugPanel, "telemetry-frequency"),
+    telemetrySequenceValue: requireReadout(telemetryDebugPanel, "telemetry-sequence"),
+    telemetryAgeValue: requireReadout(telemetryDebugPanel, "telemetry-age"),
+    telemetryParseValue: requireReadout(telemetryDebugPanel, "telemetry-parse"),
+    telemetrySkippedValue: requireReadout(telemetryDebugPanel, "telemetry-skipped"),
+    telemetryErrorValue: requireReadout(telemetryDebugPanel, "telemetry-error"),
   };
 }
 
@@ -74,8 +152,8 @@ function pad2(value: number): string {
 }
 
 /** Looks up a `[data-readout="..."]` value node in a panel and throws if it's missing. */
-function requireReadout(root: HTMLElement, name: string): HTMLDivElement {
-  const element = root.querySelector<HTMLDivElement>(`[data-readout="${name}"]`);
+function requireReadout(root: HTMLElement, name: string): HTMLElement {
+  const element = root.querySelector<HTMLElement>(`[data-readout="${name}"]`);
   if (!element) {
     throw new Error(`Missing readout: ${name}`);
   }

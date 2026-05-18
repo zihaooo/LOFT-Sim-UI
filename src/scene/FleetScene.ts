@@ -100,9 +100,20 @@ export class FleetScene {
   private readonly uavStateById = new Map<string, UavState>();
   private readonly renderSlotToFleetIndex: number[] = [];
   private readonly renderSlotToTelemetryHandle: number[] = [];
-  private readonly simulationClockValue: HTMLDivElement;
-  private readonly cameraPositionValue: HTMLDivElement;
-  private readonly cameraLookAtValue: HTMLDivElement;
+  private readonly simulationClockValue: HTMLElement;
+  private readonly sceneRoutesValue: HTMLElement;
+  private readonly sceneBuildingsValue: HTMLElement;
+  private readonly sceneRoadsValue: HTMLElement;
+  private readonly sceneTreesValue: HTMLElement;
+  private readonly cameraPositionValue: HTMLElement;
+  private readonly cameraLookAtValue: HTMLElement;
+  private readonly telemetryConnectionValue: HTMLElement;
+  private readonly telemetryFrequencyValue: HTMLElement;
+  private readonly telemetrySequenceValue: HTMLElement;
+  private readonly telemetryAgeValue: HTMLElement;
+  private readonly telemetryParseValue: HTMLElement;
+  private readonly telemetrySkippedValue: HTMLElement;
+  private readonly telemetryErrorValue: HTMLElement;
   private readonly matrix = new THREE.Matrix4();
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
@@ -177,8 +188,19 @@ export class FleetScene {
     this.controlPane = this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
+    this.sceneRoutesValue = readouts.sceneRoutesValue;
+    this.sceneBuildingsValue = readouts.sceneBuildingsValue;
+    this.sceneRoadsValue = readouts.sceneRoadsValue;
+    this.sceneTreesValue = readouts.sceneTreesValue;
     this.cameraPositionValue = readouts.cameraPositionValue;
     this.cameraLookAtValue = readouts.cameraLookAtValue;
+    this.telemetryConnectionValue = readouts.telemetryConnectionValue;
+    this.telemetryFrequencyValue = readouts.telemetryFrequencyValue;
+    this.telemetrySequenceValue = readouts.telemetrySequenceValue;
+    this.telemetryAgeValue = readouts.telemetryAgeValue;
+    this.telemetryParseValue = readouts.telemetryParseValue;
+    this.telemetrySkippedValue = readouts.telemetrySkippedValue;
+    this.telemetryErrorValue = readouts.telemetryErrorValue;
     this.routeLabelNodes = createRouteLabels(this.sceneData.routes, this.labelLayer);
     this.labelNodes = createUavLabels();
 
@@ -324,7 +346,7 @@ export class FleetScene {
     this.constrainCameraAboveHorizon();
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
-    this.updateStats();
+    this.updateHudStats();
     this.updateReadoutPanels();
     this.performanceStats.end();
   };
@@ -556,25 +578,86 @@ export class FleetScene {
     });
   }
 
-  /** Refreshes the HUD stats line with run state, fleet/route/scene counts, and selected-UAV info. */
-  private updateStats(): void {
+  /** Refreshes the HUD with simulation-facing state, keeping transport metrics in the debug panel. */
+  private updateHudStats(): void {
     const telemetrySnapshot = this.telemetryClient?.latestSnapshot();
-    if (telemetrySnapshot) {
-      const telemetryStats = this.telemetryClient?.getStats();
-      const ageMs = Math.max(0, performance.now() - telemetrySnapshot.receivedAtMs);
-      const selectedText = this.params.selectedUavId ? this.params.selectedUavId : "No UAV selected";
-      this.stats.textContent = `Telemetry ${telemetryStats?.connectionState ?? "idle"} · ${telemetryStats?.snapshotHz.toFixed(1) ?? "0.0"} Hz · seq ${telemetrySnapshot.sequence} · ${this.activeUavCount.toLocaleString()} active UAVs · age ${ageMs.toFixed(0)} ms · parse ${telemetryStats?.lastParseTimeMs.toFixed(2) ?? "0.00"} ms · skipped ${telemetryStats?.droppedSnapshotCount ?? 0} · ${selectedText}`;
-      return;
+    const status = this.params.running ? "Playing" : "Paused";
+    const selectedText = telemetrySnapshot
+      ? this.getTelemetrySelectedText(telemetrySnapshot)
+      : this.getDemoSelectedText();
+    const parts = [
+      `Status: ${status}`,
+      `UAVs: ${this.activeUavCount.toLocaleString()} active`,
+      `Routes: ${this.sceneData.routes.length.toLocaleString()}`,
+      `Selected: ${selectedText}`,
+    ];
+
+    if (!telemetrySnapshot) {
+      parts.splice(
+        1,
+        1,
+        `Speed: ${this.getSimulationSpeed()}x`,
+        `UAVs: ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled`,
+      );
     }
 
-    const selectedUav = this.fleetById.get(this.params.selectedUavId);
-    const selectedRoute = selectedUav ? this.routeById.get(selectedUav.routeId) : undefined;
-    const mode = this.params.running ? "Playing" : "Paused";
-    const selectedText = selectedUav && selectedRoute
-      ? `${selectedUav.id} · ${selectedUav.type} · ${selectedRoute.from} to ${selectedRoute.to}`
-      : "No UAV selected";
+    this.stats.textContent = parts.join(" · ");
+  }
 
-    this.stats.textContent = `${mode} · ${this.getSimulationSpeed()}x · ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled UAVs · ${this.sceneData.routes.length} routes · ${this.sceneData.buildings.length.toLocaleString()} buildings · ${this.sceneData.roads.length.toLocaleString()} roads · ${this.sceneData.trees.length.toLocaleString()} trees · ${selectedText}`;
+  private getDemoSelectedText(): string {
+    const selectedUav = this.fleetById.get(this.params.selectedUavId);
+    if (!selectedUav) {
+      return "none";
+    }
+
+    const selectedRoute = this.routeById.get(selectedUav.routeId);
+    const routeText = selectedRoute ? this.formatRouteSummary(selectedRoute) : `Route ${selectedUav.routeId}`;
+    return `${selectedUav.id} · ${selectedUav.type} · ${routeText}`;
+  }
+
+  private getTelemetrySelectedText(snapshot: TelemetrySnapshot): string {
+    const selectedDrone = this.getSelectedTelemetryDrone(snapshot);
+    if (!selectedDrone) {
+      return "none";
+    }
+
+    const droneId = this.getTelemetryDroneId(selectedDrone);
+    const droneType = this.telemetryClient?.getRegistry().dronesByHandle.get(selectedDrone.handle)?.vehicleType
+      ?? `type ${selectedDrone.vehicleTypeCode}`;
+    const route = this.getTelemetryRoute(selectedDrone);
+    const routeId = this.getTelemetryRouteId(selectedDrone);
+    const routeText = route ? this.formatRouteSummary(route) : `Route ${routeId ?? selectedDrone.routeHandle}`;
+
+    return `${droneId} · ${droneType} · ${routeText}`;
+  }
+
+  private getSelectedTelemetryDrone(snapshot: TelemetrySnapshot): TelemetryDroneState | undefined {
+    return snapshot.drones.find((drone) => (
+      drone.handle === this.selectedTelemetryHandle
+      || this.getTelemetryDroneId(drone) === this.params.selectedUavId
+    ));
+  }
+
+  private getTelemetryRouteId(drone: TelemetryDroneState): string | undefined {
+    return this.telemetryClient?.getRegistry().routesByHandle.get(drone.routeHandle)?.id;
+  }
+
+  private getTelemetryRoute(drone: TelemetryDroneState): AirRoute | undefined {
+    const routeId = this.getTelemetryRouteId(drone);
+    return routeId ? this.routeById.get(routeId) : undefined;
+  }
+
+  private formatRouteSummary(route: AirRoute): string {
+    if (route.from && route.to) {
+      return `${route.from} to ${route.to}`;
+    }
+    if (route.from) {
+      return `${route.from} to unknown`;
+    }
+    if (route.to) {
+      return `unknown to ${route.to}`;
+    }
+    return route.name || `Route ${route.id}`;
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
@@ -730,12 +813,34 @@ export class FleetScene {
     this.controls.target.copy(this.initialTarget);
   }
 
-  /** Refreshes the sim-clock and camera-debug readouts each frame from current state. */
+  /** Refreshes simulation, scene, camera, and telemetry debug readouts each frame. */
   private updateReadoutPanels(): void {
+    const telemetrySnapshot = this.telemetryClient?.latestSnapshot();
     this.simulationClockValue.textContent = formatSimulationTime(
-      this.telemetryClient?.latestSnapshot()?.simTimeSeconds ?? this.elapsedSeconds,
+      telemetrySnapshot?.simTimeSeconds ?? this.elapsedSeconds,
     );
+    this.sceneRoutesValue.textContent = this.sceneData.routes.length.toLocaleString();
+    this.sceneBuildingsValue.textContent = this.sceneData.buildings.length.toLocaleString();
+    this.sceneRoadsValue.textContent = this.sceneData.roads.length.toLocaleString();
+    this.sceneTreesValue.textContent = this.sceneData.trees.length.toLocaleString();
     this.cameraPositionValue.textContent = formatVector(this.camera.position);
     this.cameraLookAtValue.textContent = formatVector(this.controls.target);
+
+    const telemetryStats = this.telemetryClient?.getStats();
+    this.telemetryConnectionValue.textContent = telemetryStats?.connectionState ?? "disabled";
+    this.telemetryFrequencyValue.textContent = telemetrySnapshot && telemetryStats
+      ? `${telemetryStats.snapshotHz.toFixed(1)} Hz`
+      : "-";
+    this.telemetrySequenceValue.textContent = telemetrySnapshot ? String(telemetrySnapshot.sequence) : "-";
+    this.telemetryAgeValue.textContent = telemetrySnapshot
+      ? `${Math.max(0, performance.now() - telemetrySnapshot.receivedAtMs).toFixed(0)} ms`
+      : "-";
+    this.telemetryParseValue.textContent = telemetrySnapshot && telemetryStats
+      ? `${telemetryStats.lastParseTimeMs.toFixed(2)} ms`
+      : "-";
+    this.telemetrySkippedValue.textContent = telemetrySnapshot && telemetryStats
+      ? telemetryStats.droppedSnapshotCount.toLocaleString()
+      : "-";
+    this.telemetryErrorValue.textContent = telemetryStats?.lastError || "-";
   }
 }

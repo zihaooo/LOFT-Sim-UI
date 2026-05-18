@@ -261,7 +261,7 @@ select {
 
 .control-readout__row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 74px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   line-height: 1.45;
