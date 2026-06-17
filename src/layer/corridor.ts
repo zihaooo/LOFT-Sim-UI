@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { AirCorridor } from "../types";
 import {
   ENVELOPE_OPACITY,
@@ -7,15 +10,13 @@ import {
   CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
   CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
   CORRIDOR_DIRECTION_CONE_RADIUS_METERS,
-  CORRIDOR_DIRECTION_CONE_STEP,
-  CORRIDOR_LINE_RADIUS_METERS,
-  CORRIDOR_TUBE_RADIAL_SEGMENTS,
+  CORRIDOR_DIRECTION_CONE_SPACING_METERS,
+  CORRIDOR_LINE_WIDTH_PIXELS,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
-import { createPolylineTubeGeometry } from "../geometry/corridor";
 import { buildComponentEnvelopeGeometries } from "../geometry/corridorEnvelope";
 
-// Layout tradeoff: every corridor's centerline geometry is baked into one merged mesh, and every
+// Layout tradeoff: every corridor's centerline is batched into one LineSegments, and every
 // direction cone into one InstancedMesh, to keep the corridor layer at a constant ~3 draw calls
 // regardless of corridor count. Two consequences callers should know about:
 //
@@ -34,10 +35,11 @@ import { buildComponentEnvelopeGeometries } from "../geometry/corridorEnvelope";
 
 const CONE_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Builds one merged centerline mesh for all corridors plus one InstancedMesh containing every direction cone. */
+/** Builds one batched centerline LineSegments for all corridors plus one InstancedMesh containing every direction cone. */
 export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
   const group = new THREE.Group();
-  const centerlineGeometries: THREE.BufferGeometry[] = [];
+  const linePositions: number[] = [];
+  const lineColors: number[] = [];
   const conePositions: THREE.Vector3[] = [];
   const coneQuaternions: THREE.Quaternion[] = [];
   const coneColors: THREE.Color[] = [];
@@ -48,35 +50,22 @@ export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
       return;
     }
 
-    const tubeGeometry = createPolylineTubeGeometry(
-      points,
-      CORRIDOR_LINE_RADIUS_METERS,
-      CORRIDOR_TUBE_RADIAL_SEGMENTS,
-    );
-    if (!tubeGeometry) {
-      return;
-    }
     const corridorColor = new THREE.Color(corridor.color);
-    setUniformVertexColor(tubeGeometry, corridorColor);
-    centerlineGeometries.push(tubeGeometry);
-
-    for (let index = 2; index < points.length; index += CORRIDOR_DIRECTION_CONE_STEP) {
-      const start = points[index - 1];
-      const end = points[index];
-      const direction = end.clone().sub(start).normalize();
-      const offset = direction.clone().multiplyScalar(CORRIDOR_DIRECTION_CONE_HEIGHT_METERS / 2 + CORRIDOR_LINE_RADIUS_METERS);
-      conePositions.push(end.clone().sub(offset));
-      coneQuaternions.push(new THREE.Quaternion().setFromUnitVectors(CONE_AXIS, direction));
-      coneColors.push(corridorColor);
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const start = points[index];
+      const end = points[index + 1];
+      linePositions.push(start.x, start.y, start.z, end.x, end.y, end.z);
+      lineColors.push(
+        corridorColor.r, corridorColor.g, corridorColor.b,
+        corridorColor.r, corridorColor.g, corridorColor.b,
+      );
     }
+
+    appendDirectionCones(points, corridorColor, conePositions, coneQuaternions, coneColors);
   });
 
-  const centerlineMesh = buildMergedMesh(
-    centerlineGeometries,
-    () => new THREE.MeshBasicMaterial({ vertexColors: true }),
-  );
-  if (centerlineMesh) {
-    group.add(centerlineMesh);
+  if (linePositions.length > 0) {
+    group.add(buildCorridorLines(linePositions, lineColors));
   }
 
   if (conePositions.length > 0) {
@@ -84,6 +73,53 @@ export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
   }
 
   return group;
+}
+
+/** Drops arrow cones along a corridor at a fixed arc-length spacing, each oriented down the local direction. */
+function appendDirectionCones(
+  points: THREE.Vector3[],
+  color: THREE.Color,
+  positions: THREE.Vector3[],
+  quaternions: THREE.Quaternion[],
+  colors: THREE.Color[],
+): void {
+  let traveled = 0;
+  let nextConeAt = CORRIDOR_DIRECTION_CONE_SPACING_METERS;
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const segment = points[index].clone().sub(start);
+    const segmentLength = segment.length();
+    if (segmentLength < 0.000001) {
+      continue;
+    }
+    const direction = segment.divideScalar(segmentLength);
+    const orientation = new THREE.Quaternion().setFromUnitVectors(CONE_AXIS, direction);
+
+    while (nextConeAt <= traveled + segmentLength) {
+      const along = nextConeAt - traveled;
+      positions.push(start.clone().addScaledVector(direction, along));
+      quaternions.push(orientation.clone());
+      colors.push(color);
+      nextConeAt += CORRIDOR_DIRECTION_CONE_SPACING_METERS;
+    }
+    traveled += segmentLength;
+  }
+}
+
+/** Batches every corridor centerline into one fat-line (Line2) draw call with per-vertex (per-component) colors. */
+function buildCorridorLines(positions: number[], colors: number[]): LineSegments2 {
+  const geometry = new LineSegmentsGeometry();
+  geometry.setPositions(positions);
+  geometry.setColors(colors);
+  const material = new LineMaterial({
+    vertexColors: true,
+    linewidth: CORRIDOR_LINE_WIDTH_PIXELS,
+    worldUnits: false,
+  });
+  // Fat lines need the viewport size to size strokes in screen pixels; FleetScene keeps this current on resize.
+  material.resolution.set(window.innerWidth, window.innerHeight);
+  return new LineSegments2(geometry, material);
 }
 
 /**

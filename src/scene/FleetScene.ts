@@ -788,6 +788,13 @@ export class FleetScene {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    // Fat centerlines (LineMaterial) need the viewport resolution to compute screen-space stroke width.
+    this.corridorGroup.traverse((object) => {
+      const material = (object as Partial<{ material: { isLineMaterial?: boolean; resolution: THREE.Vector2 } }>).material;
+      if (material?.isLineMaterial) {
+        material.resolution.set(width, height);
+      }
+    });
   };
 
   /** Covers every possible UAV position so InstancedMesh raycasting does not depend on stale moving-instance bounds. */
