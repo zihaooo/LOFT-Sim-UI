@@ -64,9 +64,11 @@ export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
 }
 
 /**
- * Builds one merged translucent mesh containing every corridor's flight envelope. Connected corridors
- * (same `componentId`) are CSG-unioned into a single watertight blob per component so their fat tubes
- * read as one uniform-opacity solid through junctions, sharing the component color.
+ * Builds one merged translucent mesh containing every corridor's flight envelope. Each connected
+ * component (same `componentId`) is emitted as a single watertight, uniform-opacity solid in the
+ * component color, so overlapping fat tubes never double-blend where they meet. The heavy lifting is in
+ * buildComponentEnvelopeGeometries: degree-2 chains are welded with a bisector miter, and only true
+ * junctions (degree > 2, non-vertiport) are fused with CSG — junction-free components use no CSG at all.
  */
 export function createFlightEnvelopeGroup(corridors: AirCorridor[]): THREE.Group {
   const group = new THREE.Group();
