@@ -4,7 +4,7 @@ import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX } from "..
 
 export type ReadoutPanels = {
   simulationClockValue: HTMLElement;
-  sceneRoutesValue: HTMLElement;
+  sceneCorridorsValue: HTMLElement;
   sceneBuildingsValue: HTMLElement;
   sceneRoadsValue: HTMLElement;
   sceneTreesValue: HTMLElement;
@@ -46,8 +46,8 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   sceneDebugPanel.innerHTML = `
       <div class="control-readout__title">Scene Debug</div>
       <div class="control-readout__row">
-        <span>Routes</span>
-        <code data-readout="scene-routes">0</code>
+        <span>Corridors</span>
+        <code data-readout="scene-corridors">0</code>
       </div>
       <div class="control-readout__row">
         <span>Buildings</span>
@@ -115,7 +115,7 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
 
   return {
     simulationClockValue: requireReadout(simulationPanel, "simulation-clock"),
-    sceneRoutesValue: requireReadout(sceneDebugPanel, "scene-routes"),
+    sceneCorridorsValue: requireReadout(sceneDebugPanel, "scene-corridors"),
     sceneBuildingsValue: requireReadout(sceneDebugPanel, "scene-buildings"),
     sceneRoadsValue: requireReadout(sceneDebugPanel, "scene-roads"),
     sceneTreesValue: requireReadout(sceneDebugPanel, "scene-trees"),

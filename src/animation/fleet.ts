@@ -1,14 +1,14 @@
-import type { AirRoute, FlowDefinition, ScenePoint, UavSchedule, UavState } from "../types";
+import type { AirCorridor, FlowDefinition, ScenePoint, UavSchedule, UavState } from "../types";
 import { DEFAULT_UAV_SPEED_METERS_PER_SECOND } from "../constant";
 
 /** Expands flow definitions into one UavSchedule per departure in the configured hour. */
-export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSchedule[] {
-  const routeById = new Map(routes.map((route) => [route.id, route]));
+export function createFleet(corridors: AirCorridor[], flows: FlowDefinition[]): UavSchedule[] {
+  const corridorById = new Map(corridors.map((corridor) => [corridor.id, corridor]));
   const fleet: UavSchedule[] = [];
 
   flows.forEach((flow, flowIndex) => {
-    const route = routeById.get(flow.routeId);
-    if (!route || route.length <= 0 || flow.uavPerHour <= 0) {
+    const corridor = corridorById.get(flow.corridorId);
+    if (!corridor || corridor.length <= 0 || flow.uavPerHour <= 0) {
       return;
     }
 
@@ -21,7 +21,7 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSch
       fleet.push({
         id: `UAV-${flow.flowId}-${String(index + 1).padStart(3, "0")}`,
         type: index % 5 === 0 ? "cargo" : "inspection",
-        routeId: route.id,
+        corridorId: corridor.id,
         platoonId: `P-${flow.flowId}`,
         speedMetersPerSecond,
         offsetMeters: 0,
@@ -35,8 +35,8 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSch
 }
 
 /** Returns the position and tangent at a given arc-length; non-active status means the one-shot flight has not started or has ended. */
-export function computeUavState(route: AirRoute, distance: number): UavState {
-  if (route.points.length === 0 || route.length <= 0) {
+export function computeUavState(corridor: AirCorridor, distance: number): UavState {
+  if (corridor.points.length === 0 || corridor.length <= 0) {
     return {
       position: { x: 0, y: 0, z: 0 },
       tangent: { x: 1, y: 0, z: 0 },
@@ -47,32 +47,32 @@ export function computeUavState(route: AirRoute, distance: number): UavState {
   }
 
   if (distance < 0) {
-    return createNonActiveUavState(route, 0, "pending");
+    return createNonActiveUavState(corridor, 0, "pending");
   }
 
-  const targetDistance = Math.min(distance, route.length);
-  let hasBeenAirborne = route.points[0]?.y > 0;
+  const targetDistance = Math.min(distance, corridor.length);
+  let hasBeenAirborne = corridor.points[0]?.y > 0;
 
-  for (let index = 1; index < route.points.length; index += 1) {
-    const segmentStartDistance = route.cumulativeLengths[index - 1];
-    const segmentEndDistance = route.cumulativeLengths[index];
-    const start = route.points[index - 1];
-    const end = route.points[index];
+  for (let index = 1; index < corridor.points.length; index += 1) {
+    const segmentStartDistance = corridor.cumulativeLengths[index - 1];
+    const segmentEndDistance = corridor.cumulativeLengths[index];
+    const start = corridor.points[index - 1];
+    const end = corridor.points[index];
 
     if (hasBeenAirborne) {
       const groundContactDistance = getGroundContactDistance(start, end, segmentStartDistance, segmentEndDistance);
       if (groundContactDistance !== null && groundContactDistance <= targetDistance) {
         return {
-          ...interpolateUavState(route, index, groundContactDistance),
+          ...interpolateUavState(corridor, index, groundContactDistance),
           status: "destroyed",
         };
       }
     }
 
-    if (targetDistance <= segmentEndDistance || index === route.points.length - 1) {
-      const uavState = interpolateUavState(route, index, targetDistance);
+    if (targetDistance <= segmentEndDistance || index === corridor.points.length - 1) {
+      const uavState = interpolateUavState(corridor, index, targetDistance);
       const status =
-        distance < route.length && (uavState.position.y > 0 || (targetDistance === 0 && uavState.position.y === 0))
+        distance < corridor.length && (uavState.position.y > 0 || (targetDistance === 0 && uavState.position.y === 0))
           ? "active"
           : "destroyed";
       return {
@@ -84,47 +84,47 @@ export function computeUavState(route: AirRoute, distance: number): UavState {
     hasBeenAirborne = hasBeenAirborne || start.y > 0 || end.y > 0;
   }
 
-  return createNonActiveUavState(route, route.length, "destroyed");
+  return createNonActiveUavState(corridor, corridor.length, "destroyed");
 }
 
-/** Computes a UAV's one-shot route position from its scheduled departure time and elapsed sim time. */
-export function getUavRoutePosition(
+/** Computes a UAV's one-shot corridor position from its scheduled departure time and elapsed sim time. */
+export function getUavCorridorPosition(
   uavSchedule: UavSchedule,
-  route: AirRoute,
+  corridor: AirCorridor,
   elapsedSeconds: number,
   speedMultiplier: number,
 ): UavState {
   const flightSeconds = elapsedSeconds * speedMultiplier - uavSchedule.departureTimeSeconds;
 
   if (flightSeconds < 0) {
-    return createNonActiveUavState(route, 0, "pending");
+    return createNonActiveUavState(corridor, 0, "pending");
   }
 
-  return computeUavState(route, flightSeconds * uavSchedule.speedMetersPerSecond);
+  return computeUavState(corridor, flightSeconds * uavSchedule.speedMetersPerSecond);
 }
 
-/** Builds a UavState with the given non-active status, sampled at the clamped distance along the route. */
+/** Builds a UavState with the given non-active status, sampled at the clamped distance along the corridor. */
 function createNonActiveUavState(
-  route: AirRoute,
+  corridor: AirCorridor,
   distance: number,
   status: UavState["status"],
 ): UavState {
   return {
-    ...interpolateUavState(route, findSegmentIndex(route, distance), Math.min(Math.max(distance, 0), route.length)),
+    ...interpolateUavState(corridor, findSegmentIndex(corridor, distance), Math.min(Math.max(distance, 0), corridor.length)),
     status,
   };
 }
 
-/** Interpolates position, tangent, and progress within a single route segment at the given arc-length. */
+/** Interpolates position, tangent, and progress within a single corridor segment at the given arc-length. */
 function interpolateUavState(
-  route: AirRoute,
+  corridor: AirCorridor,
   segmentIndex: number,
   distance: number,
 ): Omit<UavState, "status"> {
-  const start = route.points[Math.max(segmentIndex - 1, 0)] ?? { x: 0, y: 0, z: 0 };
-  const end = route.points[segmentIndex] ?? start;
-  const segmentStartDistance = route.cumulativeLengths[Math.max(segmentIndex - 1, 0)] ?? 0;
-  const segmentEndDistance = route.cumulativeLengths[segmentIndex] ?? segmentStartDistance;
+  const start = corridor.points[Math.max(segmentIndex - 1, 0)] ?? { x: 0, y: 0, z: 0 };
+  const end = corridor.points[segmentIndex] ?? start;
+  const segmentStartDistance = corridor.cumulativeLengths[Math.max(segmentIndex - 1, 0)] ?? 0;
+  const segmentEndDistance = corridor.cumulativeLengths[segmentIndex] ?? segmentStartDistance;
   const segmentLength = Math.max(segmentEndDistance - segmentStartDistance, 0.0001);
   const t = Math.min(Math.max((distance - segmentStartDistance) / segmentLength, 0), 1);
   const tangent = normalize(subtractPoints(end, start));
@@ -133,22 +133,22 @@ function interpolateUavState(
     position: lerpPoint(start, end, t),
     tangent,
     distance,
-    progress: route.length > 0 ? distance / route.length : 0,
+    progress: corridor.length > 0 ? distance / corridor.length : 0,
   };
 }
 
-/** Returns the index of the route segment containing the given arc-length distance. */
-function findSegmentIndex(route: AirRoute, distance: number): number {
-  const clampedDistance = Math.min(Math.max(distance, 0), route.length);
+/** Returns the index of the corridor segment containing the given arc-length distance. */
+function findSegmentIndex(corridor: AirCorridor, distance: number): number {
+  const clampedDistance = Math.min(Math.max(distance, 0), corridor.length);
 
-  for (let index = 1; index < route.points.length; index += 1) {
-    const segmentEndDistance = route.cumulativeLengths[index];
-    if (clampedDistance <= segmentEndDistance || index === route.points.length - 1) {
+  for (let index = 1; index < corridor.points.length; index += 1) {
+    const segmentEndDistance = corridor.cumulativeLengths[index];
+    if (clampedDistance <= segmentEndDistance || index === corridor.points.length - 1) {
       return index;
     }
   }
 
-  return Math.max(route.points.length - 1, 0);
+  return Math.max(corridor.points.length - 1, 0);
 }
 
 /** Returns the arc-length where the segment crosses y=0 (ground), or null if it never descends to ground. */

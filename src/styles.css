@@ -173,7 +173,7 @@ select {
   pointer-events: none;
 }
 
-.route-label {
+.corridor-label {
   position: absolute;
   min-width: 64px;
   padding: 5px 8px;

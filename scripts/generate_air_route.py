@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Generate an air-route OSM file with one way that linearly interpolates
+Generate an air-corridor OSM file with one way that linearly interpolates
 between a start point and an end point.
 
-Output format mirrors public/data/map/air_route.osm:
+Output format mirrors public/data/map/air_corridor.osm:
   - Each waypoint is a <node> with a negative id (-1, -2, ...).
   - Start and end nodes get tag altitude="0".
   - Middle nodes get tag altitude="<-z>".
-  - All nodes are joined by one <way> with tag route="air".
+  - All nodes are joined by one <way> with tag corridor="air".
 
 Example:
-  python scripts/generate_air_route.py \
+  python scripts/generate_air_corridor.py \
       -i public/data/map/map.osm \
       -s -83.7129025,42.2929580 \
       -e -83.7032924,42.2985581 \
       -n 9 -z 60 \
-      -o air_route.out.osm
+      -o air_corridor.out.osm
 """
 
 import argparse
@@ -34,7 +34,7 @@ def lng_lat(value: str) -> tuple[float, float]:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Generate an air-route OSM file.")
+    p = argparse.ArgumentParser(description="Generate an air-corridor OSM file.")
     # Allow values like "-83.71,42.29" after -s/-e: argparse's default negative-
     # number regex rejects them because of the comma, then treats them as flags.
     p._negative_number_matcher = re.compile(r"^-?\d+(\.\d+)?(,-?\d+(\.\d+)?)?$")
@@ -66,7 +66,7 @@ def next_negative_id(root: ET.Element, tag: str) -> int:
     return min(floor, 0) - 1
 
 
-def append_route(root, start, end, middle, altitude, first_node_id, way_id):
+def append_corridor(root, start, end, middle, altitude, first_node_id, way_id):
     if middle < 0:
         raise ValueError("--num must be >= 0")
 
@@ -95,7 +95,7 @@ def append_route(root, start, end, middle, altitude, first_node_id, way_id):
     way = ET.SubElement(root, "way", {"id": str(way_id), "version": "1"})
     for nid in node_ids:
         ET.SubElement(way, "nd", {"ref": str(nid)})
-    ET.SubElement(way, "tag", {"k": "route", "v": "air"})
+    ET.SubElement(way, "tag", {"k": "corridor", "v": "air"})
 
 
 def indent(elem, level=0):
@@ -115,7 +115,7 @@ def main() -> int:
     args = parse_args()
 
     protected = {
-        Path("public/data/map/air_route.osm").resolve(),
+        Path("public/data/map/air_corridor.osm").resolve(),
         Path("public/data/map/map.osm").resolve(),
         args.input.resolve(),
     }
@@ -131,12 +131,12 @@ def main() -> int:
         tree = ET.parse(args.output)
         root = tree.getroot()
     else:
-        root = ET.Element("osm", {"version": "0.6", "generator": "generate_air_route.py"})
+        root = ET.Element("osm", {"version": "0.6", "generator": "generate_air_corridor.py"})
         tree = ET.ElementTree(root)
 
     first_node_id = next_negative_id(root, "node")
     way_id = next_negative_id(root, "way")
-    append_route(root, args.start, args.end, args.num, args.altitude, first_node_id, way_id)
+    append_corridor(root, args.start, args.end, args.num, args.altitude, first_node_id, way_id)
 
     indent(root)
     tree.write(args.output, encoding="UTF-8", xml_declaration=True)

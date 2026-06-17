@@ -22,7 +22,7 @@ export type SimulatorTelemetryDrone = {
   handle: number;
   stateCode: number;
   vehicleTypeCode: number;
-  routeHandle: number;
+  corridorHandle: number;
   position: SimulatorPoint;
   velocity: SimulatorPoint;
   yaw: number;
@@ -55,14 +55,14 @@ export type TelemetryRegistryDrone = {
   vehicleType: string;
 };
 
-export type TelemetryRegistryRoute = {
+export type TelemetryRegistryCorridor = {
   handle: number;
   id: string;
 };
 
 export type TelemetryRegistry = {
   dronesByHandle: Map<number, TelemetryRegistryDrone>;
-  routesByHandle: Map<number, TelemetryRegistryRoute>;
+  corridorsByHandle: Map<number, TelemetryRegistryCorridor>;
 };
 
 /** Decodes the minimal little-endian binary snapshot frame used by mock and simulator telemetry. */
@@ -88,7 +88,7 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
     const handle = view.getUint32(offset, true);
     const stateCode = view.getUint16(offset + 4, true);
     const vehicleTypeCode = view.getUint16(offset + 6, true);
-    const routeHandle = view.getUint32(offset + 8, true);
+    const corridorHandle = view.getUint32(offset + 8, true);
     const x = view.getFloat32(offset + 12, true);
     const y = view.getFloat32(offset + 16, true);
     const z = view.getFloat32(offset + 20, true);
@@ -104,7 +104,7 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
       handle,
       stateCode,
       vehicleTypeCode,
-      routeHandle,
+      corridorHandle,
       position: { x, y, z },
       velocity: { x: vx, y: vy, z: vz },
       yaw,

@@ -31,7 +31,7 @@ root.innerHTML = `
 `;
 
 type SceneSourceTexts = {
-  routeOsm: string;
+  corridorOsm: string;
   buildingOsm: string;
   flowJson: string;
 };
@@ -52,7 +52,7 @@ async function start(): Promise<void> {
     currentSources = await loadDefaultSources();
     uavGeometry = await loadDroneGeometry();
     activeScene = mountScene(createSceneData(
-      currentSources.routeOsm,
+      currentSources.corridorOsm,
       currentSources.buildingOsm,
       currentSources.flowJson,
     ));
@@ -77,7 +77,7 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
   try {
     const nextSources = await mergeUploadedSources(currentSources, files);
     const sceneData = createSceneData(
-      nextSources.routeOsm,
+      nextSources.corridorOsm,
       nextSources.buildingOsm,
       nextSources.flowJson,
     );
@@ -110,7 +110,7 @@ async function handleLoadDemoPreset(preset: DemoPreset | null): Promise<void> {
   try {
     const nextSources = await loadDemoSources(preset);
     const sceneData = createSceneData(
-      nextSources.routeOsm,
+      nextSources.corridorOsm,
       nextSources.buildingOsm,
       nextSources.flowJson,
     );
@@ -155,33 +155,33 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
 
 /** Reads the bundled startup files into the same shape used for later reloads. */
 async function loadDefaultSources(): Promise<SceneSourceTexts> {
-  const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-    loadText("/data/map/air_route.osm"),
+  const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
+    loadText("/data/map/air_corridor.osm"),
     loadText("/data/map/map.osm"),
     loadText("/data/demand/flow.json"),
   ]);
 
-  return { routeOsm, buildingOsm, flowJson };
+  return { corridorOsm, buildingOsm, flowJson };
 }
 
 /** Reads a built-in demo preset. Demo presets are always frontend-only. */
 async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTexts> {
   if (preset === "stressTest") {
-    const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-      loadText("/data/map/stress_air_route.osm"),
+    const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
+      loadText("/data/map/stress_air_corridor.osm"),
       loadText("/data/map/map.osm"),
       loadText("/data/demand/stress_flow.json"),
     ]);
 
-    return { routeOsm, buildingOsm, flowJson };
-  } else if (preset === "twoRoutes") {
-      const [routeOsm, buildingOsm, flowJson] = await Promise.all([
-          loadText("/data/map/two_air_route.osm"),
+    return { corridorOsm, buildingOsm, flowJson };
+  } else if (preset === "twoCorridors") {
+      const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
+          loadText("/data/map/two_air_corridor.osm"),
           loadText("/data/map/map.osm"),
           loadText("/data/demand/two_flow.json"),
       ]);
 
-      return { routeOsm, buildingOsm, flowJson };
+      return { corridorOsm, buildingOsm, flowJson };
   }
 
   return loadDefaultSources();
@@ -193,7 +193,7 @@ async function mergeUploadedSources(
   files: ConfigFileSelection,
 ): Promise<SceneSourceTexts> {
   return {
-    routeOsm: files.routeFile ? await files.routeFile.text() : sources.routeOsm,
+    corridorOsm: files.corridorFile ? await files.corridorFile.text() : sources.corridorOsm,
     buildingOsm: files.mapFile ? await files.mapFile.text() : sources.buildingOsm,
     flowJson: files.demandFile ? await files.demandFile.text() : sources.flowJson,
   };

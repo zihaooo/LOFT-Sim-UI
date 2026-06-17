@@ -6,7 +6,7 @@ import {
   type TelemetryProjection,
   type TelemetryRegistry,
   type TelemetryRegistryDrone,
-  type TelemetryRegistryRoute,
+  type TelemetryRegistryCorridor,
   type TelemetrySnapshot,
 } from "./protocol";
 
@@ -31,7 +31,7 @@ type RegistryMessage = {
   type?: string;
   projection?: TelemetryProjection;
   drones?: TelemetryRegistryDrone[];
-  routes?: TelemetryRegistryRoute[];
+  corridors?: TelemetryRegistryCorridor[];
 };
 
 type TelemetryControlMessage = {
@@ -42,7 +42,7 @@ export class TelemetryClient {
   private readonly buffer = new TelemetrySnapshotBuffer();
   private readonly registry: TelemetryRegistry = {
     dronesByHandle: new Map(),
-    routesByHandle: new Map(),
+    corridorsByHandle: new Map(),
   };
   private readonly recentReceiveTimes: number[] = [];
   private socket: WebSocket | null = null;
@@ -184,8 +184,8 @@ export class TelemetryClient {
     message.drones?.forEach((drone) => {
       this.registry.dronesByHandle.set(drone.handle, drone);
     });
-    message.routes?.forEach((route) => {
-      this.registry.routesByHandle.set(route.handle, route);
+    message.corridors?.forEach((corridor) => {
+      this.registry.corridorsByHandle.set(corridor.handle, corridor);
     });
   }
 

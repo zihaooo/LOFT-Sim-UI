@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import type { Pane } from "tweakpane";
-import type { AirRoute, SceneData, UavSchedule, UavState } from "../types";
-import { createFleet, getUavRoutePosition } from "../animation/fleet";
+import type { AirCorridor, SceneData, UavSchedule, UavState } from "../types";
+import { createFleet, getUavCorridorPosition } from "../animation/fleet";
 import {
   CAMERA_FAR_METERS,
   CAMERA_FOV_DEGREES,
@@ -21,7 +21,7 @@ import {
   ORBIT_MAX_DISTANCE_METERS,
   ORBIT_MIN_DISTANCE_METERS,
   ORBIT_MOUSE_BUTTONS,
-  ROUTE_COLORS,
+  CORRIDOR_COLORS,
   SCENE_BACKGROUND_COLOR,
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
@@ -37,7 +37,7 @@ import { TelemetryClient } from "../telemetry/client";
 import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
-import { createFlightEnvelopeGroup, createRouteGroup } from "../layer/route";
+import { createFlightEnvelopeGroup, createCorridorGroup } from "../layer/corridor";
 import {
   createDefaultControlState,
   createSimulationControls,
@@ -47,7 +47,7 @@ import {
   type LayerVisibilityState,
   type SimulationControlState,
 } from "./control";
-import { createRouteLabels, createUavLabels, updateLabels, type RouteLabelNode } from "./labels";
+import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabelNode } from "./labels";
 import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
 
 export { loadDroneGeometry } from "../geometry/drone";
@@ -73,7 +73,7 @@ export class FleetScene {
   private readonly sceneData: SceneData;
   private readonly onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   private readonly onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
-  private readonly routeById: Map<string, AirRoute>;
+  private readonly corridorById: Map<string, AirCorridor>;
   private readonly fleet: UavSchedule[];
   private readonly fleetById: Map<string, UavSchedule>;
   private readonly renderer: THREE.WebGLRenderer;
@@ -88,20 +88,20 @@ export class FleetScene {
   private readonly keys = new Set<string>();
   private readonly telemetryClient: TelemetryClient | null;
   private readonly uavMesh: THREE.InstancedMesh;
-  private readonly routeGroup: THREE.Group;
+  private readonly corridorGroup: THREE.Group;
   private readonly envelopeGroup: THREE.Group;
   private readonly roadGroup: THREE.Group;
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
   private readonly labelNodes: Map<string, HTMLDivElement>;
-  private readonly routeLabelNodes: RouteLabelNode[];
+  private readonly corridorLabelNodes: CorridorLabelNode[];
   private readonly pendingUavIndices: number[];
   private readonly activeUavIndices: number[] = [];
   private readonly uavStateById = new Map<string, UavState>();
   private readonly renderSlotToFleetIndex: number[] = [];
   private readonly renderSlotToTelemetryHandle: number[] = [];
   private readonly simulationClockValue: HTMLElement;
-  private readonly sceneRoutesValue: HTMLElement;
+  private readonly sceneCorridorsValue: HTMLElement;
   private readonly sceneBuildingsValue: HTMLElement;
   private readonly sceneRoadsValue: HTMLElement;
   private readonly sceneTreesValue: HTMLElement;
@@ -118,7 +118,7 @@ export class FleetScene {
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly telemetryRouteColor = new THREE.Color();
+  private readonly telemetryCorridorColor = new THREE.Color();
   private readonly telemetryPosition = new THREE.Vector3();
   private readonly telemetryTangent = new THREE.Vector3(1, 0, 0);
   private readonly initialCameraPosition = new THREE.Vector3();
@@ -148,8 +148,8 @@ export class FleetScene {
     this.sceneData = options.sceneData;
     this.onReloadScene = options.onReloadScene;
     this.onLoadDemoPreset = options.onLoadDemoPreset;
-    this.routeById = new Map(this.sceneData.routes.map((route) => [route.id, route]));
-    this.fleet = createFleet(this.sceneData.routes, this.sceneData.flows);
+    this.corridorById = new Map(this.sceneData.corridors.map((corridor) => [corridor.id, corridor]));
+    this.fleet = createFleet(this.sceneData.corridors, this.sceneData.flows);
     this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
     this.telemetryClient = options.telemetryUrl
       ? new TelemetryClient({ url: options.telemetryUrl, frontendOrigin: this.sceneData.origin })
@@ -179,8 +179,8 @@ export class FleetScene {
     this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.mapBounds);
     this.treeGroup = createTreeGroup(this.sceneData.trees);
     this.buildingGroup = createBuildingGroup(this.sceneData.buildings);
-    this.routeGroup = createRouteGroup(this.sceneData.routes);
-    this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.routes);
+    this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
+    this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.uavMesh = createUavMesh(Math.max(this.fleet.length, TELEMETRY_UAV_MESH_CAPACITY), options.uavGeometry ?? null);
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
@@ -188,7 +188,7 @@ export class FleetScene {
     this.controlPane = this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
-    this.sceneRoutesValue = readouts.sceneRoutesValue;
+    this.sceneCorridorsValue = readouts.sceneCorridorsValue;
     this.sceneBuildingsValue = readouts.sceneBuildingsValue;
     this.sceneRoadsValue = readouts.sceneRoadsValue;
     this.sceneTreesValue = readouts.sceneTreesValue;
@@ -201,7 +201,7 @@ export class FleetScene {
     this.telemetryParseValue = readouts.telemetryParseValue;
     this.telemetrySkippedValue = readouts.telemetrySkippedValue;
     this.telemetryErrorValue = readouts.telemetryErrorValue;
-    this.routeLabelNodes = createRouteLabels(this.sceneData.routes, this.labelLayer);
+    this.corridorLabelNodes = createCorridorLabels(this.sceneData.corridors, this.labelLayer);
     this.labelNodes = createUavLabels();
 
     this.buildScene();
@@ -267,7 +267,7 @@ export class FleetScene {
       createGroundGroup(this.sceneData.mapBounds),
       this.roadGroup,
       this.treeGroup,
-      this.routeGroup,
+      this.corridorGroup,
       this.envelopeGroup,
       this.buildingGroup,
       this.uavMesh,
@@ -291,7 +291,7 @@ export class FleetScene {
 
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
-    this.routeGroup.visible = visibility.routesVisible;
+    this.corridorGroup.visible = visibility.corridorsVisible;
     this.envelopeGroup.visible = visibility.envelopesVisible;
     this.buildingGroup.visible = visibility.buildingsVisible;
     this.roadGroup.visible = visibility.roadsVisible;
@@ -398,7 +398,7 @@ export class FleetScene {
 
   /** Renders the frontend-only demo fleet generated from local flow definitions. */
   private updateDemoInstances(): void {
-    const routeColor = new THREE.Color();
+    const corridorColor = new THREE.Color();
     const selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
     this.activateDepartedUavs();
     this.uavStateById.clear();
@@ -408,13 +408,13 @@ export class FleetScene {
     for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
       const index = this.activeUavIndices[activeIndex];
       const uav = this.fleet[index];
-      const route = this.routeById.get(uav.routeId);
-      if (!route) {
+      const corridor = this.corridorById.get(uav.corridorId);
+      if (!corridor) {
         this.removeActiveUavAt(activeIndex);
         continue;
       }
 
-      const uavState = getUavRoutePosition(uav, route, this.elapsedSeconds, 1);
+      const uavState = getUavCorridorPosition(uav, corridor, this.elapsedSeconds, 1);
       const position = toVector3(uavState.position);
       const tangent = toVector3(uavState.tangent).normalize();
 
@@ -439,7 +439,7 @@ export class FleetScene {
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       this.uavMesh.setMatrixAt(renderSlot, this.matrix);
-      this.uavMesh.setColorAt(renderSlot, index === this.selectedInstanceId ? selectedColor : routeColor.set(route.color));
+      this.uavMesh.setColorAt(renderSlot, index === this.selectedInstanceId ? selectedColor : corridorColor.set(corridor.color));
 
       if (uav.id === this.params.selectedUavId) {
         this.selectedPosition.copy(position);
@@ -494,7 +494,7 @@ export class FleetScene {
       setUavYawQuaternion(this.quaternion, this.telemetryTangent);
       this.matrix.compose(this.telemetryPosition, this.quaternion, this.scale);
       this.uavMesh.setMatrixAt(renderSlot, this.matrix);
-      this.uavMesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getTelemetryRouteColor(drone));
+      this.uavMesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getTelemetryCorridorColor(drone));
 
       if (isSelected) {
         this.params.selectedUavId = droneId;
@@ -532,10 +532,10 @@ export class FleetScene {
     return this.telemetryClient?.getRegistry().dronesByHandle.get(drone.handle)?.id ?? `D${drone.handle}`;
   }
 
-  private getTelemetryRouteColor(drone: TelemetryDroneState): THREE.Color {
-    const routeId = this.telemetryClient?.getRegistry().routesByHandle.get(drone.routeHandle)?.id;
-    const route = routeId ? this.routeById.get(routeId) : undefined;
-    return this.telemetryRouteColor.set(route?.color ?? ROUTE_COLORS[drone.routeHandle % ROUTE_COLORS.length]);
+  private getTelemetryCorridorColor(drone: TelemetryDroneState): THREE.Color {
+    const corridorId = this.telemetryClient?.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
+    const corridor = corridorId ? this.corridorById.get(corridorId) : undefined;
+    return this.telemetryCorridorColor.set(corridor?.color ?? CORRIDOR_COLORS[drone.corridorHandle % CORRIDOR_COLORS.length]);
   }
 
   /** Switches between Free orbit and Follow modes; in Follow, snaps behind/above the UAV on entry then trails it. */
@@ -566,17 +566,17 @@ export class FleetScene {
     this.previousSelectedUavId = this.params.selectedUavId;
   }
 
-  /** Projects 3D anchors to screen pixels and updates each route/UAV label's CSS transform. */
+  /** Projects 3D anchors to screen pixels and updates each corridor/UAV label's CSS transform. */
   private updateLabels(): void {
     updateLabels({
       labelLayer: this.labelLayer,
-      routeLabelNodes: this.routeLabelNodes,
+      corridorLabelNodes: this.corridorLabelNodes,
       uavLabelNodes: this.labelNodes,
       uavStateById: this.uavStateById,
       camera: this.camera,
       host: this.host,
       selectedUavId: this.params.selectedUavId,
-      routesVisible: this.params.routesVisible,
+      corridorsVisible: this.params.corridorsVisible,
       envelopesVisible: this.params.envelopesVisible,
       uavLabelsVisible: this.params.uavLabelsVisible,
     });
@@ -592,7 +592,7 @@ export class FleetScene {
     const parts = [
       `Status: ${status}`,
       `UAVs: ${this.activeUavCount.toLocaleString()} active`,
-      `Routes: ${this.sceneData.routes.length.toLocaleString()}`,
+      `Corridors: ${this.sceneData.corridors.length.toLocaleString()}`,
       `Selected: ${selectedText}`,
     ];
 
@@ -614,9 +614,9 @@ export class FleetScene {
       return "none";
     }
 
-    const selectedRoute = this.routeById.get(selectedUav.routeId);
-    const routeText = selectedRoute ? this.formatRouteSummary(selectedRoute) : `Route ${selectedUav.routeId}`;
-    return `${selectedUav.id} · ${selectedUav.type} · ${routeText}`;
+    const selectedCorridor = this.corridorById.get(selectedUav.corridorId);
+    const corridorText = selectedCorridor ? this.formatCorridorSummary(selectedCorridor) : `Corridor ${selectedUav.corridorId}`;
+    return `${selectedUav.id} · ${selectedUav.type} · ${corridorText}`;
   }
 
   private getTelemetrySelectedText(snapshot: TelemetrySnapshot): string {
@@ -628,11 +628,11 @@ export class FleetScene {
     const droneId = this.getTelemetryDroneId(selectedDrone);
     const droneType = this.telemetryClient?.getRegistry().dronesByHandle.get(selectedDrone.handle)?.vehicleType
       ?? `type ${selectedDrone.vehicleTypeCode}`;
-    const route = this.getTelemetryRoute(selectedDrone);
-    const routeId = this.getTelemetryRouteId(selectedDrone);
-    const routeText = route ? this.formatRouteSummary(route) : `Route ${routeId ?? selectedDrone.routeHandle}`;
+    const corridor = this.getTelemetryCorridor(selectedDrone);
+    const corridorId = this.getTelemetryCorridorId(selectedDrone);
+    const corridorText = corridor ? this.formatCorridorSummary(corridor) : `Corridor ${corridorId ?? selectedDrone.corridorHandle}`;
 
-    return `${droneId} · ${droneType} · ${routeText}`;
+    return `${droneId} · ${droneType} · ${corridorText}`;
   }
 
   private getSelectedTelemetryDrone(snapshot: TelemetrySnapshot): TelemetryDroneState | undefined {
@@ -642,26 +642,26 @@ export class FleetScene {
     ));
   }
 
-  private getTelemetryRouteId(drone: TelemetryDroneState): string | undefined {
-    return this.telemetryClient?.getRegistry().routesByHandle.get(drone.routeHandle)?.id;
+  private getTelemetryCorridorId(drone: TelemetryDroneState): string | undefined {
+    return this.telemetryClient?.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
   }
 
-  private getTelemetryRoute(drone: TelemetryDroneState): AirRoute | undefined {
-    const routeId = this.getTelemetryRouteId(drone);
-    return routeId ? this.routeById.get(routeId) : undefined;
+  private getTelemetryCorridor(drone: TelemetryDroneState): AirCorridor | undefined {
+    const corridorId = this.getTelemetryCorridorId(drone);
+    return corridorId ? this.corridorById.get(corridorId) : undefined;
   }
 
-  private formatRouteSummary(route: AirRoute): string {
-    if (route.from && route.to) {
-      return `${route.from} to ${route.to}`;
+  private formatCorridorSummary(corridor: AirCorridor): string {
+    if (corridor.from && corridor.to) {
+      return `${corridor.from} to ${corridor.to}`;
     }
-    if (route.from) {
-      return `${route.from} to unknown`;
+    if (corridor.from) {
+      return `${corridor.from} to unknown`;
     }
-    if (route.to) {
-      return `unknown to ${route.to}`;
+    if (corridor.to) {
+      return `unknown to ${corridor.to}`;
     }
-    return route.name || `Route ${route.id}`;
+    return corridor.name || `Corridor ${corridor.id}`;
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
@@ -798,8 +798,8 @@ export class FleetScene {
       toVector3(bounds.max),
     );
 
-    this.sceneData.routes.forEach((route) => {
-      route.points.forEach((point) => {
+    this.sceneData.corridors.forEach((corridor) => {
+      corridor.points.forEach((point) => {
         uavMovementBounds.expandByPoint(toVector3(point));
       });
     });
@@ -834,7 +834,7 @@ export class FleetScene {
     this.simulationClockValue.textContent = formatSimulationTime(
       telemetrySnapshot?.simTimeSeconds ?? this.elapsedSeconds,
     );
-    this.sceneRoutesValue.textContent = this.sceneData.routes.length.toLocaleString();
+    this.sceneCorridorsValue.textContent = this.sceneData.corridors.length.toLocaleString();
     this.sceneBuildingsValue.textContent = this.sceneData.buildings.length.toLocaleString();
     this.sceneRoadsValue.textContent = this.sceneData.roads.length.toLocaleString();
     this.sceneTreesValue.textContent = this.sceneData.trees.length.toLocaleString();

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import {
   createSceneData,
   measurePolyline,
-  parseAirRoutes,
+  parseAirCorridors,
   parseBuildings,
   parseFlowDefinitions,
   parseMapBounds,
@@ -14,26 +14,26 @@ import {
 } from "./osm";
 
 const root = resolve(__dirname, "../..");
-const twoRouteOsmPath = "public/data/map/two_air_route.osm";
+const twoCorridorOsmPath = "public/data/map/two_air_corridor.osm";
 const defaultMapOsmPath = "public/data/map/map.osm";
 const twoFlowJsonPath = "public/data/demand/two_flow.json";
 
 describe("OSM and flow parsing", () => {
-  it("parses the provided air routes with projected 3D points", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
-    const routes = parseAirRoutes(routeOsm);
+  it("parses the provided air corridors with projected 3D points", () => {
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
+    const corridors = parseAirCorridors(corridorOsm);
 
-    expect(routes).toHaveLength(2);
-    expect(routes[0].id).toBe("1");
-    expect(routes[0].points.length).toBeGreaterThan(10);
-    expect(routes[0].points[1].y).toBe(routes[0].geoPoints[1].altitude);
-    expect(routes[0].points[1].y).toBeGreaterThan(0);
-    expect(routes[0].length).toBeGreaterThan(900);
-    expect(routes.every((route) => route.from && route.to)).toBe(true);
+    expect(corridors).toHaveLength(2);
+    expect(corridors[0].id).toBe("1");
+    expect(corridors[0].points.length).toBeGreaterThan(10);
+    expect(corridors[0].points[1].y).toBe(corridors[0].geoPoints[1].altitude);
+    expect(corridors[0].points[1].y).toBeGreaterThan(0);
+    expect(corridors[0].length).toBeGreaterThan(900);
+    expect(corridors.every((corridor) => corridor.from && corridor.to)).toBe(true);
   });
 
-  it("falls back to all polyline ways when route tags are absent", () => {
-    const routeOsm = `
+  it("falls back to all polyline ways when corridor tags are absent", () => {
+    const corridorOsm = `
       <osm version="0.6">
         <node id="-1" lat="42.2900" lon="-83.7100">
           <tag k="altitude" v="30" />
@@ -57,18 +57,18 @@ describe("OSM and flow parsing", () => {
       </osm>
     `;
 
-    const routes = parseAirRoutes(routeOsm);
+    const corridors = parseAirCorridors(corridorOsm);
 
-    expect(routes).toHaveLength(2);
-    expect(routes.map((route) => route.id)).toEqual(["-10", "-11"]);
-    expect(routes.every((route) => route.points.length === 2)).toBe(true);
-    expect(routes[0].points[0].y).toBe(30);
+    expect(corridors).toHaveLength(2);
+    expect(corridors.map((corridor) => corridor.id)).toEqual(["-10", "-11"]);
+    expect(corridors.every((corridor) => corridor.points.length === 2)).toBe(true);
+    expect(corridors[0].points[0].y).toBe(30);
   });
 
   it("parses building footprints and resolves heights from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
+    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
     const buildings = parseBuildings(mapOsm, origin);
 
     expect(buildings.length).toBeGreaterThan(100);
@@ -77,9 +77,9 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses road ways from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
+    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
     const roads = parseRoads(mapOsm, origin);
 
     expect(roads.length).toBeGreaterThan(100);
@@ -88,9 +88,9 @@ describe("OSM and flow parsing", () => {
   });
 
   it("parses tree nodes from the provided map", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
+    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
     const trees = parseTrees(mapOsm, origin);
 
     expect(trees.length).toBeGreaterThan(10);
@@ -98,9 +98,9 @@ describe("OSM and flow parsing", () => {
   });
 
   it("computes the scene-space map bounds from the provided map nodes", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirRoutes(routeOsm)[0].geoPoints[0];
+    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
     const bounds = parseMapBounds(mapOsm, origin);
 
     expect(bounds.width).toBeGreaterThan(1_000);
@@ -114,17 +114,17 @@ describe("OSM and flow parsing", () => {
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows).toHaveLength(2);
-    expect(flows.map((flow) => flow.routeId)).toEqual(["1", "2"]);
+    expect(flows.map((flow) => flow.corridorId)).toEqual(["1", "2"]);
     expect(flows.every((flow) => flow.flowId && flow.uavPerHour > 0)).toBe(true);
   });
 
   it("builds a coherent scene data object from all provided assets", () => {
-    const routeOsm = readFileSync(resolve(root, twoRouteOsmPath), "utf8");
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
-    const sceneData = createSceneData(routeOsm, mapOsm, flowJson);
+    const sceneData = createSceneData(corridorOsm, mapOsm, flowJson);
 
-    expect(sceneData.routes).toHaveLength(2);
+    expect(sceneData.corridors).toHaveLength(2);
     expect(sceneData.flows).toHaveLength(2);
     expect(sceneData.mapBounds.width).toBeGreaterThan(1_000);
     expect(sceneData.mapBounds.depth).toBeGreaterThan(1_000);

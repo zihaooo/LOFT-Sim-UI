@@ -1,36 +1,36 @@
 import * as THREE from "three";
-import type { AirRoute, UavState } from "../types";
+import type { AirCorridor, UavState } from "../types";
 import { toScreenPosition, toVector3 } from "../geometry/coordinates";
 
-export type RouteLabelNode = {
+export type CorridorLabelNode = {
   element: HTMLDivElement;
   position: THREE.Vector3;
 };
 
 type UpdateLabelOptions = {
   labelLayer: HTMLDivElement;
-  routeLabelNodes: RouteLabelNode[];
+  corridorLabelNodes: CorridorLabelNode[];
   uavLabelNodes: Map<string, HTMLDivElement>;
   uavStateById: Map<string, UavState>;
   camera: THREE.Camera;
   host: HTMLElement;
   selectedUavId: string;
-  routesVisible: boolean;
+  corridorsVisible: boolean;
   envelopesVisible: boolean;
   uavLabelsVisible: boolean;
 };
 
-/** Creates one DOM label per route anchored above its midpoint, returning anchor positions for projection. */
-export function createRouteLabels(routes: AirRoute[], labelLayer: HTMLDivElement): RouteLabelNode[] {
-  return routes.map((route) => {
-    const position = toVector3(route.points[Math.floor(route.points.length / 2)] ?? { x: 0, y: 0, z: 0 });
-    position.y += route.envelopeRadius;
+/** Creates one DOM label per corridor anchored above its midpoint, returning anchor positions for projection. */
+export function createCorridorLabels(corridors: AirCorridor[], labelLayer: HTMLDivElement): CorridorLabelNode[] {
+  return corridors.map((corridor) => {
+    const position = toVector3(corridor.points[Math.floor(corridor.points.length / 2)] ?? { x: 0, y: 0, z: 0 });
+    position.y += corridor.envelopeRadius;
 
     const label = document.createElement("div");
-    label.className = "route-label";
-    label.textContent = `Route ${route.id}`;
-    label.style.borderColor = route.color;
-    label.style.color = route.color;
+    label.className = "corridor-label";
+    label.textContent = `Corridor ${corridor.id}`;
+    label.style.borderColor = corridor.color;
+    label.style.color = corridor.color;
     labelLayer.appendChild(label);
     return { element: label, position };
   });
@@ -41,14 +41,14 @@ export function createUavLabels(): Map<string, HTMLDivElement> {
   return new Map<string, HTMLDivElement>();
 }
 
-/** Per-frame: re-projects route labels, prunes stale UAV labels, and refreshes the selected UAV's label. */
+/** Per-frame: re-projects corridor labels, prunes stale UAV labels, and refreshes the selected UAV's label. */
 export function updateLabels(options: UpdateLabelOptions): void {
   options.labelLayer.classList.toggle("label-layer--uav-visible", options.uavLabelsVisible);
 
-  options.routeLabelNodes.forEach(({ element, position }) => {
+  options.corridorLabelNodes.forEach(({ element, position }) => {
     const screenPoint = toScreenPosition(position, options.camera, options.host);
     element.style.transform = `translate3d(${screenPoint.x}px, ${screenPoint.y}px, 0)`;
-    element.hidden = !options.uavLabelsVisible || (!options.routesVisible && !options.envelopesVisible);
+    element.hidden = !options.uavLabelsVisible || (!options.corridorsVisible && !options.envelopesVisible);
   });
 
   const selectedUavState = options.uavStateById.get(options.selectedUavId);

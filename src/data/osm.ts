@@ -1,5 +1,5 @@
 import type {
-  AirRoute,
+  AirCorridor,
   BuildingFootprint,
   FlowDefinition,
   GeoPoint,
@@ -10,7 +10,7 @@ import type {
   ScenePoint,
   TreePoint,
 } from "../types";
-import { METERS_PER_DEGREE_LAT, ROAD_STYLES, ROUTE_COLORS } from "../constant";
+import { METERS_PER_DEGREE_LAT, ROAD_STYLES, CORRIDOR_COLORS } from "../constant";
 
 type OsmNode = GeoPoint & {
   id: string;
@@ -29,43 +29,43 @@ export function parseFlowDefinitions(rawJson: string): FlowDefinition[] {
 
   return raw.map((flow) => ({
     flowId: String(flow.flow_id ?? ""),
-    routeId: String(flow.air_route_id ?? ""),
+    corridorId: String(flow.air_corridor_id ?? ""),
     uavPerHour: Number(flow.uav_per_hour ?? 0),
   }));
 }
 
-/** Extracts air-route ways, falling back to every polyline way for untagged airspace-network files. */
-export function parseAirRoutes(osmText: string, origin?: ProjectionOrigin): AirRoute[] {
+/** Extracts air-corridor ways, falling back to every polyline way for untagged airspace-network files. */
+export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): AirCorridor[] {
   const { nodes, ways } = parseOsm(osmText);
-  const routeOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
-  const taggedRouteWays = ways.filter((way) => way.tags.get("route") === "air");
-  const routeWays = taggedRouteWays.length > 0 ? taggedRouteWays : ways.filter((way) => way.nodeRefs.length >= 2);
+  const corridorOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
+  const taggedCorridorWays = ways.filter((way) => way.tags.get("corridor") === "air");
+  const corridorWays = taggedCorridorWays.length > 0 ? taggedCorridorWays : ways.filter((way) => way.nodeRefs.length >= 2);
 
-  return routeWays
-    .map((way, routeIndex) => {
+  return corridorWays
+    .map((way, corridorIndex) => {
       const geoPoints = way.nodeRefs
         .map((ref) => nodes.get(ref))
         .filter((node): node is OsmNode => Boolean(node))
         .map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
 
-      const points = geoPoints.map((point) => projectGeoPoint(point, routeOrigin));
-      const routeMetrics = measurePolyline(points);
+      const points = geoPoints.map((point) => projectGeoPoint(point, corridorOrigin));
+      const corridorMetrics = measurePolyline(points);
       const from = way.tags.get("from") ?? "";
       const to = way.tags.get("to") ?? "";
 
       return {
         id: way.id,
-        name: `${from || "Route"}${to ? ` to ${to}` : ""}`,
+        name: `${from || "Corridor"}${to ? ` to ${to}` : ""}`,
         from,
         to,
-        color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
+        color: CORRIDOR_COLORS[corridorIndex % CORRIDOR_COLORS.length],
         envelopeRadius: 35,
         points,
         geoPoints,
-        ...routeMetrics,
+        ...corridorMetrics,
       };
     })
-    .filter((route) => route.points.length >= 2);
+    .filter((corridor) => corridor.points.length >= 2);
 }
 
 /** Extracts building (or building:part) ways as planar footprints, dropping any with fewer than 3 vertices. */
@@ -147,16 +147,16 @@ export function parseMapBounds(osmText: string, origin: ProjectionOrigin): Scene
 }
 
 /** Loads every dataset under one shared projection origin so all geometry aligns in scene space. */
-export function createSceneData(routeOsm: string, buildingOsm: string, flowJson: string): SceneData {
-  const routeNodes = Array.from(parseOsm(routeOsm).nodes.values());
+export function createSceneData(corridorOsm: string, buildingOsm: string, flowJson: string): SceneData {
+  const corridorNodes = Array.from(parseOsm(corridorOsm).nodes.values());
   const buildingNodes = Array.from(parseOsm(buildingOsm).nodes.values());
-  const origin = averageOrigin([...routeNodes, ...buildingNodes]);
+  const origin = averageOrigin([...corridorNodes, ...buildingNodes]);
   const mapBounds = parseMapBounds(buildingOsm, origin);
 
   return {
     origin,
     mapBounds,
-    routes: parseAirRoutes(routeOsm, origin),
+    corridors: parseAirCorridors(corridorOsm, origin),
     buildings: parseBuildings(buildingOsm, origin),
     roads: parseRoads(buildingOsm, origin),
     trees: parseTrees(buildingOsm, origin),
@@ -176,7 +176,7 @@ export function projectGeoPoint(point: GeoPoint, origin: ProjectionOrigin): Scen
   };
 }
 
-/** Pre-computes per-segment and cumulative arc-length so route sampling can binary-walk to a distance. */
+/** Pre-computes per-segment and cumulative arc-length so corridor sampling can binary-walk to a distance. */
 export function measurePolyline(points: ScenePoint[]): {
   length: number;
   segmentLengths: number[];

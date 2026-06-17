@@ -1,73 +1,73 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { AirRoute } from "../types";
+import type { AirCorridor } from "../types";
 import {
   ENVELOPE_OPACITY,
   ENVELOPE_RADIAL_SEGMENTS,
   ENVELOPE_ROUGHNESS,
-  ROUTE_DIRECTION_CONE_HEIGHT_METERS,
-  ROUTE_DIRECTION_CONE_RADIAL_SEGMENTS,
-  ROUTE_DIRECTION_CONE_RADIUS_METERS,
-  ROUTE_DIRECTION_CONE_STEP,
-  ROUTE_LINE_RADIUS_METERS,
-  ROUTE_TUBE_RADIAL_SEGMENTS,
+  CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
+  CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
+  CORRIDOR_DIRECTION_CONE_RADIUS_METERS,
+  CORRIDOR_DIRECTION_CONE_STEP,
+  CORRIDOR_LINE_RADIUS_METERS,
+  CORRIDOR_TUBE_RADIAL_SEGMENTS,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
-import { createPolylineTubeGeometry } from "../geometry/route";
+import { createPolylineTubeGeometry } from "../geometry/corridor";
 
-// Layout tradeoff: every route's centerline geometry is baked into one merged mesh, and every
-// direction cone into one InstancedMesh, to keep the route layer at a constant ~3 draw calls
-// regardless of route count. Two consequences callers should know about:
+// Layout tradeoff: every corridor's centerline geometry is baked into one merged mesh, and every
+// direction cone into one InstancedMesh, to keep the corridor layer at a constant ~3 draw calls
+// regardless of corridor count. Two consequences callers should know about:
 //
-//   1. Per-route visibility filtering is not supported. Today only the whole `routeGroup` /
-//      `envelopeGroup` toggles, so this is fine. Showing a single route would require a
+//   1. Per-corridor visibility filtering is not supported. Today only the whole `corridorGroup` /
+//      `envelopeGroup` toggles, so this is fine. Showing a single corridor would require a
 //      draw-range trick, an attribute-mask in a custom shader, or rebuilding the merged
-//      buffer with a subset of routes.
+//      buffer with a subset of corridors.
 //
-//   2. Per-route runtime updates require rebuilding the whole merged buffer. Routes are static
-//      today, so this never happens. If a route's polyline ever changes at runtime, you cannot
-//      update only that route's slice — you must rebuild and re-upload the merged geometry
+//   2. Per-corridor runtime updates require rebuilding the whole merged buffer. Corridors are static
+//      today, so this never happens. If a corridor's polyline ever changes at runtime, you cannot
+//      update only that corridor's slice — you must rebuild and re-upload the merged geometry
 //      (and rebuild the cone InstancedMesh).
 //
-// If either capability becomes a requirement, prefer adding a per-vertex `routeId` attribute
-// (or a parallel cone-instance → routeId table) over reverting the merge.
+// If either capability becomes a requirement, prefer adding a per-vertex `corridorId` attribute
+// (or a parallel cone-instance → corridorId table) over reverting the merge.
 
 const CONE_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Builds one merged centerline mesh for all routes plus one InstancedMesh containing every direction cone. */
-export function createRouteGroup(routes: AirRoute[]): THREE.Group {
+/** Builds one merged centerline mesh for all corridors plus one InstancedMesh containing every direction cone. */
+export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
   const group = new THREE.Group();
   const centerlineGeometries: THREE.BufferGeometry[] = [];
   const conePositions: THREE.Vector3[] = [];
   const coneQuaternions: THREE.Quaternion[] = [];
   const coneColors: THREE.Color[] = [];
 
-  routes.forEach((route) => {
-    const points = route.points.map(toVector3);
+  corridors.forEach((corridor) => {
+    const points = corridor.points.map(toVector3);
     if (points.length < 2) {
       return;
     }
 
     const tubeGeometry = createPolylineTubeGeometry(
       points,
-      ROUTE_LINE_RADIUS_METERS,
-      ROUTE_TUBE_RADIAL_SEGMENTS,
+      CORRIDOR_LINE_RADIUS_METERS,
+      CORRIDOR_TUBE_RADIAL_SEGMENTS,
     );
     if (!tubeGeometry) {
       return;
     }
-    const routeColor = new THREE.Color(route.color);
-    setUniformVertexColor(tubeGeometry, routeColor);
+    const corridorColor = new THREE.Color(corridor.color);
+    setUniformVertexColor(tubeGeometry, corridorColor);
     centerlineGeometries.push(tubeGeometry);
 
-    for (let index = 2; index < points.length; index += ROUTE_DIRECTION_CONE_STEP) {
+    for (let index = 2; index < points.length; index += CORRIDOR_DIRECTION_CONE_STEP) {
       const start = points[index - 1];
       const end = points[index];
       const direction = end.clone().sub(start).normalize();
-      const offset = direction.clone().multiplyScalar(ROUTE_DIRECTION_CONE_HEIGHT_METERS / 2 + ROUTE_LINE_RADIUS_METERS);
+      const offset = direction.clone().multiplyScalar(CORRIDOR_DIRECTION_CONE_HEIGHT_METERS / 2 + CORRIDOR_LINE_RADIUS_METERS);
       conePositions.push(end.clone().sub(offset));
       coneQuaternions.push(new THREE.Quaternion().setFromUnitVectors(CONE_AXIS, direction));
-      coneColors.push(routeColor);
+      coneColors.push(corridorColor);
     }
   });
 
@@ -86,21 +86,21 @@ export function createRouteGroup(routes: AirRoute[]): THREE.Group {
   return group;
 }
 
-/** Builds one merged translucent tube mesh containing every route's flight envelope. */
-export function createFlightEnvelopeGroup(routes: AirRoute[]): THREE.Group {
+/** Builds one merged translucent tube mesh containing every corridor's flight envelope. */
+export function createFlightEnvelopeGroup(corridors: AirCorridor[]): THREE.Group {
   const group = new THREE.Group();
   const geometries: THREE.BufferGeometry[] = [];
 
-  routes.forEach((route) => {
+  corridors.forEach((corridor) => {
     const geometry = createPolylineTubeGeometry(
-      route.points.map(toVector3),
-      route.envelopeRadius,
+      corridor.points.map(toVector3),
+      corridor.envelopeRadius,
       ENVELOPE_RADIAL_SEGMENTS,
     );
     if (!geometry) {
       return;
     }
-    setUniformVertexColor(geometry, new THREE.Color(route.color));
+    setUniformVertexColor(geometry, new THREE.Color(corridor.color));
     geometries.push(geometry);
   });
 
@@ -135,16 +135,16 @@ function buildMergedMesh(
   return new THREE.Mesh(merged, createMaterial());
 }
 
-/** Packs every route's direction cones into one InstancedMesh with per-instance transform and color. */
+/** Packs every corridor's direction cones into one InstancedMesh with per-instance transform and color. */
 function buildConeInstancedMesh(
   positions: THREE.Vector3[],
   quaternions: THREE.Quaternion[],
   colors: THREE.Color[],
 ): THREE.InstancedMesh {
   const geometry = new THREE.ConeGeometry(
-    ROUTE_DIRECTION_CONE_RADIUS_METERS,
-    ROUTE_DIRECTION_CONE_HEIGHT_METERS,
-    ROUTE_DIRECTION_CONE_RADIAL_SEGMENTS,
+    CORRIDOR_DIRECTION_CONE_RADIUS_METERS,
+    CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
+    CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
   );
   const material = new THREE.MeshBasicMaterial();
   const mesh = new THREE.InstancedMesh(geometry, material, positions.length);

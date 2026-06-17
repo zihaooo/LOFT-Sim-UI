@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate simulator-style mock telemetry data from frontend air-route OSM."""
+"""Generate simulator-style mock telemetry data from frontend air-corridor OSM."""
 
 import argparse
 import json
@@ -13,8 +13,8 @@ METERS_PER_DEGREE_LAT = 111_320.0
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate mock telemetry route/drone data.")
-    parser.add_argument("--route", type=Path, default=Path("public/data/map/air_route.osm"), help="Input air-route OSM.")
+    parser = argparse.ArgumentParser(description="Generate mock telemetry corridor/drone data.")
+    parser.add_argument("--corridor", type=Path, default=Path("public/data/map/air_corridor.osm"), help="Input air-corridor OSM.")
     parser.add_argument("--output", type=Path, default=Path("mock/mock_telemetry.json"), help="Output JSON path.")
     parser.add_argument("--drones", type=int, default=1000, help="Number of mock drones.")
     parser.add_argument("--speed", type=float, default=28.0, help="Base mock speed in m/s.")
@@ -38,7 +38,7 @@ def parse_float(value: str | None, fallback: float = 0.0) -> float:
         return fallback
 
 
-def route_length(points: list[dict[str, float]]) -> tuple[float, list[float]]:
+def corridor_length(points: list[dict[str, float]]) -> tuple[float, list[float]]:
     cumulative = [0.0]
     for index in range(1, len(points)):
         prev = points[index - 1]
@@ -57,17 +57,17 @@ def main() -> int:
     if args.drones < 0:
         print("--drones must be >= 0", file=sys.stderr)
         return 2
-    if not args.route.exists():
-        print(f"route file not found: {args.route}", file=sys.stderr)
+    if not args.corridor.exists():
+        print(f"corridor file not found: {args.corridor}", file=sys.stderr)
         return 2
 
-    tree = ET.parse(args.route)
+    tree = ET.parse(args.corridor)
     root = tree.getroot()
     node_elems = {node.get("id"): node for node in root.findall("node") if node.get("id")}
     lats = [parse_float(node.get("lat")) for node in node_elems.values()]
     lons = [parse_float(node.get("lon")) for node in node_elems.values()]
     if not lats or not lons:
-        print("route OSM has no node coordinates", file=sys.stderr)
+        print("corridor OSM has no node coordinates", file=sys.stderr)
         return 2
 
     origin_lat = min(lats)
@@ -75,10 +75,10 @@ def main() -> int:
     mid_lat = (min(lats) + max(lats)) / 2.0
     meters_per_degree_lon = METERS_PER_DEGREE_LAT * max(math.cos(math.radians(mid_lat)), 1e-6)
 
-    routes = []
-    for route_index, way in enumerate(root.findall("way")):
+    corridors = []
+    for corridor_index, way in enumerate(root.findall("way")):
         tags = osm_tags(way)
-        if tags.get("route") != "air":
+        if tags.get("corridor") != "air":
             continue
 
         points = []
@@ -98,10 +98,10 @@ def main() -> int:
         if len(points) < 2:
             continue
 
-        length_m, cumulative_lengths = route_length(points)
-        routes.append({
-            "handle": route_index + 1,
-            "id": way.get("id", str(route_index + 1)),
+        length_m, cumulative_lengths = corridor_length(points)
+        corridors.append({
+            "handle": corridor_index + 1,
+            "id": way.get("id", str(corridor_index + 1)),
             "from": tags.get("from", ""),
             "to": tags.get("to", ""),
             "points": points,
@@ -109,21 +109,21 @@ def main() -> int:
             "cumulative_lengths": cumulative_lengths,
         })
 
-    if not routes:
-        print("no route=air ways found", file=sys.stderr)
+    if not corridors:
+        print("no corridor=air ways found", file=sys.stderr)
         return 2
 
     random.seed(args.seed)
     drones = []
     for index in range(args.drones):
-        route = routes[index % len(routes)]
+        corridor = corridors[index % len(corridors)]
         drones.append({
             "handle": index + 1,
             "id": f"D{index + 1}",
             "vehicle_type": "quadrotor",
             "vehicle_type_code": 1,
-            "route_handle": route["handle"],
-            "offset_m": (route["length_m"] * ((index * 37) % max(args.drones, 1))) / max(args.drones, 1),
+            "corridor_handle": corridor["handle"],
+            "offset_m": (corridor["length_m"] * ((index * 37) % max(args.drones, 1))) / max(args.drones, 1),
             "speed_mps": args.speed + (index % 7) * 0.8,
             "noise_seed": random.random() * 10_000.0,
         })
@@ -136,13 +136,13 @@ def main() -> int:
             "metersPerDegreeLon": meters_per_degree_lon,
         },
         "noise_m": args.noise,
-        "routes": routes,
+        "corridors": corridors,
         "drones": drones,
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"wrote {args.output} with {len(routes)} routes and {len(drones)} drones")
+    print(f"wrote {args.output} with {len(corridors)} corridors and {len(drones)} drones")
     return 0
 
 

@@ -3,16 +3,16 @@ import * as TweakpaneFileImportPlugin from "tweakpane-plugin-file-import";
 import { CAMERA_MODES, SIMULATION_SPEED_LEVELS } from "../constant";
 
 export type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
-export type DemoPreset = "twoRoutes" | "stressTest";
+export type DemoPreset = "twoCorridors" | "stressTest";
 
 export type SimulationControlState = {
   running: boolean;
   speedLevelIndex: number;
   selectedUavId: string;
-  demoTwoRoutes: boolean;
+  demoTwoCorridors: boolean;
   demoStressTest: boolean;
   cameraMode: CameraMode;
-  routesVisible: boolean;
+  corridorsVisible: boolean;
   envelopesVisible: boolean;
   buildingsVisible: boolean;
   roadsVisible: boolean;
@@ -22,12 +22,12 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
+  "corridorsVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
 >;
 
 export type ConfigFileSelection = {
   mapFile: File | null;
-  routeFile: File | null;
+  corridorFile: File | null;
   demandFile: File | null;
 };
 
@@ -35,7 +35,7 @@ type ConfigFileInputValue = "" | File | null;
 
 type ConfigControlState = {
   mapFile: ConfigFileInputValue;
-  routeFile: ConfigFileInputValue;
+  corridorFile: ConfigFileInputValue;
   demandFile: ConfigFileInputValue;
 };
 
@@ -57,10 +57,10 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     running: true,
     speedLevelIndex: 0,
     selectedUavId: "",
-    demoTwoRoutes: activeDemoPreset === "twoRoutes",
+    demoTwoCorridors: activeDemoPreset === "twoCorridors",
     demoStressTest: activeDemoPreset === "stressTest",
     cameraMode: CAMERA_MODES.FREE,
-    routesVisible: true,
+    corridorsVisible: true,
     envelopesVisible: true,
     buildingsVisible: true,
     roadsVisible: true,
@@ -76,7 +76,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   const { state } = options;
   const configState: ConfigControlState = {
     mapFile: "",
-    routeFile: "",
+    corridorFile: "",
     demandFile: "",
   };
 
@@ -88,8 +88,8 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     filetypes: [".osm"],
     invalidFiletypeMessage: "Select an .osm file.",
   });
-  configFolder.addBinding(configState, "routeFile", {
-    label: "Air route",
+  configFolder.addBinding(configState, "corridorFile", {
+    label: "Air corridor",
     view: "file-input",
     lineCount: 1,
     filetypes: [".osm"],
@@ -105,7 +105,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   configFolder.addButton({ title: "Reload scene" }).on("click", () => {
     void options.onReloadScene({
       mapFile: toFile(configState.mapFile),
-      routeFile: toFile(configState.routeFile),
+      corridorFile: toFile(configState.corridorFile),
       demandFile: toFile(configState.demandFile),
     });
   });
@@ -134,7 +134,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     },
   });
 
-  controlFolder.addBinding(state, "routesVisible", { label: "Routes" }).on("change", () => {
+  controlFolder.addBinding(state, "corridorsVisible", { label: "Corridors" }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "envelopesVisible", { label: "Envelopes" }).on("change", () => {
@@ -157,8 +157,8 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
 
   let syncingDemoControls = false;
   const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
-  demoFolder.addBinding(state, "demoTwoRoutes", { label: "Two Routes" }).on("change", () => {
-    if (!state.demoTwoRoutes) {
+  demoFolder.addBinding(state, "demoTwoCorridors", { label: "Two Corridors" }).on("change", () => {
+    if (!state.demoTwoCorridors) {
       if (!syncingDemoControls && !state.demoStressTest) {
         void options.onLoadDemoPreset(null);
       }
@@ -169,18 +169,18 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     state.demoStressTest = false;
     pane.refresh();
     syncingDemoControls = false;
-    void options.onLoadDemoPreset("twoRoutes");
+    void options.onLoadDemoPreset("twoCorridors");
   });
   demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
     if (!state.demoStressTest) {
-      if (!syncingDemoControls && !state.demoTwoRoutes) {
+      if (!syncingDemoControls && !state.demoTwoCorridors) {
         void options.onLoadDemoPreset(null);
       }
       return;
     }
 
     syncingDemoControls = true;
-    state.demoTwoRoutes = false;
+    state.demoTwoCorridors = false;
     pane.refresh();
     syncingDemoControls = false;
     void options.onLoadDemoPreset("stressTest");

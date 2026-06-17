@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 // Data parsing and projection
 export const METERS_PER_DEGREE_LAT = 111_320;
-export const ROUTE_COLORS = ["#47c2ff", "#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
+export const CORRIDOR_COLORS = ["#47c2ff", "#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
 export const ROAD_STYLES: Record<string, { width: number; color: string }> = {
   motorway: { width: 13, color: "#d4c7b6" },
   motorway_link: { width: 8, color: "#d4c7b6" },
@@ -111,13 +111,13 @@ export const TREE_CANOPY_LIGHTNESS_BASE = 0.34;
 export const TREE_CANOPY_LIGHTNESS_STEP = 0.03;
 export const TREE_CANOPY_LIGHTNESS_VARIANTS = 3;
 
-// Route and envelope rendering
-export const ROUTE_LINE_RADIUS_METERS = 0.3;
-export const ROUTE_TUBE_RADIAL_SEGMENTS = 8;
-export const ROUTE_DIRECTION_CONE_RADIUS_METERS = 1.2;
-export const ROUTE_DIRECTION_CONE_HEIGHT_METERS = 3.2;
-export const ROUTE_DIRECTION_CONE_RADIAL_SEGMENTS = 8;
-export const ROUTE_DIRECTION_CONE_STEP = 3;
+// Corridor and envelope rendering
+export const CORRIDOR_LINE_RADIUS_METERS = 0.3;
+export const CORRIDOR_TUBE_RADIAL_SEGMENTS = 8;
+export const CORRIDOR_DIRECTION_CONE_RADIUS_METERS = 1.2;
+export const CORRIDOR_DIRECTION_CONE_HEIGHT_METERS = 3.2;
+export const CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS = 8;
+export const CORRIDOR_DIRECTION_CONE_STEP = 3;
 export const ENVELOPE_RADIAL_SEGMENTS = 18;
 export const ENVELOPE_OPACITY = 0.1;
 export const ENVELOPE_ROUGHNESS = 0.45;

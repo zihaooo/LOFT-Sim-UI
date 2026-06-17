@@ -22,7 +22,7 @@ export type SceneBounds = {
   depth: number;
 };
 
-export type AirRoute = {
+export type AirCorridor = {
   id: string;
   name: string;
   from: string;
@@ -59,14 +59,14 @@ export type TreePoint = {
 
 export type FlowDefinition = {
   flowId: string;
-  routeId: string;
+  corridorId: string;
   uavPerHour: number;
 };
 
 export type UavSchedule = {
   id: string;
   type: string;
-  routeId: string;
+  corridorId: string;
   platoonId: string;
   speedMetersPerSecond: number;
   offsetMeters: number;
@@ -85,7 +85,7 @@ export type UavState = {
 export type SceneData = {
   origin: ProjectionOrigin;
   mapBounds: SceneBounds;
-  routes: AirRoute[];
+  corridors: AirCorridor[];
   buildings: BuildingFootprint[];
   roads: RoadPath[];
   trees: TreePoint[];

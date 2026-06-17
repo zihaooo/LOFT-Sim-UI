@@ -19,7 +19,7 @@ if (!VALID_HZ.has(telemetryHz)) {
 }
 
 const mockData = JSON.parse(readFileSync(dataPath, "utf8"));
-const routesByHandle = new Map(mockData.routes.map((route) => [route.handle, route]));
+const corridorsByHandle = new Map(mockData.corridors.map((corridor) => [corridor.handle, corridor]));
 let sequence = 0;
 let simTimeSeconds = 0;
 let streaming = true;
@@ -101,7 +101,7 @@ function createRegistryMessage() {
   return {
     type: "registry",
     projection: mockData.projection,
-    routes: mockData.routes.map((route) => ({ handle: route.handle, id: route.id })),
+    corridors: mockData.corridors.map((corridor) => ({ handle: corridor.handle, id: corridor.id })),
     drones: mockData.drones.map((drone) => ({
       handle: drone.handle,
       id: drone.id,
@@ -191,14 +191,14 @@ function createSnapshotPayload(snapshotSequence, snapshotTimeSeconds) {
 
   for (let index = 0; index < mockData.drones.length; index += 1) {
     const drone = mockData.drones[index];
-    const route = routesByHandle.get(drone.route_handle);
-    const sampled = sampleRoute(route, drone, snapshotTimeSeconds);
+    const corridor = corridorsByHandle.get(drone.corridor_handle);
+    const sampled = sampleCorridor(corridor, drone, snapshotTimeSeconds);
     const offset = HEADER_BYTES + index * RECORD_BYTES;
 
     buffer.writeUInt32LE(drone.handle, offset);
     buffer.writeUInt16LE(1, offset + 4);
     buffer.writeUInt16LE(drone.vehicle_type_code, offset + 6);
-    buffer.writeUInt32LE(drone.route_handle, offset + 8);
+    buffer.writeUInt32LE(drone.corridor_handle, offset + 8);
     buffer.writeFloatLE(sampled.x, offset + 12);
     buffer.writeFloatLE(sampled.y, offset + 16);
     buffer.writeFloatLE(sampled.z, offset + 20);
@@ -214,14 +214,14 @@ function createSnapshotPayload(snapshotSequence, snapshotTimeSeconds) {
   return buffer;
 }
 
-function sampleRoute(route, drone, timeSeconds) {
-  const routeLength = Math.max(route.length_m, 1);
-  const distance = (drone.offset_m + timeSeconds * drone.speed_mps) % routeLength;
-  const index = findSegmentIndex(route.cumulative_lengths, distance);
-  const start = route.points[Math.max(0, index - 1)];
-  const end = route.points[index] ?? start;
-  const segmentStart = route.cumulative_lengths[Math.max(0, index - 1)] ?? 0;
-  const segmentEnd = route.cumulative_lengths[index] ?? segmentStart;
+function sampleCorridor(corridor, drone, timeSeconds) {
+  const corridorLength = Math.max(corridor.length_m, 1);
+  const distance = (drone.offset_m + timeSeconds * drone.speed_mps) % corridorLength;
+  const index = findSegmentIndex(corridor.cumulative_lengths, distance);
+  const start = corridor.points[Math.max(0, index - 1)];
+  const end = corridor.points[index] ?? start;
+  const segmentStart = corridor.cumulative_lengths[Math.max(0, index - 1)] ?? 0;
+  const segmentEnd = corridor.cumulative_lengths[index] ?? segmentStart;
   const segmentLength = Math.max(segmentEnd - segmentStart, 0.0001);
   const t = Math.min(Math.max((distance - segmentStart) / segmentLength, 0), 1);
   const dx = end.x - start.x;

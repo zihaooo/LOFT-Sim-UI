@@ -47,7 +47,7 @@ describe("telemetry binary protocol", () => {
       handle: 1,
       stateCode: 1,
       vehicleTypeCode: 2,
-      routeHandle: 3,
+      corridorHandle: 3,
       position: { x: 10, y: 20, z: 30 },
       velocity: { x: 1, y: 2, z: 3 },
       speedMetersPerSecond: 42,
