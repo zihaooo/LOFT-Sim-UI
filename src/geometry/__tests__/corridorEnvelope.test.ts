@@ -5,10 +5,9 @@ import * as THREE from "three";
 import type { AirCorridor, ScenePoint } from "../../types";
 import { ENVELOPE_RADIAL_SEGMENTS } from "../../constant";
 import { parseAirCorridors } from "../../data/osm";
-import { buildComponentEnvelopeGeometries } from "../corridorEnvelope";
-import { createPolylineTubeGeometry } from "../corridor";
+import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "../corridorEnvelope";
 
-const root = resolve(__dirname, "../..");
+const root = resolve(__dirname, "../../..");
 const corridorOsm = readFileSync(resolve(root, "public/data/map/air_corridor.osm"), "utf8");
 
 /** Builds a minimal AirCorridor; only componentId/color/points/envelopeRadius/nodeIds/vertiportFlags are read. */
@@ -98,7 +97,7 @@ function allFinite(geometry: THREE.BufferGeometry): boolean {
 
 describe("corridor envelope decomposition (verification)", () => {
   it("a capped miter tube is a closed, outward-wound solid", () => {
-    const tube = createPolylineTubeGeometry(
+    const tube = createSimpleTubeGeometry(
       [new THREE.Vector3(0, 0, 0), new THREE.Vector3(100, 0, 0), new THREE.Vector3(100, 0, 100)],
       35,
       18,
@@ -109,7 +108,7 @@ describe("corridor envelope decomposition (verification)", () => {
   });
 
   it("an uncapped tube is left open at both ends", () => {
-    const tube = createPolylineTubeGeometry(
+    const tube = createSimpleTubeGeometry(
       [new THREE.Vector3(0, 0, 0), new THREE.Vector3(100, 0, 0)],
       35,
       18,
