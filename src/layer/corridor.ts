@@ -3,7 +3,6 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { AirCorridor } from "../types";
 import {
   ENVELOPE_OPACITY,
-  ENVELOPE_RADIAL_SEGMENTS,
   ENVELOPE_ROUGHNESS,
   CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
   CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
@@ -14,6 +13,7 @@ import {
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { createPolylineTubeGeometry } from "../geometry/corridor";
+import { buildComponentEnvelopeGeometries } from "../geometry/corridorEnvelope";
 
 // Layout tradeoff: every corridor's centerline geometry is baked into one merged mesh, and every
 // direction cone into one InstancedMesh, to keep the corridor layer at a constant ~3 draw calls
@@ -86,21 +86,17 @@ export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
   return group;
 }
 
-/** Builds one merged translucent tube mesh containing every corridor's flight envelope. */
+/**
+ * Builds one merged translucent mesh containing every corridor's flight envelope. Connected corridors
+ * (same `componentId`) are CSG-unioned into a single watertight blob per component so their fat tubes
+ * read as one uniform-opacity solid through junctions, sharing the component color.
+ */
 export function createFlightEnvelopeGroup(corridors: AirCorridor[]): THREE.Group {
   const group = new THREE.Group();
   const geometries: THREE.BufferGeometry[] = [];
 
-  corridors.forEach((corridor) => {
-    const geometry = createPolylineTubeGeometry(
-      corridor.points.map(toVector3),
-      corridor.envelopeRadius,
-      ENVELOPE_RADIAL_SEGMENTS,
-    );
-    if (!geometry) {
-      return;
-    }
-    setUniformVertexColor(geometry, new THREE.Color(corridor.color));
+  buildComponentEnvelopeGeometries(corridors).forEach(({ geometry, color }) => {
+    setUniformVertexColor(geometry, new THREE.Color(color));
     geometries.push(geometry);
   });
 
