@@ -9,7 +9,6 @@ import {
   GROUND_SEGMENTS,
   ROAD_MIN_SEGMENT_LENGTH_METERS,
   ROAD_OPACITY,
-  ROAD_RENDER_Y_OFFSET_METERS,
   TREE_CANOPY_COLOR,
   TREE_CANOPY_DETAIL,
   TREE_CANOPY_HUE_BASE,
@@ -120,7 +119,7 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
 
       const offsetX = (-dz / length) * halfWidth;
       const offsetZ = (dx / length) * halfWidth;
-      const y = Math.max(start.y, end.y) + ROAD_RENDER_Y_OFFSET_METERS;
+      const y = Math.max(start.y, end.y);
       const quad = clipHorizontalPolygonToBounds(
         [
           { x: start.x + offsetX, y, z: start.z + offsetZ },
@@ -166,6 +165,9 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
     opacity: ROAD_OPACITY,
     depthWrite: false,
     side: THREE.DoubleSide,
+    // Bias road depth toward the camera to resolve z-fight.
+    polygonOffset: true,
+    polygonOffsetUnits: -1,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.renderOrder = 1;

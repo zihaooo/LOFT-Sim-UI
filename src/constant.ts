@@ -86,7 +86,6 @@ export const GRID_OPACITY = 0.28;
 export const BUILDING_COLOR = "#aeb9bc";
 export const BUILDING_ROUGHNESS = 0.72;
 export const BUILDING_METALNESS = 0.04;
-export const ROAD_RENDER_Y_OFFSET_METERS = 0.1;
 export const ROAD_MIN_SEGMENT_LENGTH_METERS = 0.01;
 export const ROAD_OPACITY = 0.9;
 export const TREE_TRUNK_COLOR = "#6f563a";
