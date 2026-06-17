@@ -2,34 +2,52 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { ADDITION, Brush, Evaluator } from "three-bvh-csg";
 import type { AirCorridor } from "../types";
+import { ENVELOPE_RADIAL_SEGMENTS } from "../constant";
 import { toVector3 } from "./coordinates";
+import { createPolylineTubeGeometry } from "./corridor";
 
-// The flight envelope is a fat translucent tube (~35 m radius). Where corridors connect, the per-way
-// tubes must read as one solid: overlapping translucent tubes double-blend into a darker, busier soup,
-// and at many-to-many / T junctions there is no single bisector plane to miter against. So instead of
-// the centerline's miter approach we model each connected component as a union of convex solids and let
-// a CSG boolean ADDITION fuse them into one watertight, uniform-opacity blob:
+// The flight envelope is a fat translucent tube (~35 m radius). Two requirements shape how we build it:
+// overlapping translucent tubes double-blend into a darker, busier soup, so a connected set of corridors
+// must read as ONE uniform-opacity solid; and that solid must stay watertight where corridors meet.
 //
-//   - one capped cylinder per polyline edge, and
-//   - one sphere at every node that is NOT a vertiport terminal.
+// We split the work by node degree, because the cheap bisector miter already solves most of it:
 //
-// The spheres do double duty: at an interior bend they fill the wedge gap two consecutive cylinders
-// would otherwise leave, and at a shared junction node they fuse every incident tube — handling any
-// valence (simple joint, T-junction, X) with no special cases. Vertiport nodes get no sphere, so the
-// adjacent cylinder's flat cap becomes a clean terminal. Everything here runs once at load for a static
-// scene; cost scales with brush count per component (see segment constants below).
+//   - Degree-2 nodes (a bend inside one corridor, OR an end-to-end joint of two corridors) have a single
+//     well-defined bisector plane, so a parallel-transport miter welds them gap-free. We therefore stitch
+//     the component's edges into maximal "chains" that run through every degree-2 node — crossing corridor
+//     boundaries when two corridors simply join — and build each chain with createPolylineTubeGeometry.
+//
+//   - Junction nodes (degree > 2 and NOT a vertiport: a T, an X, a diverging point) have no single
+//     bisector plane, so there we fall back to CSG: a sphere at the node fuses every incident chain end.
+//
+// A component with no junctions needs no CSG at all — its miter tubes already read as one solid and are
+// merged directly. A component with junctions is CSG-unioned (chain tubes + junction spheres) into one
+// watertight blob. Either way the old approach's per-edge cylinders and per-node spheres are gone, cutting
+// brush count by ~10x on the sample data. Vertiport nodes never get a sphere and always end a chain, so the
+// chain's flat end cap becomes a clean terminal. Everything here runs once at load for a static scene.
 
-const CYLINDER_AXIS = new THREE.Vector3(0, 1, 0);
-const CYLINDER_RADIAL_SEGMENTS = 12;
-const SPHERE_WIDTH_SEGMENTS = 12;
-const SPHERE_HEIGHT_SEGMENTS = 8;
-const MIN_EDGE_LENGTH = 0.0001;
+const SPHERE_WIDTH_SEGMENTS = ENVELOPE_RADIAL_SEGMENTS;
+const SPHERE_HEIGHT_SEGMENTS = 12;
 
 export type ComponentEnvelope = {
   componentId: number;
   color: string;
   geometry: THREE.BufferGeometry;
 };
+
+type CorridorEdge = { a: string; b: string; radius: number; used: boolean };
+
+/** The shared-node graph of one connected component: node positions/flags plus one edge per polyline segment. */
+type CorridorGraph = {
+  position: Map<string, THREE.Vector3>;
+  vertiport: Map<string, boolean>;
+  edges: CorridorEdge[];
+  /** node id -> indices into `edges` of every edge incident to it; its length is the node's degree. */
+  adjacency: Map<string, number[]>;
+};
+
+type Chain = { nodeIds: string[]; radius: number };
+type JunctionNode = { position: THREE.Vector3; radius: number };
 
 /** Builds one fused envelope geometry per connected component (grouped by `corridor.componentId`). */
 export function buildComponentEnvelopeGeometries(corridors: AirCorridor[]): ComponentEnvelope[] {
@@ -45,81 +63,186 @@ export function buildComponentEnvelopeGeometries(corridors: AirCorridor[]): Comp
 
   const evaluator = new Evaluator();
   evaluator.useGroups = false;
-  // The capped cylinders / spheres carry only position + normal (no uv), so restrict the evaluator to
-  // those attributes; leaving uv in the default set would make it read an attribute the brushes lack.
+  // Chain tubes carry position+normal; sphere brushes also carry uv. Restricting the evaluator to
+  // position+normal keeps it from touching the uv attribute the tubes lack.
   evaluator.attributes = ["position", "normal"];
 
   const envelopes: ComponentEnvelope[] = [];
   componentsById.forEach((componentCorridors, componentId) => {
-    const brushes = buildComponentBrushes(componentCorridors);
-    if (brushes.length === 0) {
-      return;
+    const geometry = buildComponentEnvelope(componentCorridors, evaluator);
+    if (geometry) {
+      envelopes.push({ componentId, color: componentCorridors[0].color, geometry });
     }
-
-    const geometry = unionBrushes(brushes, evaluator);
-    if (!geometry) {
-      return;
-    }
-
-    envelopes.push({ componentId, color: componentCorridors[0].color, geometry });
   });
 
   return envelopes;
 }
 
-/** Assembles the convex-primitive brushes (cylinders per edge, spheres per non-vertiport node) for one component. */
-function buildComponentBrushes(corridors: AirCorridor[]): Brush[] {
-  const brushes: Brush[] = [];
-  // Shared junction nodes appear in several corridors; dedupe spheres by node id and keep the largest radius.
-  const spheresByNode = new Map<string, { position: THREE.Vector3; radius: number }>();
+/**
+ * Builds one watertight envelope geometry for a single connected component: bisector-miter tubes for the
+ * degree-2 chains, plus a CSG sphere union at each junction node. Returns null if nothing was built.
+ */
+function buildComponentEnvelope(corridors: AirCorridor[], evaluator: Evaluator): THREE.BufferGeometry | null {
+  const graph = buildCorridorGraph(corridors);
 
-  corridors.forEach((corridor) => {
-    const radius = corridor.envelopeRadius;
-    const points = corridor.points.map(toVector3);
+  const chainGeometries = extractChains(graph)
+    .map((chain) =>
+      createPolylineTubeGeometry(
+        chain.nodeIds.map((nodeId) => graph.position.get(nodeId) as THREE.Vector3),
+        chain.radius,
+        ENVELOPE_RADIAL_SEGMENTS,
+      ),
+    )
+    .filter((geometry): geometry is THREE.BufferGeometry => geometry !== null);
 
-    for (let index = 0; index < points.length - 1; index += 1) {
-      const cylinder = createCylinderBrush(points[index], points[index + 1], radius);
-      if (cylinder) {
-        brushes.push(cylinder);
-      }
+  const junctions = collectJunctionNodes(graph);
+
+  // No junction → the miter tubes already read as one solid, so merge them without paying for CSG.
+  if (junctions.length === 0) {
+    if (chainGeometries.length === 0) {
+      return null;
     }
-
-    for (let index = 0; index < points.length; index += 1) {
-      if (corridor.vertiportFlags[index]) {
-        continue;
-      }
-      const nodeId = corridor.nodeIds[index];
-      const existing = spheresByNode.get(nodeId);
-      if (existing) {
-        existing.radius = Math.max(existing.radius, radius);
-      } else {
-        spheresByNode.set(nodeId, { position: points[index], radius });
-      }
+    const merged = mergeGeometries(chainGeometries, false);
+    if (merged) {
+      merged.computeBoundingBox();
+      merged.computeBoundingSphere();
     }
+    return merged ?? null;
+  }
+
+  const brushes: Brush[] = chainGeometries.map((geometry) => makeBrush(geometry));
+  junctions.forEach((junction) => {
+    brushes.push(createSphereBrush(junction.position, junction.radius));
   });
-
-  spheresByNode.forEach(({ position, radius }) => {
-    brushes.push(createSphereBrush(position, radius));
-  });
-
-  return brushes;
-}
-
-/** A solid capped cylinder of `radius` spanning `start`→`end`, with its transform baked into the geometry. */
-function createCylinderBrush(start: THREE.Vector3, end: THREE.Vector3, radius: number): Brush | null {
-  const direction = new THREE.Vector3().subVectors(end, start);
-  const length = direction.length();
-  if (length < MIN_EDGE_LENGTH) {
+  if (brushes.length === 0) {
     return null;
   }
-  direction.divideScalar(length);
+  return unionBrushes(brushes, evaluator);
+}
 
-  const geometry = new THREE.CylinderGeometry(radius, radius, length, CYLINDER_RADIAL_SEGMENTS, 1, false);
-  const orientation = new THREE.Quaternion().setFromUnitVectors(CYLINDER_AXIS, direction);
-  const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-  geometry.applyMatrix4(new THREE.Matrix4().compose(midpoint, orientation, new THREE.Vector3(1, 1, 1)));
+/** Builds the shared-node graph for one component: node positions/flags plus one edge per polyline segment. */
+function buildCorridorGraph(corridors: AirCorridor[]): CorridorGraph {
+  const position = new Map<string, THREE.Vector3>();
+  const vertiport = new Map<string, boolean>();
+  const edges: CorridorEdge[] = [];
+  const adjacency = new Map<string, number[]>();
 
-  return makeBrush(geometry);
+  const addIncidentEdge = (nodeId: string, edgeIndex: number): void => {
+    const incident = adjacency.get(nodeId);
+    if (incident) {
+      incident.push(edgeIndex);
+    } else {
+      adjacency.set(nodeId, [edgeIndex]);
+    }
+  };
+
+  corridors.forEach((corridor) => {
+    const points = corridor.points.map(toVector3);
+    corridor.nodeIds.forEach((nodeId, index) => {
+      if (!position.has(nodeId)) {
+        position.set(nodeId, points[index]);
+      }
+      // A node shared across corridors is a vertiport if any corridor flags it as one (they should agree).
+      vertiport.set(nodeId, (vertiport.get(nodeId) ?? false) || corridor.vertiportFlags[index]);
+    });
+
+    for (let index = 0; index < corridor.nodeIds.length - 1; index += 1) {
+      const edgeIndex = edges.length;
+      edges.push({
+        a: corridor.nodeIds[index],
+        b: corridor.nodeIds[index + 1],
+        radius: corridor.envelopeRadius,
+        used: false,
+      });
+      addIncidentEdge(corridor.nodeIds[index], edgeIndex);
+      addIncidentEdge(corridor.nodeIds[index + 1], edgeIndex);
+    }
+  });
+
+  return { position, vertiport, edges, adjacency };
+}
+
+/** A through node is a degree-2, non-vertiport node — the miter flows straight through it, so it never breaks a chain. */
+function isThroughNode(graph: CorridorGraph, nodeId: string): boolean {
+  return (graph.adjacency.get(nodeId)?.length ?? 0) === 2 && !graph.vertiport.get(nodeId);
+}
+
+/**
+ * Splits the component's edges into maximal chains. Each chain runs through degree-2 nodes (stitching
+ * adjacent corridors) and ends at a break node — a junction, a degree-1 terminal, or a vertiport.
+ */
+function extractChains(graph: CorridorGraph): Chain[] {
+  const chains: Chain[] = [];
+
+  // Root one chain at each break node per incident edge; the walk consumes every edge reachable through
+  // through-nodes between two break nodes.
+  graph.adjacency.forEach((edgeIndices, nodeId) => {
+    if (isThroughNode(graph, nodeId)) {
+      return;
+    }
+    edgeIndices.forEach((edgeIndex) => {
+      if (!graph.edges[edgeIndex].used) {
+        chains.push(walkChain(graph, nodeId, edgeIndex));
+      }
+    });
+  });
+
+  // Any edge still unused belongs to a pure loop of through-nodes (no break node to root it); cut it at an
+  // arbitrary node, which leaves a single capped seam where the loop closes.
+  graph.edges.forEach((edge, edgeIndex) => {
+    if (!edge.used) {
+      chains.push(walkChain(graph, edge.a, edgeIndex));
+    }
+  });
+
+  return chains;
+}
+
+/** Walks from a break node along one edge, continuing through every through-node until the next break node. */
+function walkChain(graph: CorridorGraph, startNodeId: string, firstEdgeIndex: number): Chain {
+  const nodeIds = [startNodeId];
+  let radius = 0;
+  let currentNodeId = startNodeId;
+  let edgeIndex = firstEdgeIndex;
+
+  for (;;) {
+    const edge = graph.edges[edgeIndex];
+    edge.used = true;
+    const nextNodeId = edge.a === currentNodeId ? edge.b : edge.a;
+    nodeIds.push(nextNodeId);
+    radius = Math.max(radius, edge.radius);
+
+    if (!isThroughNode(graph, nextNodeId)) {
+      break;
+    }
+    // A through-node has exactly two incident edges; continue along the one we did not arrive on.
+    const continuation = (graph.adjacency.get(nextNodeId) ?? []).find(
+      (candidate) => candidate !== edgeIndex && !graph.edges[candidate].used,
+    );
+    if (continuation === undefined) {
+      break;
+    }
+    currentNodeId = nextNodeId;
+    edgeIndex = continuation;
+  }
+
+  return { nodeIds, radius };
+}
+
+/** Junction nodes are shared by 3+ edges and are not vertiports; each gets a sphere sized to its widest incident corridor. */
+function collectJunctionNodes(graph: CorridorGraph): JunctionNode[] {
+  const junctions: JunctionNode[] = [];
+  graph.adjacency.forEach((edgeIndices, nodeId) => {
+    if (edgeIndices.length <= 2 || graph.vertiport.get(nodeId)) {
+      return;
+    }
+    let radius = 0;
+    edgeIndices.forEach((edgeIndex) => {
+      radius = Math.max(radius, graph.edges[edgeIndex].radius);
+    });
+    junctions.push({ position: graph.position.get(nodeId) as THREE.Vector3, radius });
+  });
+  return junctions;
 }
 
 /** A solid sphere of `radius` centered at `position`, with its translation baked into the geometry. */

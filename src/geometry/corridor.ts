@@ -1,12 +1,18 @@
 import * as THREE from "three";
 import { WORLD_UP } from "../constant";
 
-/** Builds a tube BufferGeometry around a polyline using parallel-transport frames; returns null if too few points. */
+/**
+ * Builds a tube BufferGeometry around a polyline using parallel-transport frames; returns null if too few
+ * points. Faces wind outward and (when `caps`, the default) both ends are closed with a triangle fan, so
+ * the result is a closed, outward-oriented solid suitable for translucent rendering and CSG booleans.
+ */
 export function createPolylineTubeGeometry(
   rawPoints: THREE.Vector3[],
   radius: number,
   radialSegments: number,
+  options: { caps?: boolean } = {},
 ): THREE.BufferGeometry | null {
+  const caps = options.caps ?? true;
   const points = removeDuplicateVectorPoints(rawPoints);
   if (points.length < 2) {
     return null;
@@ -88,6 +94,17 @@ export function createPolylineTubeGeometry(
     }
   }
 
+  // Endpoints have no bisector, so their rings are planar circles centered exactly on the endpoint —
+  // that point doubles as the cap-fan hub. Append the two hubs after every ring vertex.
+  const startCapCenterIndex = points.length * radialSegments;
+  const endCapCenterIndex = startCapCenterIndex + 1;
+  if (caps) {
+    const startPoint = points[0];
+    const endPoint = points[points.length - 1];
+    positions.push(startPoint.x, startPoint.y, startPoint.z);
+    positions.push(endPoint.x, endPoint.y, endPoint.z);
+  }
+
   const indices: number[] = [];
   for (let pointIndex = 0; pointIndex < points.length - 1; pointIndex += 1) {
     const currentRing = pointIndex * radialSegments;
@@ -99,7 +116,18 @@ export function createPolylineTubeGeometry(
       const b = currentRing + nextSegmentIndex;
       const c = nextRing + segmentIndex;
       const d = nextRing + nextSegmentIndex;
-      indices.push(a, c, b, b, c, d);
+      // Outward winding (normals point away from the axis) for correct lighting and CSG inside/outside.
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+
+  if (caps) {
+    const lastRing = (points.length - 1) * radialSegments;
+    for (let segmentIndex = 0; segmentIndex < radialSegments; segmentIndex += 1) {
+      const nextSegmentIndex = (segmentIndex + 1) % radialSegments;
+      // Start cap faces back along -tangent; end cap faces forward along +tangent (both outward).
+      indices.push(startCapCenterIndex, nextSegmentIndex, segmentIndex);
+      indices.push(endCapCenterIndex, lastRing + segmentIndex, lastRing + nextSegmentIndex);
     }
   }
 
