@@ -2,7 +2,7 @@ import { METERS_PER_DEGREE_LAT } from "../constant";
 import type { ProjectionOrigin, ScenePoint } from "../types";
 
 export const TELEMETRY_HEADER_BYTES = 16;
-export const TELEMETRY_DRONE_RECORD_BYTES = 52;
+export const TELEMETRY_DRONE_RECORD_BYTES = 60;
 export const TELEMETRY_SNAPSHOT_BUFFER_SIZE = 3;
 
 export type SimulatorPoint = {
@@ -29,6 +29,8 @@ export type SimulatorTelemetryDrone = {
   pitch: number;
   roll: number;
   speedMetersPerSecond: number;
+  energyJoules: number;
+  powerWatts: number;
 };
 
 export type SimulatorTelemetrySnapshot = {
@@ -99,6 +101,8 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
     const pitch = view.getFloat32(offset + 40, true);
     const roll = view.getFloat32(offset + 44, true);
     const speedMetersPerSecond = view.getFloat32(offset + 48, true);
+    const energyJoules = view.getFloat32(offset + 52, true);
+    const powerWatts = view.getFloat32(offset + 56, true);
 
     drones.push({
       handle,
@@ -111,6 +115,8 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
       pitch,
       roll,
       speedMetersPerSecond,
+      energyJoules,
+      powerWatts,
     });
 
     offset += TELEMETRY_DRONE_RECORD_BYTES;

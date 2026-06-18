@@ -49,7 +49,7 @@ async function start(): Promise<void> {
   const loadingOverlay = showLoadingOverlay();
 
   try {
-    currentSources = await loadDefaultSources();
+    currentSources = await loadInitialSources();
     uavGeometry = await loadDroneGeometry();
     activeScene = mountScene(createSceneData(
       currentSources.corridorOsm,
@@ -129,6 +129,12 @@ async function handleLoadDemoPreset(preset: DemoPreset | null): Promise<void> {
   }
 }
 
+/** Same-origin telemetry websocket URL — the merged backend serves the UI and /ws on one port. */
+function telemetryWebSocketUrl(): string {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws`;
+}
+
 /** Builds and starts a FleetScene against the current shared DOM hosts. */
 function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
   const host = requireElement<HTMLDivElement>("#scene-host");
@@ -146,11 +152,36 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
     onReloadScene: handleReloadScene,
     onLoadDemoPreset: handleLoadDemoPreset,
     activeDemoPreset,
-    telemetryUrl: activeDemoPreset === null ? "ws://127.0.0.1:8765/ws" : undefined,
+    telemetryUrl: activeDemoPreset === null ? telemetryWebSocketUrl() : undefined,
   });
 
   fleetScene.start();
   return fleetScene;
+}
+
+/** Prefers the backend /configs API (telemetry-backed run); falls back to bundled files under vite dev. */
+async function loadInitialSources(): Promise<SceneSourceTexts> {
+  try {
+    return await loadSourcesFromApi();
+  } catch (error) {
+    console.warn("Backend /configs unavailable; using bundled scene sources.", error);
+    return loadDefaultSources();
+  }
+}
+
+/** Fetches scene OSM from the backend /configs endpoint. Telemetry supplies the UAVs, so flow stays empty. */
+async function loadSourcesFromApi(): Promise<SceneSourceTexts> {
+  const response = await fetch("/configs");
+  if (!response.ok) {
+    throw new Error(`Failed to load /configs: ${response.status}`);
+  }
+
+  const configs = (await response.json()) as { corridorOsm?: string; buildingOsm?: string };
+  if (!configs.corridorOsm || !configs.buildingOsm) {
+    throw new Error("/configs response is missing corridorOsm or buildingOsm.");
+  }
+
+  return { corridorOsm: configs.corridorOsm, buildingOsm: configs.buildingOsm, flowJson: "" };
 }
 
 /** Reads the bundled startup files into the same shape used for later reloads. */

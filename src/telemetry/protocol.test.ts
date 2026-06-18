@@ -31,6 +31,8 @@ function makeFrame(droneCount: number): ArrayBuffer {
     view.setFloat32(offset + 40, 0.25, true);
     view.setFloat32(offset + 44, 0.125, true);
     view.setFloat32(offset + 48, 42, true);
+    view.setFloat32(offset + 52, 1000 + index, true);
+    view.setFloat32(offset + 56, 250 + index, true);
   }
 
   return buffer;
@@ -51,6 +53,8 @@ describe("telemetry binary protocol", () => {
       position: { x: 10, y: 20, z: 30 },
       velocity: { x: 1, y: 2, z: 3 },
       speedMetersPerSecond: 42,
+      energyJoules: 1000,
+      powerWatts: 250,
     });
   });
 

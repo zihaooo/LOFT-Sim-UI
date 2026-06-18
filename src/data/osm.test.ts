@@ -32,7 +32,7 @@ describe("OSM and flow parsing", () => {
     expect(corridors.every((corridor) => corridor.from && corridor.to)).toBe(true);
   });
 
-  it("falls back to all polyline ways when corridor tags are absent", () => {
+  it("selects every airspace=yes polyline way as a corridor", () => {
     const corridorOsm = `
       <osm version="0.6">
         <node id="-1" lat="42.2900" lon="-83.7100">
@@ -116,6 +116,21 @@ describe("OSM and flow parsing", () => {
     expect(flows).toHaveLength(2);
     expect(flows.map((flow) => flow.corridorId)).toEqual(["1", "2"]);
     expect(flows.every((flow) => flow.flowId && flow.uavPerHour > 0)).toBe(true);
+  });
+
+  it("treats empty, blank, or missing flow JSON as no flows", () => {
+    expect(parseFlowDefinitions("")).toEqual([]);
+    expect(parseFlowDefinitions("   ")).toEqual([]);
+    expect(parseFlowDefinitions()).toEqual([]);
+  });
+
+  it("builds scene data with empty flow when telemetry supplies the UAVs", () => {
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
+    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
+    const sceneData = createSceneData(corridorOsm, mapOsm);
+
+    expect(sceneData.flows).toEqual([]);
+    expect(sceneData.corridors).toHaveLength(2);
   });
 
   it("builds a coherent scene data object from all provided assets", () => {

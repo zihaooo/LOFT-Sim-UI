@@ -24,8 +24,14 @@ type OsmWay = {
 };
 
 /** Parses the demand JSON file into FlowDefinition records, coercing snake_case keys to the internal shape. */
-export function parseFlowDefinitions(rawJson: string): FlowDefinition[] {
-  const raw = JSON.parse(rawJson) as Array<Record<string, unknown>>;
+export function parseFlowDefinitions(rawJson?: string): FlowDefinition[] {
+  const trimmed = rawJson?.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const parsed = JSON.parse(trimmed) as unknown;
+  const raw = Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
 
   return raw.map((flow) => ({
     flowId: String(flow.flow_id ?? ""),
@@ -34,12 +40,11 @@ export function parseFlowDefinitions(rawJson: string): FlowDefinition[] {
   }));
 }
 
-/** Extracts air-corridor ways, falling back to every polyline way for untagged airspace-network files. */
+/** Extracts air-corridor ways: every airspace=yes polyline way in the network is a corridor. */
 export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): AirCorridor[] {
   const { nodes, ways } = parseOsm(osmText);
   const corridorOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
-  const taggedCorridorWays = ways.filter((way) => way.tags.get("corridor") === "air");
-  const corridorWays = taggedCorridorWays.length > 0 ? taggedCorridorWays : ways.filter((way) => way.nodeRefs.length >= 2);
+  const corridorWays = ways.filter((way) => way.tags.get("airspace") === "yes" && way.nodeRefs.length >= 2);
 
   // Resolve each way to the OSM nodes that actually exist, dropping ways too short to draw. The
   // surviving node list is the single source of truth for points, ids, and vertiport flags below,
@@ -233,7 +238,7 @@ export function parseMapBounds(osmText: string, origin: ProjectionOrigin): Scene
 }
 
 /** Loads every dataset under one shared projection origin so all geometry aligns in scene space. */
-export function createSceneData(corridorOsm: string, buildingOsm: string, flowJson: string): SceneData {
+export function createSceneData(corridorOsm: string, buildingOsm: string, flowJson = ""): SceneData {
   const corridorNodes = Array.from(parseOsm(corridorOsm).nodes.values());
   const buildingNodes = Array.from(parseOsm(buildingOsm).nodes.values());
   const origin = averageOrigin([...corridorNodes, ...buildingNodes]);
