@@ -65,7 +65,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     buildingsVisible: true,
     roadsVisible: true,
     treesVisible: true,
-    uavLabelsVisible: true,
+    uavLabelsVisible: false,
   };
 }
 

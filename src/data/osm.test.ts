@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  createSceneData,
-  measurePolyline,
-  parseAirCorridors,
-  parseBuildings,
-  parseFlowDefinitions,
-  parseMapBounds,
-  parseRoads,
-  parseTrees,
-  projectGeoPoint,
-} from "./osm";
+import { projectGeoPoint } from "./common";
+import { measurePolyline, parseAirCorridors } from "./corridors";
+import { parseBuildings, parseMapBounds, parseRoads, parseTrees } from "./map";
+import { parseFlowDefinitions } from "./flows";
+import { createSceneData } from "./osm";
 
 const root = resolve(__dirname, "../..");
 const twoCorridorOsmPath = "public/data/map/two_air_corridor.osm";

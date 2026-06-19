@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import type { AirCorridor, ScenePoint } from "../../types";
 import { ENVELOPE_RADIAL_SEGMENTS } from "../../constant";
-import { parseAirCorridors } from "../../data/osm";
+import { parseAirCorridors } from "../../data/corridors";
 import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "../corridorEnvelope";
 
 const root = resolve(__dirname, "../../..");
