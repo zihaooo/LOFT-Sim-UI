@@ -2,8 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import type { Pane } from "tweakpane";
-import type { AirCorridor, SceneData, UavSchedule, UavState } from "../types";
-import { createFleet, getUavCorridorPosition } from "../animation/fleet";
+import type { SceneData, UavState } from "../types";
 import {
   CAMERA_FAR_METERS,
   CAMERA_FOV_DEGREES,
@@ -21,20 +20,19 @@ import {
   ORBIT_MAX_DISTANCE_METERS,
   ORBIT_MIN_DISTANCE_METERS,
   ORBIT_MOUSE_BUTTONS,
-  CORRIDOR_COLORS,
   SCENE_BACKGROUND_COLOR,
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
-  SELECTED_UAV_COLOR,
   SIMULATION_SPEED_LEVELS,
   TELEMETRY_UAV_MESH_CAPACITY,
   WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
-import { setUavYawQuaternion } from "../geometry/drone";
 import { createUavMesh } from "../layer/drone";
 import { TelemetryClient } from "../telemetry/client";
-import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
+import { DemoFleetSource } from "../fleet/demoSource";
+import { TelemetrySource } from "../fleet/telemetrySource";
+import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/corridor";
@@ -51,6 +49,9 @@ import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabel
 import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
 
 export { loadDroneGeometry } from "../geometry/drone";
+
+/** Shared empty map used for label projection before the first fleet frame is produced. */
+const EMPTY_UAV_STATE: Map<string, UavState> = new Map();
 
 type FleetSceneOptions = {
   host: HTMLDivElement;
@@ -73,9 +74,10 @@ export class FleetScene {
   private readonly sceneData: SceneData;
   private readonly onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   private readonly onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
-  private readonly corridorById: Map<string, AirCorridor>;
-  private readonly fleet: UavSchedule[];
-  private readonly fleetById: Map<string, UavSchedule>;
+  /** Frontend-generated fleet; always present and used as the fallback when telemetry has no frame. */
+  private readonly demoSource: DemoFleetSource;
+  /** Backend telemetry source; present only when a telemetry URL was configured. */
+  private readonly telemetrySource: TelemetrySource | null;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly performanceStats = new Stats();
   private readonly scene = new THREE.Scene();
@@ -86,7 +88,6 @@ export class FleetScene {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
   private readonly keys = new Set<string>();
-  private readonly telemetryClient: TelemetryClient | null;
   private readonly uavMesh: THREE.InstancedMesh;
   private readonly corridorGroup: THREE.Group;
   private readonly envelopeGroup: THREE.Group;
@@ -96,11 +97,6 @@ export class FleetScene {
   private readonly buildingGroup: THREE.Group;
   private readonly labelNodes: Map<string, HTMLDivElement>;
   private readonly corridorLabelNodes: CorridorLabelNode[];
-  private readonly pendingUavIndices: number[];
-  private readonly activeUavIndices: number[] = [];
-  private readonly uavStateById = new Map<string, UavState>();
-  private readonly renderSlotToFleetIndex: number[] = [];
-  private readonly renderSlotToTelemetryHandle: number[] = [];
   private readonly simulationClockValue: HTMLElement;
   private readonly sceneCorridorsValue: HTMLElement;
   private readonly sceneBuildingsValue: HTMLElement;
@@ -115,32 +111,24 @@ export class FleetScene {
   private readonly telemetryParseValue: HTMLElement;
   private readonly telemetrySkippedValue: HTMLElement;
   private readonly telemetryErrorValue: HTMLElement;
-  private readonly matrix = new THREE.Matrix4();
-  private readonly quaternion = new THREE.Quaternion();
-  private readonly scale = new THREE.Vector3(1, 1, 1);
-  private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly telemetryCorridorColor = new THREE.Color();
-  private readonly telemetryPosition = new THREE.Vector3();
-  private readonly telemetryTangent = new THREE.Vector3(1, 0, 0);
+  private readonly selectedPosition = new THREE.Vector3();
+  private readonly selectedTangent = new THREE.Vector3(1, 0, 0);
   private readonly initialCameraPosition = new THREE.Vector3();
   private readonly initialTarget = new THREE.Vector3();
 
+  /** Source that produced the most recent frame; the raycast selection is routed back to it. */
+  private activeSource: FleetSource;
+  private lastFrame: FleetFrame | null = null;
   private elapsedSeconds = 0;
-  private selectedInstanceId = -1;
-  private selectedTelemetryHandle = -1;
-  private selectedPosition = new THREE.Vector3();
-  private selectedTangent = new THREE.Vector3(1, 0, 0);
   private previousCameraMode: CameraMode = CAMERA_MODES.FREE;
   private previousSelectedUavId = "";
   private lastFollowPosition = new THREE.Vector3();
-  private activeUavCount = 0;
-  private nextPendingUavIndex = 0;
   private animationFrame = 0;
   private started = false;
   private disposed = false;
   private readonly params: SimulationControlState;
 
-  /** Wires DOM hosts, builds the fleet from scene data, and configures renderer, controls, UI, and scene. */
+  /** Wires DOM hosts, builds the fleet sources from scene data, and configures renderer, controls, UI, and scene. */
   constructor(options: FleetSceneOptions) {
     this.host = options.host;
     this.panel = options.panel;
@@ -149,15 +137,16 @@ export class FleetScene {
     this.sceneData = options.sceneData;
     this.onReloadScene = options.onReloadScene;
     this.onLoadDemoPreset = options.onLoadDemoPreset;
-    this.corridorById = new Map(this.sceneData.corridors.map((corridor) => [corridor.id, corridor]));
-    this.fleet = createFleet(this.sceneData.corridors, this.sceneData.flows);
-    this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
-    this.telemetryClient = options.telemetryUrl
-      ? new TelemetryClient({ url: options.telemetryUrl, frontendOrigin: this.sceneData.origin })
+
+    const corridorById = new Map(this.sceneData.corridors.map((corridor) => [corridor.id, corridor]));
+    this.demoSource = new DemoFleetSource(this.sceneData.corridors, this.sceneData.flows, corridorById);
+    this.telemetrySource = options.telemetryUrl
+      ? new TelemetrySource(
+          new TelemetryClient({ url: options.telemetryUrl, frontendOrigin: this.sceneData.origin }),
+          corridorById,
+        )
       : null;
-    this.pendingUavIndices = this.fleet
-      .map((_, index) => index)
-      .sort((a, b) => this.fleet[a].departureTimeSeconds - this.fleet[b].departureTimeSeconds);
+    this.activeSource = this.demoSource;
 
     this.params = createDefaultControlState(options.activeDemoPreset ?? null);
 
@@ -184,7 +173,7 @@ export class FleetScene {
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
-    this.uavMesh = createUavMesh(Math.max(this.fleet.length, TELEMETRY_UAV_MESH_CAPACITY), options.uavGeometry ?? null);
+    this.uavMesh = createUavMesh(Math.max(this.demoSource.fleetSize, TELEMETRY_UAV_MESH_CAPACITY), options.uavGeometry ?? null);
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
     this.initializeStaticUavBoundingSphere();
@@ -223,7 +212,7 @@ export class FleetScene {
     window.addEventListener("keyup", this.handleKeyUp);
     this.renderer.domElement.addEventListener("pointerdown", this.handlePointerDown);
     this.renderer.domElement.addEventListener("contextmenu", this.handleContextMenu);
-    this.telemetryClient?.start();
+    this.telemetrySource?.start();
     this.clock.start();
     this.animate();
   }
@@ -245,7 +234,7 @@ export class FleetScene {
     window.removeEventListener("keyup", this.handleKeyUp);
     this.renderer.domElement.removeEventListener("pointerdown", this.handlePointerDown);
     this.renderer.domElement.removeEventListener("contextmenu", this.handleContextMenu);
-    this.telemetryClient?.stop();
+    this.telemetrySource?.stop();
     this.controls.dispose();
     this.controlPane.dispose();
     this.performanceStats.dom.remove();
@@ -285,7 +274,7 @@ export class FleetScene {
       state: this.params,
       formatSpeed: (speedLevelIndex) => `${this.getSimulationSpeed(speedLevelIndex)}x`,
       normalizeSpeedLevelIndex: (speedLevelIndex) => this.toSpeedLevelIndex(speedLevelIndex),
-      onRunningChange: (running) => this.telemetryClient?.setRunning(running),
+      onRunningChange: (running) => this.telemetrySource?.setRunning(running),
       onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
       onResetSimulation: () => this.resetSimulation(),
       onReloadScene: this.onReloadScene,
@@ -307,23 +296,16 @@ export class FleetScene {
   /** Resets mutable simulation state while preserving loaded scene assets and control bindings. */
   private resetSimulation(): void {
     this.elapsedSeconds = 0;
-    this.nextPendingUavIndex = 0;
-    this.activeUavIndices.length = 0;
-    this.uavStateById.clear();
-    this.renderSlotToFleetIndex.length = 0;
-    this.renderSlotToTelemetryHandle.length = 0;
+    this.demoSource.reset();
+    this.telemetrySource?.reset();
+    this.activeSource = this.demoSource;
+    this.lastFrame = null;
     this.uavMesh.count = 0;
-    this.clearSelectedUav();
+    this.params.selectedUavId = "";
     this.clearUavLabels();
     this.params.cameraMode = CAMERA_MODES.FREE;
     this.camera.position.copy(this.initialCameraPosition);
     this.controls.target.copy(this.initialTarget);
-  }
-
-  private clearSelectedUav(): void {
-    this.selectedInstanceId = -1;
-    this.selectedTelemetryHandle = -1;
-    this.params.selectedUavId = "";
   }
 
   /** Returns the simulation-speed multiplier for the given speed-level slider index. */
@@ -350,7 +332,7 @@ export class FleetScene {
     }
 
     this.applyKeyboardNavigation(delta);
-    this.updateFleetInstances();
+    this.updateFleet();
     this.updateCameraMode();
     this.controls.update();
     this.constrainCameraAboveHorizon();
@@ -361,25 +343,21 @@ export class FleetScene {
     this.performanceStats.end();
   };
 
-  /** Promotes any pending UAVs whose departure time has been reached into the active set. */
-  private activateDepartedUavs(): void {
-    while (this.nextPendingUavIndex < this.pendingUavIndices.length) {
-      const fleetIndex = this.pendingUavIndices[this.nextPendingUavIndex];
-      const uav = this.fleet[fleetIndex];
-      if (uav.departureTimeSeconds > this.elapsedSeconds) {
-        break;
-      }
-
-      this.activeUavIndices.push(fleetIndex);
-      this.nextPendingUavIndex += 1;
-    }
-  }
-
-  /** O(1) removal from the active list by swapping the last entry into the freed slot. */
-  private removeActiveUavAt(activeIndex: number): void {
-    const lastIndex = this.activeUavIndices.pop();
-    if (lastIndex !== undefined && activeIndex < this.activeUavIndices.length) {
-      this.activeUavIndices[activeIndex] = lastIndex;
+  /** Runs telemetry when it has a live frame, otherwise the demo fleet, and adopts the frame's selection state. */
+  private updateFleet(): void {
+    const ctx: FleetFrameContext = {
+      mesh: this.uavMesh,
+      elapsedSeconds: this.elapsedSeconds,
+      selectedUavId: this.params.selectedUavId,
+    };
+    const telemetryFrame = this.telemetrySource?.update(ctx) ?? null;
+    const frame = telemetryFrame ?? this.demoSource.update(ctx);
+    this.activeSource = telemetryFrame ? (this.telemetrySource as FleetSource) : this.demoSource;
+    this.lastFrame = frame;
+    this.params.selectedUavId = frame.selectedUavId;
+    if (frame.selection) {
+      this.selectedPosition.copy(frame.selection.position);
+      this.selectedTangent.copy(frame.selection.tangent);
     }
   }
 
@@ -389,159 +367,6 @@ export class FleetScene {
       label.remove();
     });
     this.labelNodes.clear();
-  }
-
-  /** Updates each active UAV's position/orientation and writes its instance matrix and tint color. */
-  private updateFleetInstances(): void {
-    const telemetrySnapshot = this.telemetryClient?.latestSnapshot();
-    if (telemetrySnapshot) {
-      this.updateTelemetryInstances(telemetrySnapshot);
-      return;
-    }
-
-    this.updateDemoInstances();
-  }
-
-  /** Renders the frontend-only demo fleet generated from local flow definitions. */
-  private updateDemoInstances(): void {
-    const corridorColor = new THREE.Color();
-    const selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-    this.activateDepartedUavs();
-    this.uavStateById.clear();
-    this.activeUavCount = 0;
-    this.renderSlotToTelemetryHandle.length = 0;
-
-    for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
-      const index = this.activeUavIndices[activeIndex];
-      const uav = this.fleet[index];
-      const corridor = this.corridorById.get(uav.corridorId);
-      if (!corridor) {
-        this.removeActiveUavAt(activeIndex);
-        continue;
-      }
-
-      const uavState = getUavCorridorPosition(uav, corridor, this.elapsedSeconds, 1);
-      const position = toVector3(uavState.position);
-      const tangent = toVector3(uavState.tangent).normalize();
-
-      if (uavState.status === "destroyed") {
-        if (uav.id === this.params.selectedUavId) {
-          this.selectedPosition.copy(position);
-          this.selectedTangent.copy(tangent);
-        }
-        this.removeActiveUavAt(activeIndex);
-        continue;
-      }
-
-      if (uavState.status !== "active") {
-        activeIndex += 1;
-        continue;
-      }
-
-      const renderSlot = this.activeUavCount;
-      this.activeUavCount += 1;
-      this.renderSlotToFleetIndex[renderSlot] = index;
-      this.uavStateById.set(uav.id, uavState);
-      setUavYawQuaternion(this.quaternion, tangent);
-      this.matrix.compose(position, this.quaternion, this.scale);
-      this.uavMesh.setMatrixAt(renderSlot, this.matrix);
-      this.uavMesh.setColorAt(renderSlot, index === this.selectedInstanceId ? selectedColor : corridorColor.set(corridor.color));
-
-      if (uav.id === this.params.selectedUavId) {
-        this.selectedPosition.copy(position);
-        this.selectedTangent.copy(tangent);
-      }
-      activeIndex += 1;
-    }
-
-    this.renderSlotToFleetIndex.length = this.activeUavCount;
-    this.uavMesh.count = this.activeUavCount;
-    if (this.activeUavCount === 0) {
-      return;
-    }
-
-    this.uavMesh.instanceMatrix.addUpdateRange(0, this.activeUavCount * 16);
-    this.uavMesh.instanceMatrix.needsUpdate = true;
-    if (this.uavMesh.instanceColor) {
-      this.uavMesh.instanceColor.addUpdateRange(0, this.activeUavCount * 3);
-      this.uavMesh.instanceColor.needsUpdate = true;
-    }
-  }
-
-  /** Renders backend telemetry snapshots directly, without frontend interpolation. */
-  private updateTelemetryInstances(snapshot: TelemetrySnapshot): void {
-    const capacity = this.uavMesh.instanceMatrix.count;
-    this.uavStateById.clear();
-    this.renderSlotToFleetIndex.length = 0;
-    this.activeUavCount = 0;
-
-    for (const drone of snapshot.drones) {
-      if (this.activeUavCount >= capacity) {
-        break;
-      }
-      if (drone.stateCode === 0) {
-        continue;
-      }
-
-      const renderSlot = this.activeUavCount;
-      this.activeUavCount += 1;
-      this.renderSlotToTelemetryHandle[renderSlot] = drone.handle;
-
-      this.telemetryPosition.set(drone.position.x, drone.position.y, drone.position.z);
-      this.telemetryTangent.set(drone.velocity.x, drone.velocity.y, drone.velocity.z);
-      if (this.telemetryTangent.lengthSq() < 0.0001) {
-        this.telemetryTangent.set(1, 0, 0);
-      } else {
-        this.telemetryTangent.normalize();
-      }
-
-      const droneId = this.getTelemetryDroneId(drone);
-      const isSelected = drone.handle === this.selectedTelemetryHandle || droneId === this.params.selectedUavId;
-      setUavYawQuaternion(this.quaternion, this.telemetryTangent);
-      this.matrix.compose(this.telemetryPosition, this.quaternion, this.scale);
-      this.uavMesh.setMatrixAt(renderSlot, this.matrix);
-      this.uavMesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getTelemetryCorridorColor(drone));
-
-      if (isSelected) {
-        this.params.selectedUavId = droneId;
-        this.selectedPosition.copy(this.telemetryPosition);
-        this.selectedTangent.copy(this.telemetryTangent);
-        this.uavStateById.set(droneId, {
-          position: drone.position,
-          tangent: {
-            x: this.telemetryTangent.x,
-            y: this.telemetryTangent.y,
-            z: this.telemetryTangent.z,
-          },
-          distance: 0,
-          progress: 0,
-          status: "active",
-        });
-      }
-    }
-
-    this.renderSlotToTelemetryHandle.length = this.activeUavCount;
-    this.uavMesh.count = this.activeUavCount;
-    if (this.activeUavCount === 0) {
-      return;
-    }
-
-    this.uavMesh.instanceMatrix.addUpdateRange(0, this.activeUavCount * 16);
-    this.uavMesh.instanceMatrix.needsUpdate = true;
-    if (this.uavMesh.instanceColor) {
-      this.uavMesh.instanceColor.addUpdateRange(0, this.activeUavCount * 3);
-      this.uavMesh.instanceColor.needsUpdate = true;
-    }
-  }
-
-  private getTelemetryDroneId(drone: TelemetryDroneState): string {
-    return this.telemetryClient?.getRegistry().dronesByHandle.get(drone.handle)?.id ?? `D${drone.handle}`;
-  }
-
-  private getTelemetryCorridorColor(drone: TelemetryDroneState): THREE.Color {
-    const corridorId = this.telemetryClient?.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
-    const corridor = corridorId ? this.corridorById.get(corridorId) : undefined;
-    return this.telemetryCorridorColor.set(corridor?.color ?? CORRIDOR_COLORS[drone.corridorHandle % CORRIDOR_COLORS.length]);
   }
 
   /** Switches between Free orbit and Follow modes; in Follow, snaps behind/above the UAV on entry then trails it. */
@@ -578,7 +403,7 @@ export class FleetScene {
       labelLayer: this.labelLayer,
       corridorLabelNodes: this.corridorLabelNodes,
       uavLabelNodes: this.labelNodes,
-      uavStateById: this.uavStateById,
+      uavStateById: this.lastFrame?.uavStateById ?? EMPTY_UAV_STATE,
       camera: this.camera,
       host: this.host,
       selectedUavId: this.params.selectedUavId,
@@ -590,84 +415,22 @@ export class FleetScene {
 
   /** Refreshes the HUD with simulation-facing state, keeping transport metrics in the debug panel. */
   private updateHudStats(): void {
-    const telemetrySnapshot = this.telemetryClient?.latestSnapshot();
-    const status = this.params.running ? "Playing" : "Paused";
-    const selectedText = telemetrySnapshot
-      ? this.getTelemetrySelectedText(telemetrySnapshot)
-      : this.getDemoSelectedText();
-    const parts = [
-      `Status: ${status}`,
-      `UAVs: ${this.activeUavCount.toLocaleString()} active`,
-      `Corridors: ${this.sceneData.corridors.length.toLocaleString()}`,
-      `Selected: ${selectedText}`,
-    ];
+    const frame = this.lastFrame;
+    const activeCount = frame?.activeCount ?? 0;
+    const parts = [`Status: ${this.params.running ? "Playing" : "Paused"}`];
 
-    if (!telemetrySnapshot) {
-      parts.splice(
-        1,
-        1,
-        `Speed: ${this.getSimulationSpeed()}x`,
-        `UAVs: ${this.activeUavCount.toLocaleString()} active / ${this.fleet.length.toLocaleString()} scheduled`,
-      );
+    if (frame && frame.scheduledCount !== null) {
+      // Demo fleet exposes its full schedule and is driven by the local speed control.
+      parts.push(`Speed: ${this.getSimulationSpeed()}x`);
+      parts.push(`UAVs: ${activeCount.toLocaleString()} active / ${frame.scheduledCount.toLocaleString()} scheduled`);
+    } else {
+      parts.push(`UAVs: ${activeCount.toLocaleString()} active`);
     }
+
+    parts.push(`Corridors: ${this.sceneData.corridors.length.toLocaleString()}`);
+    parts.push(`Selected: ${frame?.selectedSummary ?? "none"}`);
 
     this.stats.textContent = parts.join(" · ");
-  }
-
-  private getDemoSelectedText(): string {
-    const selectedUav = this.fleetById.get(this.params.selectedUavId);
-    if (!selectedUav) {
-      return "none";
-    }
-
-    const selectedCorridor = this.corridorById.get(selectedUav.corridorId);
-    const corridorText = selectedCorridor ? this.formatCorridorSummary(selectedCorridor) : `Corridor ${selectedUav.corridorId}`;
-    return `${selectedUav.id} · ${selectedUav.type} · ${corridorText}`;
-  }
-
-  private getTelemetrySelectedText(snapshot: TelemetrySnapshot): string {
-    const selectedDrone = this.getSelectedTelemetryDrone(snapshot);
-    if (!selectedDrone) {
-      return "none";
-    }
-
-    const droneId = this.getTelemetryDroneId(selectedDrone);
-    const droneType = this.telemetryClient?.getRegistry().dronesByHandle.get(selectedDrone.handle)?.vehicleType
-      ?? `type ${selectedDrone.vehicleTypeCode}`;
-    const corridor = this.getTelemetryCorridor(selectedDrone);
-    const corridorId = this.getTelemetryCorridorId(selectedDrone);
-    const corridorText = corridor ? this.formatCorridorSummary(corridor) : `Corridor ${corridorId ?? selectedDrone.corridorHandle}`;
-
-    return `${droneId} · ${droneType} · ${corridorText}`;
-  }
-
-  private getSelectedTelemetryDrone(snapshot: TelemetrySnapshot): TelemetryDroneState | undefined {
-    return snapshot.drones.find((drone) => (
-      drone.handle === this.selectedTelemetryHandle
-      || this.getTelemetryDroneId(drone) === this.params.selectedUavId
-    ));
-  }
-
-  private getTelemetryCorridorId(drone: TelemetryDroneState): string | undefined {
-    return this.telemetryClient?.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
-  }
-
-  private getTelemetryCorridor(drone: TelemetryDroneState): AirCorridor | undefined {
-    const corridorId = this.getTelemetryCorridorId(drone);
-    return corridorId ? this.corridorById.get(corridorId) : undefined;
-  }
-
-  private formatCorridorSummary(corridor: AirCorridor): string {
-    if (corridor.from && corridor.to) {
-      return `${corridor.from} to ${corridor.to}`;
-    }
-    if (corridor.from) {
-      return `${corridor.from} to unknown`;
-    }
-    if (corridor.to) {
-      return `unknown to ${corridor.to}`;
-    }
-    return corridor.name || `Corridor ${corridor.id}`;
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
@@ -704,7 +467,7 @@ export class FleetScene {
     }
   }
 
-  /** Left-click selects the UAV under the cursor via raycasting against the InstancedMesh. */
+  /** Left-click selects the UAV under the cursor via raycasting, delegating slot resolution to the active source. */
   private handlePointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) {
       return;
@@ -717,34 +480,14 @@ export class FleetScene {
 
     const intersections = this.raycaster.intersectObject(this.uavMesh);
     const instanceId = intersections[0]?.instanceId;
-    const telemetryHandle = instanceId === undefined ? undefined : this.renderSlotToTelemetryHandle[instanceId];
-    if (telemetryHandle !== undefined) {
-      const droneId = this.telemetryClient?.getRegistry().dronesByHandle.get(telemetryHandle)?.id ?? `D${telemetryHandle}`;
-      if (telemetryHandle === this.selectedTelemetryHandle || droneId === this.params.selectedUavId) {
-        this.clearSelectedUav();
-        return;
-      }
-
-      this.selectedTelemetryHandle = telemetryHandle;
-      this.selectedInstanceId = -1;
-      this.params.selectedUavId = droneId;
+    if (instanceId === undefined) {
       return;
     }
 
-    const fleetIndex = instanceId === undefined ? undefined : this.renderSlotToFleetIndex[instanceId];
-    if (fleetIndex === undefined || !this.fleet[fleetIndex]) {
-      return;
+    const nextSelectedUavId = this.activeSource.selectAt(instanceId, this.params.selectedUavId);
+    if (nextSelectedUavId !== null) {
+      this.params.selectedUavId = nextSelectedUavId;
     }
-
-    const uavId = this.fleet[fleetIndex].id;
-    if (fleetIndex === this.selectedInstanceId || uavId === this.params.selectedUavId) {
-      this.clearSelectedUav();
-      return;
-    }
-
-    this.selectedTelemetryHandle = -1;
-    this.selectedInstanceId = fleetIndex;
-    this.params.selectedUavId = uavId;
   };
 
   /** Suppresses the browser context menu so right-drag is free to rotate the orbit camera. */
@@ -845,32 +588,24 @@ export class FleetScene {
 
   /** Refreshes simulation, scene, camera, and telemetry debug readouts each frame. */
   private updateReadoutPanels(): void {
-    const telemetrySnapshot = this.telemetryClient?.latestSnapshot();
-    this.simulationClockValue.textContent = formatSimulationTime(
-      telemetrySnapshot?.simTimeSeconds ?? this.elapsedSeconds,
-    );
+    this.simulationClockValue.textContent = formatSimulationTime(this.lastFrame?.simTimeSeconds ?? this.elapsedSeconds);
     this.sceneCorridorsValue.textContent = this.sceneData.corridors.length.toLocaleString();
     this.sceneBuildingsValue.textContent = this.sceneData.buildings.length.toLocaleString();
     this.sceneRoadsValue.textContent = this.sceneData.roads.length.toLocaleString();
     this.sceneTreesValue.textContent = this.sceneData.trees.length.toLocaleString();
     this.cameraPositionValue.textContent = formatVector(this.camera.position);
     this.cameraLookAtValue.textContent = formatVector(this.controls.target);
+    this.applyTelemetryReadout(this.telemetrySource?.debugReadout() ?? null);
+  }
 
-    const telemetryStats = this.telemetryClient?.getStats();
-    this.telemetryConnectionValue.textContent = telemetryStats?.connectionState ?? "disabled";
-    this.telemetryFrequencyValue.textContent = telemetrySnapshot && telemetryStats
-      ? `${telemetryStats.snapshotHz.toFixed(1)} Hz`
-      : "-";
-    this.telemetrySequenceValue.textContent = telemetrySnapshot ? String(telemetrySnapshot.sequence) : "-";
-    this.telemetryAgeValue.textContent = telemetrySnapshot
-      ? `${Math.max(0, performance.now() - telemetrySnapshot.receivedAtMs).toFixed(0)} ms`
-      : "-";
-    this.telemetryParseValue.textContent = telemetrySnapshot && telemetryStats
-      ? `${telemetryStats.lastParseTimeMs.toFixed(2)} ms`
-      : "-";
-    this.telemetrySkippedValue.textContent = telemetrySnapshot && telemetryStats
-      ? telemetryStats.droppedSnapshotCount.toLocaleString()
-      : "-";
-    this.telemetryErrorValue.textContent = telemetryStats?.lastError || "-";
+  /** Writes the telemetry debug block, falling back to "disabled"/"-" when no telemetry source is configured. */
+  private applyTelemetryReadout(readout: TelemetryDebugReadout | null): void {
+    this.telemetryConnectionValue.textContent = readout?.connection ?? "disabled";
+    this.telemetryFrequencyValue.textContent = readout?.frequency ?? "-";
+    this.telemetrySequenceValue.textContent = readout?.sequence ?? "-";
+    this.telemetryAgeValue.textContent = readout?.age ?? "-";
+    this.telemetryParseValue.textContent = readout?.parse ?? "-";
+    this.telemetrySkippedValue.textContent = readout?.skipped ?? "-";
+    this.telemetryErrorValue.textContent = readout?.error ?? "-";
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AirCorridor } from "../types";
-import { computeUavState, createFleet, getUavCorridorPosition } from "./fleet";
+import { computeUavState, createFleet, getUavCorridorPosition } from "./demoFleet";
 
 const corridor: AirCorridor = {
   id: "A",
