@@ -3,15 +3,18 @@
 Generate an air-corridor OSM file with one way that linearly interpolates
 between a start point and an end point.
 
-Output format mirrors public/data/map/air_corridor.osm:
+Output format mirrors public/data/network/airspace_network.osm:
   - Each waypoint is a <node> with a negative id (-1, -2, ...).
   - Start and end nodes get tag altitude="0".
   - Middle nodes get tag altitude="<-z>".
   - All nodes are joined by one <way> with tag corridor="air".
+  - Each way is wrapped in its own <relation> tagged object_type="route" (one
+    way per relation) so the app parses it as a route. This 1:1 mapping is a
+    deliberate simplification for stress testing.
 
 Example:
   python scripts/generate_air_corridor.py \
-      -i public/data/map/map.osm \
+      -i public/data/network/map.osm \
       -s -83.7129025,42.2929580 \
       -e -83.7032924,42.2985581 \
       -n 9 -z 60 \
@@ -66,7 +69,7 @@ def next_negative_id(root: ET.Element, tag: str) -> int:
     return min(floor, 0) - 1
 
 
-def append_corridor(root, start, end, middle, altitude, first_node_id, way_id):
+def append_corridor(root, start, end, middle, altitude, first_node_id, way_id, relation_id):
     if middle < 0:
         raise ValueError("--num must be >= 0")
 
@@ -97,6 +100,20 @@ def append_corridor(root, start, end, middle, altitude, first_node_id, way_id):
         ET.SubElement(way, "nd", {"ref": str(nid)})
     ET.SubElement(way, "tag", {"k": "corridor", "v": "air"})
 
+    # One relation per way so the app parses this way as a standalone route. The
+    # parser keys on object_type="route" and stitches the member ways' nodes; the
+    # other tags mirror public/data/network/airspace_network.osm for fidelity.
+    relation = ET.SubElement(root, "relation", {
+        "id": str(relation_id),
+        "action": "modify",
+        "visible": "true",
+    })
+    ET.SubElement(relation, "member", {"type": "way", "ref": str(way_id), "role": ""})
+    ET.SubElement(relation, "tag", {"k": "airspace", "v": "yes"})
+    ET.SubElement(relation, "tag", {"k": "object_id", "v": f"stress_route_{abs(way_id)}"})
+    ET.SubElement(relation, "tag", {"k": "object_type", "v": "route"})
+    ET.SubElement(relation, "tag", {"k": "type", "v": "route"})
+
 
 def indent(elem, level=0):
     pad = "\n" + "  " * level
@@ -115,8 +132,8 @@ def main() -> int:
     args = parse_args()
 
     protected = {
-        Path("public/data/map/air_corridor.osm").resolve(),
-        Path("public/data/map/map.osm").resolve(),
+        Path("public/data/network/airspace_network.osm").resolve(),
+        Path("public/data/network/map.osm").resolve(),
         args.input.resolve(),
     }
     if args.output.resolve() in protected:
@@ -136,11 +153,12 @@ def main() -> int:
 
     first_node_id = next_negative_id(root, "node")
     way_id = next_negative_id(root, "way")
-    append_corridor(root, args.start, args.end, args.num, args.altitude, first_node_id, way_id)
+    relation_id = next_negative_id(root, "relation")
+    append_corridor(root, args.start, args.end, args.num, args.altitude, first_node_id, way_id, relation_id)
 
     indent(root)
     tree.write(args.output, encoding="UTF-8", xml_declaration=True)
-    print(f"wrote {args.output} (nodes start at {first_node_id}, way id {way_id})")
+    print(f"wrote {args.output} (nodes start at {first_node_id}, way id {way_id}, relation id {relation_id})")
     return 0
 
 

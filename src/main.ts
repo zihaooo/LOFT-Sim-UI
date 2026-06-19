@@ -187,8 +187,8 @@ async function loadSourcesFromApi(): Promise<SceneSourceTexts> {
 /** Reads the bundled startup files into the same shape used for later reloads. */
 async function loadDefaultSources(): Promise<SceneSourceTexts> {
   const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
-    loadText("/data/map/air_corridor.osm"),
-    loadText("/data/map/map.osm"),
+    loadText("/data/network/airspace_network.osm"),
+    loadText("/data/network/map.osm"),
     loadText("/data/demand/flow.json"),
   ]);
 
@@ -199,16 +199,16 @@ async function loadDefaultSources(): Promise<SceneSourceTexts> {
 async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTexts> {
   if (preset === "stressTest") {
     const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
-      loadText("/data/map/stress_air_corridor.osm"),
-      loadText("/data/map/map.osm"),
+      loadText("/data/network/stress_air_corridor.osm"),
+      loadText("/data/network/map.osm"),
       loadText("/data/demand/stress_flow.json"),
     ]);
 
     return { corridorOsm, buildingOsm, flowJson };
   } else if (preset === "twoCorridors") {
       const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
-          loadText("/data/map/two_air_corridor.osm"),
-          loadText("/data/map/map.osm"),
+          loadText("/data/network/two_air_corridor.osm"),
+          loadText("/data/network/map.osm"),
           loadText("/data/demand/two_flow.json"),
       ]);
 

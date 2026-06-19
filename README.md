@@ -49,8 +49,8 @@ src/
 
 Files under `public/data/` are served by Vite at `/data/...` in the browser and copied into `dist/data/` during production builds. `src/main.ts` loads these default scene assets:
 
-- `public/data/map/air_corridor.osm` — default air-corridor network
-- `public/data/map/map.osm` — buildings, roads, trees
+- `public/data/network/airspace_network.osm` — default air-corridor network
+- `public/data/network/map.osm` — buildings, roads, trees
 - `public/data/demand/flow.json` — default flow demand
 - `public/data/model/drone.gltf` *(optional)* — falls back to a low-poly cone if missing
 

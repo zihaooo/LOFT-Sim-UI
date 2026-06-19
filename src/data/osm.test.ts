@@ -8,8 +8,8 @@ import { parseFlowDefinitions } from "./flows";
 import { createSceneData } from "./osm";
 
 const root = resolve(__dirname, "../..");
-const twoCorridorOsmPath = "public/data/map/two_air_corridor.osm";
-const defaultMapOsmPath = "public/data/map/map.osm";
+const twoCorridorOsmPath = "public/data/network/two_air_corridor.osm";
+const defaultMapOsmPath = "public/data/network/map.osm";
 const twoFlowJsonPath = "public/data/demand/two_flow.json";
 
 describe("OSM and flow parsing", () => {

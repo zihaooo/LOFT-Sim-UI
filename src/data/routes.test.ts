@@ -8,7 +8,7 @@ import { createRouteGroup } from "../layer/corridor";
 
 const origin = { lat: 42.0, lon: -83.0 };
 const root = resolve(__dirname, "../..");
-const airCorridorOsm = readFileSync(resolve(root, "public/data/map/air_corridor.osm"), "utf8");
+const airCorridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
 
 // Two airspace ways that meet at node 3; a relation chains them into one route in member order.
 const routeOsm = `

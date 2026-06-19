@@ -3,7 +3,7 @@
 Remove all elements marked with action="delete" from an OSM file.
 
 Example:
-  python scripts/clean_osm.py -i public/data/map/map.osm -o public/data/map/map.clean.osm
+  python scripts/clean_osm.py -i public/data/network/map.osm -o public/data/network/map.clean.osm
 """
 
 import argparse

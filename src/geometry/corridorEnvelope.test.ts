@@ -8,7 +8,7 @@ import { parseAirCorridors } from "../data/corridors";
 import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./corridorEnvelope";
 
 const root = resolve(__dirname, "../..");
-const corridorOsm = readFileSync(resolve(root, "public/data/map/air_corridor.osm"), "utf8");
+const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
 
 /** Builds a minimal AirCorridor; only componentId/color/points/envelopeRadius/nodeIds/vertiportFlags are read. */
 function fakeCorridor(
