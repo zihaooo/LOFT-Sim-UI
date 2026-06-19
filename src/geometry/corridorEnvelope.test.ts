@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as THREE from "three";
-import type { AirCorridor, ScenePoint } from "../../types";
-import { ENVELOPE_RADIAL_SEGMENTS } from "../../constant";
-import { parseAirCorridors } from "../../data/corridors";
-import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "../corridorEnvelope";
+import type { AirCorridor, ScenePoint } from "../types";
+import { ENVELOPE_RADIAL_SEGMENTS } from "../constant";
+import { parseAirCorridors } from "../data/corridors";
+import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./corridorEnvelope";
 
-const root = resolve(__dirname, "../../..");
+const root = resolve(__dirname, "../..");
 const corridorOsm = readFileSync(resolve(root, "public/data/map/air_corridor.osm"), "utf8");
 
 /** Builds a minimal AirCorridor; only componentId/color/points/envelopeRadius/nodeIds/vertiportFlags are read. */
