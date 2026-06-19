@@ -37,7 +37,7 @@ import { TelemetryClient } from "../telemetry/client";
 import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
-import { createFlightEnvelopeGroup, createCorridorGroup } from "../layer/corridor";
+import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/corridor";
 import {
   createDefaultControlState,
   createSimulationControls,
@@ -90,6 +90,7 @@ export class FleetScene {
   private readonly uavMesh: THREE.InstancedMesh;
   private readonly corridorGroup: THREE.Group;
   private readonly envelopeGroup: THREE.Group;
+  private readonly routeGroup: THREE.Group;
   private readonly roadGroup: THREE.Group;
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
@@ -181,6 +182,8 @@ export class FleetScene {
     this.buildingGroup = createBuildingGroup(this.sceneData.buildings);
     this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
+    this.routeGroup = createRouteGroup(this.sceneData.routes);
+    this.routeGroup.visible = this.params.routesVisible;
     this.uavMesh = createUavMesh(Math.max(this.fleet.length, TELEMETRY_UAV_MESH_CAPACITY), options.uavGeometry ?? null);
     this.uavMesh.count = 0;
     this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
@@ -269,6 +272,7 @@ export class FleetScene {
       this.treeGroup,
       this.corridorGroup,
       this.envelopeGroup,
+      this.routeGroup,
       this.buildingGroup,
       this.uavMesh,
     );
@@ -292,7 +296,9 @@ export class FleetScene {
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
     this.corridorGroup.visible = visibility.corridorsVisible;
-    this.envelopeGroup.visible = visibility.envelopesVisible;
+    // Corridor envelope follows its own toggle but hides while routes are shown (the two are exclusive).
+    this.envelopeGroup.visible = visibility.envelopesVisible && !visibility.routesVisible;
+    this.routeGroup.visible = visibility.routesVisible;
     this.buildingGroup.visible = visibility.buildingsVisible;
     this.roadGroup.visible = visibility.roadsVisible;
     this.treeGroup.visible = visibility.treesVisible;
@@ -789,12 +795,14 @@ export class FleetScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     // Fat centerlines (LineMaterial) need the viewport resolution to compute screen-space stroke width.
-    this.corridorGroup.traverse((object) => {
+    const applyLineResolution = (object: THREE.Object3D): void => {
       const material = (object as Partial<{ material: { isLineMaterial?: boolean; resolution: THREE.Vector2 } }>).material;
       if (material?.isLineMaterial) {
         material.resolution.set(width, height);
       }
-    });
+    };
+    this.corridorGroup.traverse(applyLineResolution);
+    this.routeGroup.traverse(applyLineResolution);
   };
 
   /** Covers every possible UAV position so InstancedMesh raycasting does not depend on stale moving-instance bounds. */

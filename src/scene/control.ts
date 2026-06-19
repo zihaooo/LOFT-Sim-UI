@@ -13,6 +13,7 @@ export type SimulationControlState = {
   demoStressTest: boolean;
   cameraMode: CameraMode;
   corridorsVisible: boolean;
+  routesVisible: boolean;
   envelopesVisible: boolean;
   buildingsVisible: boolean;
   roadsVisible: boolean;
@@ -22,7 +23,7 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "corridorsVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
+  "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -61,6 +62,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     demoStressTest: activeDemoPreset === "stressTest",
     cameraMode: CAMERA_MODES.FREE,
     corridorsVisible: true,
+    routesVisible: false,
     envelopesVisible: true,
     buildingsVisible: true,
     roadsVisible: true,
@@ -134,7 +136,31 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     },
   });
 
+  // Corridors and Routes are mutually exclusive: enabling one disables the other (both may be off).
+  // The guard suppresses the re-entrant change event that pane.refresh() fires for the cleared toggle.
+  let syncingCorridorRoute = false;
   controlFolder.addBinding(state, "corridorsVisible", { label: "Corridors" }).on("change", () => {
+    if (syncingCorridorRoute) {
+      return;
+    }
+    if (state.corridorsVisible && state.routesVisible) {
+      syncingCorridorRoute = true;
+      state.routesVisible = false;
+      pane.refresh();
+      syncingCorridorRoute = false;
+    }
+    options.onLayerVisibilityChange(state);
+  });
+  controlFolder.addBinding(state, "routesVisible", { label: "Routes" }).on("change", () => {
+    if (syncingCorridorRoute) {
+      return;
+    }
+    if (state.routesVisible && state.corridorsVisible) {
+      syncingCorridorRoute = true;
+      state.corridorsVisible = false;
+      pane.refresh();
+      syncingCorridorRoute = false;
+    }
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "envelopesVisible", { label: "Envelopes" }).on("change", () => {

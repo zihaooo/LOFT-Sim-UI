@@ -22,18 +22,22 @@ export type SceneBounds = {
   depth: number;
 };
 
-export type AirCorridor = {
+/**
+ * A colored 3D polyline with the per-node metadata the centerline + envelope builders consume.
+ * Corridors and routes are both AirPaths; the two aliases below mark intent and can diverge later.
+ */
+export type AirPath = {
   id: string;
   name: string;
   from: string;
   to: string;
   color: string;
   envelopeRadius: number;
-  /** Index of the connected component this corridor belongs to; all corridors in a component share one color. */
+  /** Index of the connected component this path belongs to; all paths in a component share one color. */
   componentId: number;
   points: ScenePoint[];
   geoPoints: GeoPoint[];
-  /** OSM node id per point (aligned with `points`); used to detect shared junction nodes across corridors. */
+  /** OSM node id per point (aligned with `points`); used to detect shared junction nodes across paths. */
   nodeIds: string[];
   /** Per-point flag (aligned with `points`): true when the node is a vertiport terminal, which never connects onward. */
   vertiportFlags: boolean[];
@@ -41,6 +45,12 @@ export type AirCorridor = {
   segmentLengths: number[];
   cumulativeLengths: number[];
 };
+
+/** An air corridor: a path UAVs fly along, grouped into components by shared (non-vertiport) nodes. */
+export type AirCorridor = AirPath;
+
+/** A route: a sequence of corridor ways merged into one path; each route is its own component. */
+export type AirRoute = AirPath;
 
 export type BuildingFootprint = {
   id: string;
@@ -92,6 +102,7 @@ export type SceneData = {
   origin: ProjectionOrigin;
   mapBounds: SceneBounds;
   corridors: AirCorridor[];
+  routes: AirRoute[];
   buildings: BuildingFootprint[];
   roads: RoadPath[];
   trees: TreePoint[];

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { ADDITION, Brush, Evaluator } from "three-bvh-csg";
-import type { AirCorridor } from "../types";
+import type { AirPath } from "../types";
 import { ENVELOPE_RADIAL_SEGMENTS, WORLD_UP } from "../constant";
 import { toVector3 } from "./coordinates";
 
@@ -49,8 +49,8 @@ type Chain = { nodeIds: string[]; radius: number };
 type JunctionNode = { position: THREE.Vector3; radius: number };
 
 /** Builds one fused envelope geometry per connected component (grouped by `corridor.componentId`). */
-export function buildComponentEnvelopeGeometries(corridors: AirCorridor[]): ComponentEnvelope[] {
-  const componentsById = new Map<number, AirCorridor[]>();
+export function buildComponentEnvelopeGeometries(corridors: AirPath[]): ComponentEnvelope[] {
+  const componentsById = new Map<number, AirPath[]>();
   corridors.forEach((corridor) => {
     const group = componentsById.get(corridor.componentId);
     if (group) {
@@ -81,7 +81,7 @@ export function buildComponentEnvelopeGeometries(corridors: AirCorridor[]): Comp
  * Builds one watertight envelope geometry for a single connected component: bisector-miter tubes for the
  * degree-2 chains, plus a CSG sphere union at each junction node. Returns null if nothing was built.
  */
-function buildComponentEnvelope(corridors: AirCorridor[], evaluator: Evaluator): THREE.BufferGeometry | null {
+function buildComponentEnvelope(corridors: AirPath[], evaluator: Evaluator): THREE.BufferGeometry | null {
   const graph = buildCorridorGraph(corridors);
 
   const chainGeometries = extractChains(graph)
@@ -120,7 +120,7 @@ function buildComponentEnvelope(corridors: AirCorridor[], evaluator: Evaluator):
 }
 
 /** Builds the shared-node graph for one component: node positions/flags plus one edge per polyline segment. */
-function buildCorridorGraph(corridors: AirCorridor[]): CorridorGraph {
+function buildCorridorGraph(corridors: AirPath[]): CorridorGraph {
   const position = new Map<string, THREE.Vector3>();
   const vertiport = new Map<string, boolean>();
   const edges: CorridorEdge[] = [];

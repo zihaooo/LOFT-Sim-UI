@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { AirCorridor } from "../types";
+import type { AirPath } from "../types";
 import { ENVELOPE_OPACITY, ENVELOPE_ROUGHNESS } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { buildComponentEnvelopeGeometries } from "../geometry/corridorEnvelope";
@@ -23,8 +23,8 @@ import { appendDirectionCones, buildConeInstancedMesh, buildCorridorLines } from
 // If either capability becomes a requirement, prefer adding a per-vertex `corridorId` attribute
 // (or a parallel cone-instance → corridorId table) over reverting the merge.
 
-/** Builds one batched centerline LineSegments for all corridors plus one InstancedMesh containing every direction cone. */
-export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
+/** Builds one batched centerline LineSegments for all paths plus one InstancedMesh containing every direction cone. */
+export function createCorridorGroup(corridors: AirPath[]): THREE.Group {
   const group = new THREE.Group();
   const linePositions: number[] = [];
   const lineColors: number[] = [];
@@ -70,7 +70,7 @@ export function createCorridorGroup(corridors: AirCorridor[]): THREE.Group {
  * buildComponentEnvelopeGeometries: degree-2 chains are welded with a bisector miter, and only true
  * junctions (degree > 2, non-vertiport) are fused with CSG — junction-free components use no CSG at all.
  */
-export function createFlightEnvelopeGroup(corridors: AirCorridor[]): THREE.Group {
+export function createFlightEnvelopeGroup(corridors: AirPath[]): THREE.Group {
   const group = new THREE.Group();
   const geometries: THREE.BufferGeometry[] = [];
 
@@ -91,6 +91,26 @@ export function createFlightEnvelopeGroup(corridors: AirCorridor[]): THREE.Group
   if (mesh) {
     group.add(mesh);
   }
+  return group;
+}
+
+/**
+ * Builds one subgroup per route (named `route:<id>`), each holding that route's own centerline and
+ * envelope. Routes are kept as separate objects rather than one merged batch so a single route can
+ * later be shown/hidden (`subgroup.visible`) or recolored independently — at the cost of a few extra
+ * draw calls, which is negligible for the handful of routes a scene carries.
+ */
+export function createRouteGroup(routes: AirPath[]): THREE.Group {
+  const group = new THREE.Group();
+
+  routes.forEach((route) => {
+    const subgroup = new THREE.Group();
+    subgroup.name = `route:${route.id}`;
+    subgroup.add(createCorridorGroup([route]));
+    subgroup.add(createFlightEnvelopeGroup([route]));
+    group.add(subgroup);
+  });
+
   return group;
 }
 

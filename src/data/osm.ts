@@ -1,6 +1,7 @@
 import type { SceneData } from "../types";
 import { averageOrigin, parseOsm } from "./common";
 import { parseAirCorridors } from "./corridors";
+import { parseRoutes } from "./routes";
 import { parseBuildings, parseMapBounds, parseRoads, parseTrees } from "./map";
 import { parseFlowDefinitions } from "./flows";
 
@@ -15,6 +16,7 @@ export function createSceneData(corridorOsm: string, buildingOsm: string, flowJs
     origin,
     mapBounds,
     corridors: parseAirCorridors(corridorOsm, origin),
+    routes: parseRoutes(corridorOsm, origin),
     buildings: parseBuildings(buildingOsm, origin),
     roads: parseRoads(buildingOsm, origin),
     trees: parseTrees(buildingOsm, origin),

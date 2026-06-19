@@ -117,7 +117,7 @@ function assignCorridorComponents(wayNodeLists: OsmNode[][]): number[] {
 }
 
 /** A node terminates corridor connectivity when it is an explicit vertiport (a flow start/end point). */
-function isVertiportNode(node: OsmNode): boolean {
+export function isVertiportNode(node: OsmNode): boolean {
   return node.tags.get("node_type") === "vertiport";
 }
 

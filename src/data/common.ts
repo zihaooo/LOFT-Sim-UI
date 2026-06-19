@@ -12,6 +12,18 @@ export type OsmWay = {
   tags: Map<string, string>;
 };
 
+export type OsmRelationMember = {
+  type: string;
+  ref: string;
+  role: string;
+};
+
+export type OsmRelation = {
+  id: string;
+  members: OsmRelationMember[];
+  tags: Map<string, string>;
+};
+
 /** Flat-earth projection of lat/lon to local meters around `origin`; accurate for city-scale extents. */
 export function projectGeoPoint(point: GeoPoint, origin: ProjectionOrigin): ScenePoint {
   const latRadians = (origin.lat * Math.PI) / 180;
@@ -24,8 +36,12 @@ export function projectGeoPoint(point: GeoPoint, origin: ProjectionOrigin): Scen
   };
 }
 
-/** Lightweight regex-based scraper that pulls nodes and ways out of OSM XML without a full DOM parse. */
-export function parseOsm(osmText: string): { nodes: Map<string, OsmNode>; ways: OsmWay[] } {
+/** Lightweight regex-based scraper that pulls nodes, ways, and relations out of OSM XML without a full DOM parse. */
+export function parseOsm(osmText: string): {
+  nodes: Map<string, OsmNode>;
+  ways: OsmWay[];
+  relations: OsmRelation[];
+} {
   const nodes = new Map<string, OsmNode>();
 
   for (const nodeMatch of osmText.matchAll(/<node\b([^>]*?)(?:\/>|>([\s\S]*?)<\/node>)/g)) {
@@ -64,7 +80,28 @@ export function parseOsm(osmText: string): { nodes: Map<string, OsmNode>; ways: 
     });
   }
 
-  return { nodes, ways };
+  const relations: OsmRelation[] = [];
+
+  for (const relationMatch of osmText.matchAll(/<relation\b([^>]*)>([\s\S]*?)<\/relation>/g)) {
+    const attributes = readAttributes(relationMatch[1]);
+    const body = relationMatch[2] ?? "";
+    const members = Array.from(body.matchAll(/<member\b([^>]*?)\/?>/g)).map((memberMatch) => {
+      const memberAttributes = readAttributes(memberMatch[1]);
+      return {
+        type: memberAttributes.get("type") ?? "",
+        ref: memberAttributes.get("ref") ?? "",
+        role: memberAttributes.get("role") ?? "",
+      };
+    });
+
+    relations.push({
+      id: attributes.get("id") ?? "",
+      members,
+      tags: readTagsFromBlock(body),
+    });
+  }
+
+  return { nodes, ways, relations };
 }
 
 /** Pulls `<tag k= v= />` pairs out of a node/way body block. */
