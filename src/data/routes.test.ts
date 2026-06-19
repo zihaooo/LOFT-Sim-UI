@@ -66,7 +66,7 @@ describe("parseRoutes", () => {
 
     expect(routes).toHaveLength(6);
     expect(routes.map((route) => route.id)).toEqual(
-      expect.arrayContaining(["route1", "route2", "route3", "route4", "route_priority_1", "route_priority_2"]),
+      expect.arrayContaining(["-71", "-72", "-73", "-74", "-75", "-76"]),
     );
     routes.forEach((route) => {
       expect(route.points.length).toBeGreaterThanOrEqual(2);

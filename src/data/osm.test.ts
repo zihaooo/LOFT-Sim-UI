@@ -5,6 +5,7 @@ import { projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
 import { parseBuildings, parseMapBounds, parseRoads, parseTrees } from "./map";
 import { parseFlowDefinitions } from "./flows";
+import { parseRoutes } from "./routes";
 import { createSceneData } from "./osm";
 
 const root = resolve(__dirname, "../..");
@@ -108,8 +109,18 @@ describe("OSM and flow parsing", () => {
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows).toHaveLength(2);
-    expect(flows.map((flow) => flow.routeId)).toEqual(["1", "2"]);
+    expect(flows.map((flow) => flow.routeId)).toEqual(["-1", "-2"]);
     expect(flows.every((flow) => flow.flowId && flow.uavPerHour > 0)).toBe(true);
+  });
+
+  it("resolves every demo flow's routeId to a parsed route so the fleet is non-empty", () => {
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
+    const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
+    const routeIds = new Set(parseRoutes(corridorOsm).map((route) => route.id));
+    const flows = parseFlowDefinitions(flowJson);
+
+    expect(flows.length).toBeGreaterThan(0);
+    expect(flows.every((flow) => routeIds.has(flow.routeId))).toBe(true);
   });
 
   it("treats empty, blank, or missing flow JSON as no flows", () => {

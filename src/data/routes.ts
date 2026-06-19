@@ -35,12 +35,10 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
       const geoPoints = wayNodes.map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
       const points = geoPoints.map((point) => projectGeoPoint(point, routeOrigin));
 
-      // Prefer the stable, human-meaningful `object_id` (e.g. "route1") over the OSM relation id,
-      // which is often just an editor-assigned temporary (e.g. "-71").
       const objectId = relation.tags.get("object_id");
 
       return {
-        id: objectId ?? relation.id,
+        id: relation.id,
         name: relation.tags.get("name") ?? objectId ?? `Route ${relation.id}`,
         from: relation.tags.get("from") ?? "",
         to: relation.tags.get("to") ?? "",

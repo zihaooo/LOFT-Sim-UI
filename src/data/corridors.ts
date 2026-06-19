@@ -30,9 +30,11 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
     const to = way.tags.get("to") ?? "";
     const componentId = componentIds[corridorIndex];
 
+    const objectId = way.tags.get("object_id");
+
     return {
       id: way.id,
-      name: `${from || "Corridor"}${to ? ` to ${to}` : way.id}`,
+      name: way.tags.get("name") ?? objectId ?? `Corridor ${way.id}`,
       from,
       to,
       color: CORRIDOR_COLORS[componentId % CORRIDOR_COLORS.length],

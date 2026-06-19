@@ -110,7 +110,7 @@ def append_corridor(root, start, end, middle, altitude, first_node_id, way_id, r
     })
     ET.SubElement(relation, "member", {"type": "way", "ref": str(way_id), "role": ""})
     ET.SubElement(relation, "tag", {"k": "airspace", "v": "yes"})
-    ET.SubElement(relation, "tag", {"k": "object_id", "v": f"stress_route_{abs(way_id)}"})
+    ET.SubElement(relation, "tag", {"k": "object_id", "v": f"{relation_id}"})
     ET.SubElement(relation, "tag", {"k": "object_type", "v": "route"})
     ET.SubElement(relation, "tag", {"k": "type", "v": "route"})
 
