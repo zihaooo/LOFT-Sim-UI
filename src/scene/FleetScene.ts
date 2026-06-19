@@ -138,11 +138,12 @@ export class FleetScene {
     this.onReloadScene = options.onReloadScene;
     this.onLoadDemoPreset = options.onLoadDemoPreset;
 
+    const routeById = new Map(this.sceneData.routes.map((route) => [route.id, route]));
     const corridorById = new Map(this.sceneData.corridors.map((corridor) => [corridor.id, corridor]));
-    this.demoSource = new DemoFleetSource(this.sceneData.corridors, this.sceneData.flows, corridorById);
-    this.telemetrySource = options.telemetryUrl
-      ? new TelemetrySource(
+    this.demoSource = new DemoFleetSource(this.sceneData.routes, this.sceneData.flows, routeById);
+    this.telemetrySource = options.telemetryUrl ? new TelemetrySource(
           new TelemetryClient({ url: options.telemetryUrl, frontendOrigin: this.sceneData.origin }),
+          routeById,
           corridorById,
         )
       : null;

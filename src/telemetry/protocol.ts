@@ -2,7 +2,7 @@ import { METERS_PER_DEGREE_LAT } from "../constant";
 import type { ProjectionOrigin, ScenePoint } from "../types";
 
 export const TELEMETRY_HEADER_BYTES = 16;
-export const TELEMETRY_DRONE_RECORD_BYTES = 60;
+export const TELEMETRY_DRONE_RECORD_BYTES = 64;
 export const TELEMETRY_SNAPSHOT_BUFFER_SIZE = 3;
 
 export type SimulatorPoint = {
@@ -23,6 +23,7 @@ export type SimulatorTelemetryDrone = {
   stateCode: number;
   vehicleTypeCode: number;
   corridorHandle: number;
+  routeHandle: number;
   position: SimulatorPoint;
   velocity: SimulatorPoint;
   yaw: number;
@@ -62,9 +63,15 @@ export type TelemetryRegistryCorridor = {
   id: string;
 };
 
+export type TelemetryRegistryRoute = {
+  handle: number;
+  id: string;
+};
+
 export type TelemetryRegistry = {
   dronesByHandle: Map<number, TelemetryRegistryDrone>;
   corridorsByHandle: Map<number, TelemetryRegistryCorridor>;
+  routesByHandle: Map<number, TelemetryRegistryRoute>;
 };
 
 /** Decodes the minimal little-endian binary snapshot frame used by mock and simulator telemetry. */
@@ -91,24 +98,26 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
     const stateCode = view.getUint16(offset + 4, true);
     const vehicleTypeCode = view.getUint16(offset + 6, true);
     const corridorHandle = view.getUint32(offset + 8, true);
-    const x = view.getFloat32(offset + 12, true);
-    const y = view.getFloat32(offset + 16, true);
-    const z = view.getFloat32(offset + 20, true);
-    const vx = view.getFloat32(offset + 24, true);
-    const vy = view.getFloat32(offset + 28, true);
-    const vz = view.getFloat32(offset + 32, true);
-    const yaw = view.getFloat32(offset + 36, true);
-    const pitch = view.getFloat32(offset + 40, true);
-    const roll = view.getFloat32(offset + 44, true);
-    const speedMetersPerSecond = view.getFloat32(offset + 48, true);
-    const energyJoules = view.getFloat32(offset + 52, true);
-    const powerWatts = view.getFloat32(offset + 56, true);
+    const routeHandle = view.getUint32(offset + 12, true);
+    const x = view.getFloat32(offset + 16, true);
+    const y = view.getFloat32(offset + 20, true);
+    const z = view.getFloat32(offset + 24, true);
+    const vx = view.getFloat32(offset + 28, true);
+    const vy = view.getFloat32(offset + 32, true);
+    const vz = view.getFloat32(offset + 36, true);
+    const yaw = view.getFloat32(offset + 40, true);
+    const pitch = view.getFloat32(offset + 44, true);
+    const roll = view.getFloat32(offset + 48, true);
+    const speedMetersPerSecond = view.getFloat32(offset + 52, true);
+    const energyJoules = view.getFloat32(offset + 56, true);
+    const powerWatts = view.getFloat32(offset + 60, true);
 
     drones.push({
       handle,
       stateCode,
       vehicleTypeCode,
       corridorHandle,
+      routeHandle,
       position: { x, y, z },
       velocity: { x: vx, y: vy, z: vz },
       yaw,

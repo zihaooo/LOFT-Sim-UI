@@ -1,16 +1,16 @@
 import * as THREE from "three";
-import type { AirCorridor, UavState } from "../types";
-import { CORRIDOR_COLORS, SELECTED_UAV_COLOR } from "../constant";
+import type {AirCorridor, AirRoute, UavState} from "../types";
+import { ROUTE_COLORS, SELECTED_UAV_COLOR } from "../constant";
 import { setUavYawQuaternion } from "../geometry/drone";
 import type { TelemetryClient } from "../telemetry/client";
 import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
 import {
-  formatCorridorSummary,
+  formatRouteSummary,
   type FleetFrame,
   type FleetFrameContext,
   type FleetSelection,
   type FleetSource,
-  type TelemetryDebugReadout,
+  type TelemetryDebugReadout, formatCorridorSummary,
 } from "./source";
 
 /**
@@ -24,7 +24,7 @@ export class TelemetrySource implements FleetSource {
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly corridorColor = new THREE.Color();
+  private readonly routeColor = new THREE.Color();
   private readonly position = new THREE.Vector3();
   private readonly tangent = new THREE.Vector3(1, 0, 0);
   private readonly selectedPosition = new THREE.Vector3();
@@ -34,7 +34,8 @@ export class TelemetrySource implements FleetSource {
 
   constructor(
     private readonly client: TelemetryClient,
-    private readonly corridorById: Map<string, AirCorridor>,
+    private readonly routeById: Map<string, AirRoute>,
+    private readonly corridorById:  Map<string, AirCorridor>,
   ) {}
 
   start(): void {
@@ -88,7 +89,7 @@ export class TelemetrySource implements FleetSource {
       setUavYawQuaternion(this.quaternion, this.tangent);
       this.matrix.compose(this.position, this.quaternion, this.scale);
       mesh.setMatrixAt(renderSlot, this.matrix);
-      mesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getCorridorColor(drone));
+      mesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getRouteColor(drone));
 
       if (isSelected) {
         selectedUavId = droneId;
@@ -169,14 +170,18 @@ export class TelemetrySource implements FleetSource {
     return this.client.getRegistry().dronesByHandle.get(handle)?.id ?? `D${handle}`;
   }
 
+  private getRouteId(drone: TelemetryDroneState): string | undefined {
+    return this.client.getRegistry().routesByHandle.get(drone.routeHandle)?.id;
+  }
+
   private getCorridorId(drone: TelemetryDroneState): string | undefined {
     return this.client.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
   }
 
-  private getCorridorColor(drone: TelemetryDroneState): THREE.Color {
-    const corridorId = this.getCorridorId(drone);
-    const corridor = corridorId ? this.corridorById.get(corridorId) : undefined;
-    return this.corridorColor.set(corridor?.color ?? CORRIDOR_COLORS[drone.corridorHandle % CORRIDOR_COLORS.length]);
+  private getRouteColor(drone: TelemetryDroneState): THREE.Color {
+    const routeId = this.getRouteId(drone);
+    const route = routeId ? this.routeById.get(routeId) : undefined;
+    return this.routeColor.set(route?.color ?? ROUTE_COLORS[drone.routeHandle % ROUTE_COLORS.length]);
   }
 
   private describeSelection(snapshot: TelemetrySnapshot, selectedUavId: string): string {
@@ -190,10 +195,14 @@ export class TelemetrySource implements FleetSource {
     const droneId = this.getDroneId(drone.handle);
     const droneType = this.client.getRegistry().dronesByHandle.get(drone.handle)?.vehicleType
       ?? `type ${drone.vehicleTypeCode}`;
+    const routeId = this.getRouteId(drone);
+    const route = routeId ? this.routeById.get(routeId) : undefined;
+    const routeText = route ? formatRouteSummary(route) : `Route ${routeId ?? drone.routeHandle}`;
+
     const corridorId = this.getCorridorId(drone);
     const corridor = corridorId ? this.corridorById.get(corridorId) : undefined;
     const corridorText = corridor ? formatCorridorSummary(corridor) : `Corridor ${corridorId ?? drone.corridorHandle}`;
 
-    return `${droneId} · ${droneType} · ${corridorText}`;
+    return `${droneId} · ${droneType} · ${routeText} · ${corridorText}`;
   }
 }

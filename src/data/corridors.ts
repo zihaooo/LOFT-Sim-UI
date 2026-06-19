@@ -32,7 +32,7 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
 
     return {
       id: way.id,
-      name: `${from || "Corridor"}${to ? ` to ${to}` : ""}`,
+      name: `${from || "Corridor"}${to ? ` to ${to}` : way.id}`,
       from,
       to,
       color: CORRIDOR_COLORS[componentId % CORRIDOR_COLORS.length],

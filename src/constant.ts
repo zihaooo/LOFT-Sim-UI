@@ -3,6 +3,7 @@ import * as THREE from "three";
 // Data parsing and projection
 export const METERS_PER_DEGREE_LAT = 111_320;
 export const CORRIDOR_COLORS = ["#47c2ff", "#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
+export const ROUTE_COLORS = ["#47c2ff", "#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
 export const ROAD_STYLES: Record<string, { width: number; color: string }> = {
   motorway: { width: 13, color: "#d4c7b6" },
   motorway_link: { width: 8, color: "#d4c7b6" },

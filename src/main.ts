@@ -129,8 +129,11 @@ async function handleLoadDemoPreset(preset: DemoPreset | null): Promise<void> {
   }
 }
 
-/** Same-origin telemetry websocket URL — the merged backend serves the UI and /ws on one port. */
+/** Telemetry websocket URL. */
 function telemetryWebSocketUrl(): string {
+  if (import.meta.env.DEV) {
+    return "ws://127.0.0.1:8765/ws";
+  }
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/ws`;
 }

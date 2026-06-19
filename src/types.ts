@@ -75,14 +75,14 @@ export type TreePoint = {
 
 export type FlowDefinition = {
   flowId: string;
-  corridorId: string;
+  routeId: string;
   uavPerHour: number;
 };
 
 export type UavSchedule = {
   id: string;
   type: string;
-  corridorId: string;
+  routeId: string;
   platoonId: string;
   speedMetersPerSecond: number;
   offsetMeters: number;

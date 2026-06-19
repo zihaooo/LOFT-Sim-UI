@@ -1,5 +1,5 @@
 import type { AirRoute, ProjectionOrigin } from "../types";
-import { CORRIDOR_COLORS, ROUTE_ENVELOPE_RADIUS_METERS } from "../constant";
+import { ROUTE_COLORS, ROUTE_ENVELOPE_RADIUS_METERS } from "../constant";
 import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode, type OsmWay } from "./common";
 import { isVertiportNode, measurePolyline } from "./corridors";
 
@@ -44,7 +44,7 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
         name: relation.tags.get("name") ?? objectId ?? `Route ${relation.id}`,
         from: relation.tags.get("from") ?? "",
         to: relation.tags.get("to") ?? "",
-        color: CORRIDOR_COLORS[routeIndex % CORRIDOR_COLORS.length],
+        color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],
         envelopeRadius: ROUTE_ENVELOPE_RADIUS_METERS,
         // Each route is its own component so its envelope never fuses with another route's or a corridor's.
         componentId: routeIndex,

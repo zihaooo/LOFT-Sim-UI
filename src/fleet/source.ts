@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import type { AirCorridor, UavState } from "../types";
+import type { AirRoute, AirCorridor, UavState } from "../types";
 
 /** Inputs every fleet source needs to compute a frame and write instances into the shared mesh. */
 export type FleetFrameContext = {
@@ -60,16 +60,21 @@ export interface FleetSource {
   reset(): void;
 }
 
+/** Formats a route's endpoints for HUD selection text, shared by every source. */
+export function formatRouteSummary(route: AirRoute): string {
+  if (route.from && route.to) {
+    return `${route.from} to ${route.to}`;
+  }
+  if (route.from) {
+    return `${route.from} to unknown`;
+  }
+  if (route.to) {
+    return `unknown to ${route.to}`;
+  }
+  return route.name || `Route ${route.id}`;
+}
+
 /** Formats a corridor's endpoints for HUD selection text, shared by every source. */
 export function formatCorridorSummary(corridor: AirCorridor): string {
-  if (corridor.from && corridor.to) {
-    return `${corridor.from} to ${corridor.to}`;
-  }
-  if (corridor.from) {
-    return `${corridor.from} to unknown`;
-  }
-  if (corridor.to) {
-    return `unknown to ${corridor.to}`;
-  }
   return corridor.name || `Corridor ${corridor.id}`;
 }

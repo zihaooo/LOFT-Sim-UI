@@ -12,7 +12,7 @@ export function parseFlowDefinitions(rawJson?: string): FlowDefinition[] {
 
   return raw.map((flow) => ({
     flowId: String(flow.flow_id ?? ""),
-    corridorId: String(flow.air_corridor_id ?? ""),
+    routeId: String(flow.air_route_id ?? ""),
     uavPerHour: Number(flow.uav_per_hour ?? 0),
   }));
 }

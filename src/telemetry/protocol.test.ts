@@ -21,18 +21,19 @@ function makeFrame(droneCount: number): ArrayBuffer {
     view.setUint16(offset + 4, 1, true);
     view.setUint16(offset + 6, 2, true);
     view.setUint32(offset + 8, 3, true);
-    view.setFloat32(offset + 12, 10 + index, true);
-    view.setFloat32(offset + 16, 20 + index, true);
-    view.setFloat32(offset + 20, 30 + index, true);
-    view.setFloat32(offset + 24, 1, true);
-    view.setFloat32(offset + 28, 2, true);
-    view.setFloat32(offset + 32, 3, true);
-    view.setFloat32(offset + 36, 0.5, true);
-    view.setFloat32(offset + 40, 0.25, true);
-    view.setFloat32(offset + 44, 0.125, true);
-    view.setFloat32(offset + 48, 42, true);
-    view.setFloat32(offset + 52, 1000 + index, true);
-    view.setFloat32(offset + 56, 250 + index, true);
+    view.setUint32(offset + 12, 4, true);
+    view.setFloat32(offset + 16, 10 + index, true);
+    view.setFloat32(offset + 20, 20 + index, true);
+    view.setFloat32(offset + 24, 30 + index, true);
+    view.setFloat32(offset + 28, 1, true);
+    view.setFloat32(offset + 32, 2, true);
+    view.setFloat32(offset + 36, 3, true);
+    view.setFloat32(offset + 40, 0.5, true);
+    view.setFloat32(offset + 44, 0.25, true);
+    view.setFloat32(offset + 48, 0.125, true);
+    view.setFloat32(offset + 52, 42, true);
+    view.setFloat32(offset + 56, 1000 + index, true);
+    view.setFloat32(offset + 60, 250 + index, true);
   }
 
   return buffer;
@@ -50,6 +51,7 @@ describe("telemetry binary protocol", () => {
       stateCode: 1,
       vehicleTypeCode: 2,
       corridorHandle: 3,
+      routeHandle: 4,
       position: { x: 10, y: 20, z: 30 },
       velocity: { x: 1, y: 2, z: 3 },
       speedMetersPerSecond: 42,

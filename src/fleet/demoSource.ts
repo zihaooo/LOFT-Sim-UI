@@ -1,17 +1,17 @@
 import * as THREE from "three";
-import type { AirCorridor, FlowDefinition, UavSchedule, UavState } from "../types";
+import type { AirRoute, FlowDefinition, UavSchedule, UavState } from "../types";
 import { SELECTED_UAV_COLOR } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { setUavYawQuaternion } from "../geometry/drone";
-import { createFleet, getUavCorridorPosition } from "./demoFleet";
-import { formatCorridorSummary, type FleetFrame, type FleetFrameContext, type FleetSelection, type FleetSource } from "./source";
+import { createFleet, getUavRoutePosition } from "./demoFleet";
+import { formatRouteSummary, type FleetFrame, type FleetFrameContext, type FleetSelection, type FleetSource } from "./source";
 
 /**
  * Renders the frontend-only fleet expanded from local flow definitions. Owns the scheduling state
- * (pending/active rosters) and the kinematic sampling that places each UAV along its corridor.
+ * (pending/active rosters) and the kinematic sampling that places each UAV along its route.
  */
 export class DemoFleetSource implements FleetSource {
-  private readonly corridorById: Map<string, AirCorridor>;
+  private readonly routeById: Map<string, AirRoute>;
   private readonly fleet: UavSchedule[];
   private readonly fleetById: Map<string, UavSchedule>;
   /** Fleet indices ordered by departure time; consumed front-to-back as sim time advances. */
@@ -23,14 +23,14 @@ export class DemoFleetSource implements FleetSource {
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly corridorColor = new THREE.Color();
+  private readonly routeColor = new THREE.Color();
 
   private nextPendingUavIndex = 0;
   private selectedFleetIndex = -1;
 
-  constructor(corridors: AirCorridor[], flows: FlowDefinition[], corridorById: Map<string, AirCorridor>) {
-    this.corridorById = corridorById;
-    this.fleet = createFleet(corridors, flows);
+  constructor(routes: AirRoute[], flows: FlowDefinition[], routeById: Map<string, AirRoute>) {
+    this.routeById = routeById;
+    this.fleet = createFleet(routes, flows);
     this.fleetById = new Map(this.fleet.map((uav) => [uav.id, uav]));
     this.pendingUavIndices = this.fleet
       .map((_, index) => index)
@@ -53,13 +53,13 @@ export class DemoFleetSource implements FleetSource {
     for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
       const index = this.activeUavIndices[activeIndex];
       const uav = this.fleet[index];
-      const corridor = this.corridorById.get(uav.corridorId);
-      if (!corridor) {
+      const route = this.routeById.get(uav.routeId);
+      if (!route) {
         this.removeActiveUavAt(activeIndex);
         continue;
       }
 
-      const uavState = getUavCorridorPosition(uav, corridor, elapsedSeconds, 1);
+      const uavState = getUavRoutePosition(uav, route, elapsedSeconds, 1);
       const position = toVector3(uavState.position);
       const tangent = toVector3(uavState.tangent).normalize();
 
@@ -83,7 +83,7 @@ export class DemoFleetSource implements FleetSource {
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       mesh.setMatrixAt(renderSlot, this.matrix);
-      mesh.setColorAt(renderSlot, index === this.selectedFleetIndex ? this.selectedColor : this.corridorColor.set(corridor.color));
+      mesh.setColorAt(renderSlot, index === this.selectedFleetIndex ? this.selectedColor : this.routeColor.set(route.color));
 
       if (uav.id === selectedUavId) {
         selection = { position, tangent };
@@ -164,8 +164,8 @@ export class DemoFleetSource implements FleetSource {
       return "none";
     }
 
-    const corridor = this.corridorById.get(selectedUav.corridorId);
-    const corridorText = corridor ? formatCorridorSummary(corridor) : `Corridor ${selectedUav.corridorId}`;
-    return `${selectedUav.id} · ${selectedUav.type} · ${corridorText}`;
+    const route = this.routeById.get(selectedUav.routeId);
+    const routeText = route ? formatRouteSummary(route) : `Route ${selectedUav.routeId}`;
+    return `${selectedUav.id} · ${selectedUav.type} · ${routeText}`;
   }
 }

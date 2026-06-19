@@ -108,7 +108,7 @@ describe("OSM and flow parsing", () => {
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows).toHaveLength(2);
-    expect(flows.map((flow) => flow.corridorId)).toEqual(["1", "2"]);
+    expect(flows.map((flow) => flow.routeId)).toEqual(["1", "2"]);
     expect(flows.every((flow) => flow.flowId && flow.uavPerHour > 0)).toBe(true);
   });
 
