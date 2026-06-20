@@ -107,6 +107,7 @@ export class DemoFleetSource implements FleetSource {
       scheduledCount: this.fleet.length,
       simTimeSeconds: elapsedSeconds,
       selectedUavId,
+      selectedRouteId: this.fleetById.get(selectedUavId)?.routeId ?? null,
       selection,
       uavStateById: this.uavStateById,
       selectedSummary: this.describeSelection(selectedUavId),

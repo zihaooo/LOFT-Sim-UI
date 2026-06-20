@@ -24,6 +24,8 @@ export type FleetFrame = {
   simTimeSeconds: number;
   /** Canonical selected id after the source reconciles it (telemetry maps a stale handle to the current id). */
   selectedUavId: string;
+  /** Route id the selected UAV is flying, or null when nothing is selected (drives single-route display). */
+  selectedRouteId: string | null;
   /** Follow-camera pose for the selected UAV, or null when nothing selectable is visible. */
   selection: FleetSelection | null;
   /** Active + selected UAV states keyed by id, for label projection. */

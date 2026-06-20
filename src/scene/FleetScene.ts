@@ -288,7 +288,7 @@ export class FleetScene {
     this.corridorGroup.visible = visibility.corridorsVisible;
     // Corridor envelope follows its own toggle but hides while routes are shown (the two are exclusive).
     this.envelopeGroup.visible = visibility.envelopesVisible && !visibility.routesVisible;
-    this.routeGroup.visible = visibility.routesVisible;
+    // The route group's overall visibility and per-route selection are driven per-frame in updateRouteVisibility.
     this.buildingGroup.visible = visibility.buildingsVisible;
     this.roadGroup.visible = visibility.roadsVisible;
     this.treeGroup.visible = visibility.treesVisible;
@@ -334,6 +334,7 @@ export class FleetScene {
 
     this.applyKeyboardNavigation(delta);
     this.updateFleet();
+    this.updateRouteVisibility();
     this.updateCameraMode();
     this.controls.update();
     this.constrainCameraAboveHorizon();
@@ -359,6 +360,26 @@ export class FleetScene {
     if (frame.selection) {
       this.selectedPosition.copy(frame.selection.position);
       this.selectedTangent.copy(frame.selection.tangent);
+    }
+  }
+
+  /**
+   * Shows only the selected UAV's route while the Route toggle is on: the group is hidden entirely
+   * unless routes are enabled, and within it only the `route:<selectedRouteId>` subgroup stays visible
+   * (each subgroup bundles its centerline and envelope, so they show/hide together). With nothing
+   * selected, no route is shown.
+   */
+  private updateRouteVisibility(): void {
+    if (!this.params.routesVisible) {
+      this.routeGroup.visible = false;
+      return;
+    }
+
+    this.routeGroup.visible = true;
+    const selectedRouteId = this.lastFrame?.selectedRouteId ?? null;
+    const targetName = selectedRouteId === null ? null : `route:${selectedRouteId}`;
+    for (const subgroup of this.routeGroup.children) {
+      subgroup.visible = subgroup.name === targetName;
     }
   }
 

@@ -59,6 +59,7 @@ export class TelemetrySource implements FleetSource {
     const { mesh } = ctx;
     const capacity = mesh.instanceMatrix.count;
     let selectedUavId = ctx.selectedUavId;
+    let selectedRouteId: string | null = null;
     let selection: FleetSelection | null = null;
     this.uavStateById.clear();
     this.renderSlotToHandle.length = 0;
@@ -93,6 +94,7 @@ export class TelemetrySource implements FleetSource {
 
       if (isSelected) {
         selectedUavId = droneId;
+        selectedRouteId = this.getRouteId(drone) ?? null;
         selection = {
           position: this.selectedPosition.copy(this.position),
           tangent: this.selectedTangent.copy(this.tangent),
@@ -123,6 +125,7 @@ export class TelemetrySource implements FleetSource {
       scheduledCount: null,
       simTimeSeconds: snapshot.simTimeSeconds,
       selectedUavId,
+      selectedRouteId,
       selection,
       uavStateById: this.uavStateById,
       selectedSummary: this.describeSelection(snapshot, selectedUavId),

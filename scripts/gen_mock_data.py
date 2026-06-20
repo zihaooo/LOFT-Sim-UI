@@ -174,9 +174,7 @@ def main() -> int:
             continue
 
         length_m, cumulative_lengths = polyline_length(points)
-        # Prefer the stable, human-meaningful `object_id` (e.g. "route1") over the OSM relation
-        # id, matching the id the frontend derives in parseRoutes so telemetry lookups resolve.
-        route_id = tags.get("object_id") or relation.get("id", str(len(routes) + 1))
+        route_id = relation.get("id", str(len(routes) + 1))
         routes.append({
             "handle": len(routes) + 1,
             "id": route_id,

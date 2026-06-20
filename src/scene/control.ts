@@ -151,7 +151,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     }
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "routesVisible", { label: "Routes" }).on("change", () => {
+  controlFolder.addBinding(state, "routesVisible", { label: "Route" }).on("change", () => {
     if (syncingCorridorRoute) {
       return;
     }
