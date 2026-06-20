@@ -35,10 +35,12 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
       const geoPoints = wayNodes.map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
       const points = geoPoints.map((point) => projectGeoPoint(point, routeOrigin));
 
+      // Prefer the simulator's stable `object_id` (e.g. "route1") over the OSM-native relation id so the
+      // route id matches the ids telemetry and the demand flows reference; fall back when the tag is absent.
       const objectId = relation.tags.get("object_id");
 
       return {
-        id: relation.id,
+        id: objectId ?? relation.id,
         name: relation.tags.get("name") ?? objectId ?? `Route ${relation.id}`,
         from: relation.tags.get("from") ?? "",
         to: relation.tags.get("to") ?? "",

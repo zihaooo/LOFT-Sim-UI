@@ -30,10 +30,12 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
     const to = way.tags.get("to") ?? "";
     const componentId = componentIds[corridorIndex];
 
+    // Prefer the simulator's stable `object_id` (e.g. "way:-18967") over the OSM-native way id so the
+    // corridor id matches what telemetry reports; fall back to the way id when the tag is absent.
     const objectId = way.tags.get("object_id");
 
     return {
-      id: way.id,
+      id: objectId ?? way.id,
       name: way.tags.get("name") ?? objectId ?? `Corridor ${way.id}`,
       from,
       to,

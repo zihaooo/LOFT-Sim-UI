@@ -8,7 +8,7 @@ frontend derives in `parseRoutes` -- that match is what lets the telemetry sourc
 each drone's route color and label.
 
 Corridors (the `airspace=yes` ways the routes are stitched from) are emitted alongside,
-keyed by handle to their `way.id` -- matching how the frontend ids corridors in
+their id taken from the `object_id` tag -- matching how the frontend ids corridors in
 `parseAirCorridors`. Each route also records, per segment, the handle of the corridor that
 segment came from, so the websocket server can report the corridor a drone is currently on
 as it advances along its route.
@@ -142,9 +142,10 @@ def main() -> int:
             continue
         handle = len(corridors) + 1
         corridor_handle_by_way[way_id] = handle
+        # Id from the `object_id` tag so it matches parseAirCorridors; fall back to way.id when absent.
         corridors.append({
             "handle": handle,
-            "id": way_id,
+            "id": tags.get("object_id") or way_id,
             "from": tags.get("from", ""),
             "to": tags.get("to", ""),
         })
@@ -174,7 +175,8 @@ def main() -> int:
             continue
 
         length_m, cumulative_lengths = polyline_length(points)
-        route_id = relation.get("id", str(len(routes) + 1))
+        # Id from the `object_id` tag so it matches parseRoutes; fall back to the relation id when absent.
+        route_id = tags.get("object_id") or relation.get("id", str(len(routes) + 1))
         routes.append({
             "handle": len(routes) + 1,
             "id": route_id,

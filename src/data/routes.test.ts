@@ -65,8 +65,9 @@ describe("parseRoutes", () => {
     const routes = parseRoutes(airCorridorOsm, origin);
 
     expect(routes).toHaveLength(6);
+    // Route ids come from each relation's `object_id` tag, not the OSM-native relation id.
     expect(routes.map((route) => route.id)).toEqual(
-      expect.arrayContaining(["-71", "-72", "-73", "-74", "-75", "-76"]),
+      expect.arrayContaining(["route1", "route2", "route3", "route4", "route_priority_1", "route_priority_2"]),
     );
     routes.forEach((route) => {
       expect(route.points.length).toBeGreaterThanOrEqual(2);
