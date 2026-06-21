@@ -1,82 +1,97 @@
-# LOFT Sim UI
+# LOFT-Sim UI
 
-A browser-based 3D visualization for large UAV/UAM fleet simulation in an urban scene, built with Three.js.
+A browser-based 3D visualization for large UAV/UAM fleets in an urban scene, built with Three.js. It is the web front-end for **[LOFT-Sim](https://github.com/cherryh2021/LOFT-Sim)** (the Low-altitude Operations Fast-Time Simulator): the simulator owns the airspace network and vehicle state, and this app renders the fleet and provides interactive controls.
 
-The app supports two visualization modes:
+You normally don't install this repo to use it — LOFT-Sim downloads a built release of this UI on demand (see [Releases & distribution](#releases--distribution)). Clone it only to develop the UI itself.
 
-- **Demo mode** *(current)* — loads local OSM map and demand flow assets, schedules UAV departures in the frontend, and animates the fleet along predefined air corridors.
-- **Backend mode** — connects to an external simulation backend that owns UAV state; the frontend focuses on rendering and interaction.
+## Modes
 
+The app picks a data source at startup:
+
+- **Telemetry-backed (default).** It fetches the scene network from the simulator's `/configs` endpoint and streams live UAV state over a `/ws` websocket. This is what you get when LOFT-Sim serves the UI (`loft-sim run --visualization web`).
+- **Standalone demo.** When no backend is present (e.g. `npm run dev`), it falls back to the bundled assets under `public/data/`, scheduling UAV departures in the browser from a demand-flow file. The control panel also offers frontend-only demo presets and custom file uploads.
 
 ## Stack
 
 - **Build/runtime:** Vite + TypeScript (native ES modules)
-- **Rendering:** Three.js
+- **Rendering:** Three.js (`three-mesh-bvh` / `three-bvh-csg` for geometry)
 - **UI:** Tweakpane (control panel), `stats.js` (FPS overlay)
 - **Tests:** Vitest
 
-## Getting Started
+## Getting started (development)
 
 ```sh
 npm install
-npm run dev      # start the dev server (http://localhost:5173)
-npm run build    # type-check and produce a production build in dist/
+npm run dev      # dev server at http://localhost:5173 (standalone demo data)
+npm run build    # type-check (tsc) and produce a production build in dist/
 npm run preview  # serve the production build
 npm test         # run the Vitest suite
 ```
 
+### Exercising telemetry mode locally
 
-## Project Layout
+Under `npm run dev` the network/map come from the bundled `public/data/` files (the backend `/configs` is absent), while UAV state is read from a websocket at `ws://127.0.0.1:8765/ws`. A bundled mock server can supply that stream without running the full simulator:
+
+```sh
+npm run mock:data   # generate mock/mock_telemetry.json from a network file
+npm run mock:ws     # serve it at ws://127.0.0.1:8765/ws (--hz 30|60|120)
+```
+
+To render against the real simulator instead, run `loft-sim run --visualization web`, which serves this UI and its telemetry from the same origin.
+
+## Releases & distribution
+
+This UI is shipped as a versioned, checksummed build artifact rather than committed into LOFT-Sim:
+
+1. Pushing a `v*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the production build, packages `dist/` into `loft-ui-<tag>.tar.gz`, computes its SHA-256, and publishes both as GitHub Release assets.
+2. LOFT-Sim pins an independent UI version in `loft/telemetry/web_ui_pin.py` and downloads + verifies that release at runtime (the first time the web UI is launched), caching it locally.
+
+To adopt a new UI build in LOFT-Sim, cut a release here, then update the pinned version and SHA-256 on the LOFT-Sim side. Because the repo is public, the release assets download without authentication.
+
+## Project layout
 
 ```
 public/
   data/
-    demand/  flow definition JSON (demand inputs)
-    map/     OSM map and air-corridor files
-    model/   optional drone glTF
+    network/  air-corridor + map OSM files (default and demo presets)
+    demand/   demand-flow JSON
+    model/    drone glTF (falls back to a low-poly cone if absent)
 src/
-  animation/ fleet simulation tick logic
-  data/      OSM parsing and projection
-  geometry/  coordinate, corridor, drone, and map geometry helpers
-  layer/     scene layer builders (environment, map, corridor, drone)
-  scene/     FleetScene orchestration, labels, HUD readouts
-  types/     shared DTO types
-  main.ts    entry point: loads assets and starts FleetScene
-  types.ts   core scene/UAV types
+  data/       OSM/flow parsing, corridors, routes, projection
+  geometry/   coordinate, corridor centerline/envelope, drone, map geometry
+  layer/      scene layer builders (map, environment, corridor, drone)
+  fleet/      fleet sources — frontend demo scheduling and telemetry-backed state
+  telemetry/  websocket client and binary telemetry protocol
+  scene/      FleetScene orchestration, control panel, labels, HUD readouts
+  main.ts     entry point: selects data source and mounts FleetScene
+  constant.ts shared tunables; types.ts core scene/UAV types
 ```
 
-## Scene Inputs
+## Scene inputs
 
-Files under `public/data/` are served by Vite at `/data/...` in the browser and copied into `dist/data/` during production builds. `src/main.ts` loads these default scene assets:
+Files under `public/data/` are served by Vite at `/data/...` and copied into `dist/data/` during production builds. The default scene loads:
 
-- `public/data/network/airspace_network.osm` — default air-corridor network
-- `public/data/network/map.osm` — buildings, roads, trees
-- `public/data/demand/flow.json` — default flow demand
-- `public/data/model/drone.gltf` *(optional)* — falls back to a low-poly cone if missing
+- `data/network/airspace_network.osm` — default air-corridor network
+- `data/network/map.osm` — buildings, roads, trees
+- `data/demand/flow.json` — default flow demand (standalone mode only)
+- `data/model/drone.gltf` — UAV model
 
-Demo presets live alongside the default files, including `two_air_corridor.osm` / `two_flow.json` and `stress_air_corridor.osm` / `stress_flow.json`.
+Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and `stress_air_corridor.osm` / `stress_flow.json`. In telemetry-backed mode the network comes from the simulator's `/configs` and UAVs come from the websocket, so the bundled demand file is unused.
 
 ## Controls
 
-The Tweakpane panel exposes:
+The Tweakpane panel has three sections:
 
-- Play / Pause and a discrete speed slider (`1x`, `2x`, `5x`, `10x`, `100x`)
-- Camera mode: `Free` or `Follow selected UAV`
-- Visibility toggles for corridors, flight envelopes, buildings, roads, trees, and labels
-- Reset simulation
+- **Config Files** — upload a custom map, air-corridor, or demand file and **Reload scene**.
+- **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (corridors, routes, flight envelopes, buildings, roads, trees, labels), and **Reset simulation**.
+- **Demo** — load the frontend-only **Two Corridors** or **Stress Test** preset (toggling off restores the default telemetry-backed scene).
 
 Camera and selection:
 
 - **Free mode:** right-drag to rotate, left-drag to pan, scroll to zoom, WASD/arrow keys to pan on the ground plane.
-- **Follow mode:** chases the selected UAV from behind and above; requires a selected UAV.
-- **Selection:** left-click a UAV in the scene to select it; the HUD shows its ID, type, and corridor.
+- **Follow mode:** chases the selected UAV from behind and above; requires a selection.
+- **Selection:** left-click a UAV to select it; the HUD shows its ID, type, and corridor.
 
-## Coordinate System
+## Coordinate system
 
 City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
-
-## Status
-
-Implemented: static scene rendering, instanced UAV mesh, click selection, follow camera, label management, and a number of fleet/render optimizations.
-
-Not yet implemented: backend connection, real-time network updates, physics, collision avoidance, weather, corridor editing, persistence. 
