@@ -181,36 +181,41 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     pane.refresh();
   });
 
-  let syncingDemoControls = false;
-  const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
-  demoFolder.addBinding(state, "demoTwoCorridors", { label: "Two Corridors" }).on("change", () => {
-    if (!state.demoTwoCorridors) {
-      if (!syncingDemoControls && !state.demoStressTest) {
-        void options.onLoadDemoPreset(null);
+  // Demo presets rely on bundled OSM/demand fixtures that ship only in dev builds,
+  // so expose the Demo folder under `vite dev` only. Production is telemetry-backed,
+  // and this branch is tree-shaken out of the production bundle.
+  if (import.meta.env.DEV) {
+    let syncingDemoControls = false;
+    const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
+    demoFolder.addBinding(state, "demoTwoCorridors", { label: "Two Corridors" }).on("change", () => {
+      if (!state.demoTwoCorridors) {
+        if (!syncingDemoControls && !state.demoStressTest) {
+          void options.onLoadDemoPreset(null);
+        }
+        return;
       }
-      return;
-    }
 
-    syncingDemoControls = true;
-    state.demoStressTest = false;
-    pane.refresh();
-    syncingDemoControls = false;
-    void options.onLoadDemoPreset("twoCorridors");
-  });
-  demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
-    if (!state.demoStressTest) {
-      if (!syncingDemoControls && !state.demoTwoCorridors) {
-        void options.onLoadDemoPreset(null);
+      syncingDemoControls = true;
+      state.demoStressTest = false;
+      pane.refresh();
+      syncingDemoControls = false;
+      void options.onLoadDemoPreset("twoCorridors");
+    });
+    demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
+      if (!state.demoStressTest) {
+        if (!syncingDemoControls && !state.demoTwoCorridors) {
+          void options.onLoadDemoPreset(null);
+        }
+        return;
       }
-      return;
-    }
 
-    syncingDemoControls = true;
-    state.demoTwoCorridors = false;
-    pane.refresh();
-    syncingDemoControls = false;
-    void options.onLoadDemoPreset("stressTest");
-  });
+      syncingDemoControls = true;
+      state.demoTwoCorridors = false;
+      pane.refresh();
+      syncingDemoControls = false;
+      void options.onLoadDemoPreset("stressTest");
+    });
+  }
 
   return pane;
 }
