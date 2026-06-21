@@ -1,0 +1,48 @@
+name: Release web UI
+
+# Build the browser UI on each version tag and publish a checksummed tarball as a
+# GitHub Release asset. LOFT-Sim downloads this artifact at runtime (see its
+# loft/telemetry/web_ui_pin.py).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package checksummed artifact
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p artifacts
+          # Archive the contents of dist/ so the tarball root holds index.html.
+          tar -czf "artifacts/loft-ui-${TAG}.tar.gz" -C dist .
+          ( cd artifacts && sha256sum "loft-ui-${TAG}.tar.gz" > "loft-ui-${TAG}.tar.gz.sha256" )
+          echo "Artifact SHA-256:"
+          cat "artifacts/loft-ui-${TAG}.tar.gz.sha256"
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" artifacts/* --title "$TAG" --generate-notes \
+            || gh release upload "$TAG" artifacts/* --clobber
