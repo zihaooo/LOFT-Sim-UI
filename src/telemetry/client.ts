@@ -36,9 +36,9 @@ type RegistryMessage = {
   routes?: TelemetryRegistryRoute[];
 };
 
-type TelemetryControlMessage = {
-  type: "pause" | "resume";
-};
+type TelemetryControlMessage =
+  | { type: "pause" | "resume" }
+  | { type: "speed"; speed: number };
 
 export class TelemetryClient {
   private readonly buffer = new TelemetrySnapshotBuffer();
@@ -52,6 +52,7 @@ export class TelemetryClient {
   private reconnectTimer = 0;
   private simulatorProjection: TelemetryProjection | undefined;
   private requestedRunning = true;
+  private requestedSpeed = 1;
   private stopped = true;
   private stats: TelemetryClientStats = {
     connectionState: "idle",
@@ -94,6 +95,11 @@ export class TelemetryClient {
     this.sendControlMessage({ type: running ? "resume" : "pause" });
   }
 
+  setSpeed(speed: number): void {
+    this.requestedSpeed = speed;
+    this.sendControlMessage({ type: "speed", speed });
+  }
+
   getStats(): TelemetryClientStats {
     const latest = this.buffer.latest();
     return {
@@ -117,6 +123,7 @@ export class TelemetryClient {
       this.stats.connectionState = "connected";
       this.stats.lastError = "";
       this.sendControlMessage({ type: this.requestedRunning ? "resume" : "pause" });
+      this.sendControlMessage({ type: "speed", speed: this.requestedSpeed });
     });
 
     socket.addEventListener("message", (event) => {

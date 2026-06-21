@@ -276,6 +276,7 @@ export class FleetScene {
       formatSpeed: (speedLevelIndex) => `${this.getSimulationSpeed(speedLevelIndex)}x`,
       normalizeSpeedLevelIndex: (speedLevelIndex) => this.toSpeedLevelIndex(speedLevelIndex),
       onRunningChange: (running) => this.telemetrySource?.setRunning(running),
+      onSpeedChange: (speedLevelIndex) => this.telemetrySource?.setSpeed(this.getSimulationSpeed(speedLevelIndex)),
       onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
       onResetSimulation: () => this.resetSimulation(),
       onReloadScene: this.onReloadScene,
@@ -440,10 +441,10 @@ export class FleetScene {
     const frame = this.lastFrame;
     const activeCount = frame?.activeCount ?? 0;
     const parts = [`Status: ${this.params.running ? "Playing" : "Paused"}`];
+    parts.push(`Speed: ${this.getSimulationSpeed()}x`);
 
     if (frame && frame.scheduledCount !== null) {
-      // Demo fleet exposes its full schedule and is driven by the local speed control.
-      parts.push(`Speed: ${this.getSimulationSpeed()}x`);
+      // Demo fleet exposes its full schedule; telemetry streams an open-ended active count.
       parts.push(`UAVs: ${activeCount.toLocaleString()} active / ${frame.scheduledCount.toLocaleString()} scheduled`);
     } else {
       parts.push(`UAVs: ${activeCount.toLocaleString()} active`);

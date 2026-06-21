@@ -50,6 +50,10 @@ export class TelemetrySource implements FleetSource {
     this.client.setRunning(running);
   }
 
+  setSpeed(speed: number): void {
+    this.client.setSpeed(speed);
+  }
+
   update(ctx: FleetFrameContext): FleetFrame | null {
     const snapshot = this.client.latestSnapshot();
     if (!snapshot) {

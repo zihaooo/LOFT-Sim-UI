@@ -46,6 +46,7 @@ type SimulationControlsOptions = {
   formatSpeed: (speedLevelIndex: number) => string;
   normalizeSpeedLevelIndex: (speedLevelIndex: number) => number;
   onRunningChange: (running: boolean) => void;
+  onSpeedChange: (speedLevelIndex: number) => void;
   onLayerVisibilityChange: (visibility: LayerVisibilityState) => void;
   onResetSimulation: () => void;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
@@ -126,6 +127,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   }).on("change", () => {
     state.speedLevelIndex = options.normalizeSpeedLevelIndex(state.speedLevelIndex);
     pane.refresh();
+    options.onSpeedChange(state.speedLevelIndex);
   });
 
   controlFolder.addBinding(state, "cameraMode", {

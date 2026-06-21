@@ -23,6 +23,7 @@ const routesByHandle = new Map(mockData.routes.map((route) => [route.handle, rou
 let sequence = 0;
 let simTimeSeconds = 0;
 let streaming = true;
+let speedMultiplier = 1;
 const clients = new Set();
 
 const server = createServer((_, response) => {
@@ -66,7 +67,9 @@ setInterval(() => {
     return;
   }
 
-  simTimeSeconds += 1 / telemetryHz;
+  // Real backend varies wall-clock delay between steps; the mock keeps a fixed
+  // tick and instead scales the per-tick sim-time advance so drones move faster.
+  simTimeSeconds += speedMultiplier / telemetryHz;
   sequence += 1;
   const payload = createSnapshotPayload(sequence, simTimeSeconds);
   const frame = encodeWebSocketFrame(payload, 0x2);
@@ -126,6 +129,14 @@ function applyControlMessage(rawMessage) {
 
   if (message.type === "resume") {
     streaming = true;
+    return;
+  }
+
+  if (message.type === "speed") {
+    const speed = Number(message.speed);
+    if (Number.isFinite(speed) && speed > 0) {
+      speedMultiplier = Math.min(speed, 1000);
+    }
   }
 }
 
