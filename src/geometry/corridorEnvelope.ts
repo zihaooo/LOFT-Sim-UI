@@ -23,10 +23,21 @@ import { toVector3 } from "./coordinates";
 // merged directly. A component with junctions is CSG-unioned (chain tubes + junction spheres) into one
 // watertight blob. Either way the old approach's per-edge cylinders and per-node spheres are gone, cutting
 // brush count by ~10x on the sample data. Vertiport nodes never get a sphere and always end a chain, so the
-// chain's flat end cap becomes a clean terminal. Everything here runs once at load for a static scene.
+// chain's flat end cap becomes a clean terminal. A chain end resting on the ground is extended straight down
+// into a buried stub (groundTerminalPoints), so the tube bends to vertical and plunges into the ground with
+// its flat cap hidden below the surface, instead of an open disk straddling y=0. Everything here runs once
+// at load for a static scene.
 
 const SPHERE_WIDTH_SEGMENTS = ENVELOPE_RADIAL_SEGMENTS;
 const SPHERE_HEIGHT_SEGMENTS = 12;
+/** A terminal node within this many meters of y=0 counts as resting on the ground plane. */
+const GROUND_PLANE_EPSILON_METERS = 0.001;
+/**
+ * A ground terminal is extended straight down by this many tube radii into a buried "stub", so the tube
+ * bends to vertical and plunges into the ground with its flat end cap hidden below the surface. Two radii
+ * keeps the stub longer than the worst-case miter shift at the elbow, so the bend never self-intersects.
+ */
+const UNDERGROUND_STUB_DEPTH_RADII = 2;
 
 export type ComponentEnvelope = {
   componentId: number;
@@ -85,13 +96,7 @@ function buildComponentEnvelope(corridors: AirPath[], evaluator: Evaluator): THR
   const graph = buildCorridorGraph(corridors);
 
   const chainGeometries = extractChains(graph)
-    .map((chain) =>
-      createSimpleTubeGeometry(
-        chain.nodeIds.map((nodeId) => graph.position.get(nodeId) as THREE.Vector3),
-        chain.radius,
-        ENVELOPE_RADIAL_SEGMENTS,
-      ),
-    )
+    .map((chain) => createSimpleTubeGeometry(groundTerminalPoints(graph, chain), chain.radius, ENVELOPE_RADIAL_SEGMENTS))
     .filter((geometry): geometry is THREE.BufferGeometry => geometry !== null);
 
   const junctions = collectJunctionNodes(graph);
@@ -226,6 +231,44 @@ function walkChain(graph: CorridorGraph, startNodeId: string, firstEdgeIndex: nu
   }
 
   return { nodeIds, radius };
+}
+
+/**
+ * Resolves a chain's node ids to scene points, extending any endpoint that rests on the ground with one
+ * extra point straight below it. That turns the ground terminal into an interior miter vertex — the tube
+ * bends to vertical and plunges down — and pushes the chain's actual flat end cap underground, where the
+ * opaque ground hides it. So no perpendicular disk straddles y=0 and no end is left open. Junctions (fused
+ * by a CSG sphere) and mid-air terminals are not extended.
+ */
+function groundTerminalPoints(graph: CorridorGraph, chain: Chain): THREE.Vector3[] {
+  const points = chain.nodeIds.map((nodeId) => graph.position.get(nodeId) as THREE.Vector3);
+  const depth = chain.radius * UNDERGROUND_STUB_DEPTH_RADII;
+  const lastIndex = chain.nodeIds.length - 1;
+
+  const extended: THREE.Vector3[] = [];
+  if (isGroundTerminal(graph, chain.nodeIds[0])) {
+    extended.push(undergroundStubPoint(points[0], depth));
+  }
+  extended.push(...points);
+  if (lastIndex > 0 && isGroundTerminal(graph, chain.nodeIds[lastIndex])) {
+    extended.push(undergroundStubPoint(points[lastIndex], depth));
+  }
+  return extended;
+}
+
+/** A point `depth` meters straight below `point`, where the tube's buried end cap hides under the ground. */
+function undergroundStubPoint(point: THREE.Vector3, depth: number): THREE.Vector3 {
+  return new THREE.Vector3(point.x, point.y - depth, point.z);
+}
+
+/** A ground terminal is an exposed chain end (degree-1 or a vertiport, never a CSG-fused junction) sitting on y=0. */
+function isGroundTerminal(graph: CorridorGraph, nodeId: string): boolean {
+  const position = graph.position.get(nodeId);
+  if (!position || Math.abs(position.y) > GROUND_PLANE_EPSILON_METERS) {
+    return false;
+  }
+  const degree = graph.adjacency.get(nodeId)?.length ?? 0;
+  return degree === 1 || graph.vertiport.get(nodeId) === true;
 }
 
 /**

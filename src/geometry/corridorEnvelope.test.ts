@@ -107,6 +107,26 @@ describe("corridor envelope decomposition (verification)", () => {
     expect(signedVolume(tube!)).toBeGreaterThan(0); // outward winding
   });
 
+  it("plunges a ground terminal into a buried underground stub instead of capping at y=0", () => {
+    // A single corridor descending from 100 m altitude to a degree-1 terminal sitting on the ground.
+    const envelopes = buildComponentEnvelopeGeometries([
+      fakeCorridor(0, ["air", "ground"], [[0, 100, 0], [0, 0, 50]], [false, false]),
+    ]);
+    expect(envelopes).toHaveLength(1);
+    // The tube bends to vertical at the ground node and continues straight down, so its end cap is
+    // buried well below y=0 (a ~2-radius stub) rather than straddling the ground plane.
+    expect(envelopes[0].geometry.boundingBox!.min.y).toBeLessThan(-35);
+  });
+
+  it("leaves a mid-air terminal alone (no underground stub)", () => {
+    // Both endpoints are above the ground, so neither sprouts a stub; nothing dips below y=0.
+    const envelopes = buildComponentEnvelopeGeometries([
+      fakeCorridor(0, ["lowAir", "highAir"], [[0, 50, 0], [100, 80, 0]], [false, false]),
+    ]);
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0].geometry.boundingBox!.min.y).toBeGreaterThan(0);
+  });
+
   it("an uncapped tube is left open at both ends", () => {
     const tube = createSimpleTubeGeometry(
       [new THREE.Vector3(0, 0, 0), new THREE.Vector3(100, 0, 0)],
@@ -158,8 +178,9 @@ describe("corridor envelope decomposition (verification)", () => {
 
     expect(envelopes).toHaveLength(1);
     const geometry = envelopes[0].geometry;
-    // One stitched chain of 5 distinct points → 5 rings + 2 cap hubs; two unstitched tubes would not match.
-    expect(geometry.getAttribute("position").count).toBe(5 * ENVELOPE_RADIAL_SEGMENTS + 2);
+    // One stitched chain of 5 distinct points, plus an underground stub point at each end (a0 and b2 are
+    // vertiports resting on the ground) → 7 rings + 2 cap hubs; two unstitched tubes would not match.
+    expect(geometry.getAttribute("position").count).toBe(7 * ENVELOPE_RADIAL_SEGMENTS + 2);
     expect(boundaryEdgeCount(geometry)).toBe(0); // watertight across the joint
     expect(signedVolume(geometry)).toBeGreaterThan(0);
     expect(warn).not.toHaveBeenCalled(); // never touched CSG
