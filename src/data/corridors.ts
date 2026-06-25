@@ -1,5 +1,5 @@
 import type { AirCorridor, ProjectionOrigin, ScenePoint } from "../types";
-import { CORRIDOR_COLORS } from "../constant";
+import { CORRIDOR_COLORS, ENVELOPE_RADIUS_METERS } from "../constant";
 import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode } from "./common";
 
 /** Extracts air-corridor ways: every airspace=yes polyline way in the network is a corridor. */
@@ -40,7 +40,7 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
       from,
       to,
       color: CORRIDOR_COLORS[componentId % CORRIDOR_COLORS.length],
-      envelopeRadius: 35,
+      envelopeRadius: ENVELOPE_RADIUS_METERS,
       componentId,
       points,
       geoPoints,

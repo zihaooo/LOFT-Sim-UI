@@ -6,15 +6,15 @@ import { ENVELOPE_RADIAL_SEGMENTS, WORLD_UP } from "../constant";
 import { toVector3 } from "./coordinates";
 
 // The flight envelope is a fat translucent tube (~35 m radius). Two requirements shape how we build it:
-// overlapping translucent tubes double-blend into a darker, busier soup, so a connected set of corridors
-// must read as ONE uniform-opacity solid; and that solid must stay watertight where corridors meet.
+// overlapping translucent tubes double-blend into a darker, busier soup, so a connected set of air paths
+// must read as ONE uniform-opacity solid; and that solid must stay watertight where air paths meet.
 //
 // We split the work by node degree, because the cheap bisector miter already solves most of it:
 //
-//   - Degree-2 nodes (a bend inside one corridor, OR an end-to-end joint of two corridors) have a single
+//   - Degree-2 nodes (a bend inside one air path, OR an end-to-end joint of two air paths) have a single
 //     well-defined bisector plane, so a parallel-transport miter welds them gap-free. We therefore stitch
-//     the component's edges into maximal "chains" that run through every degree-2 node — crossing corridor
-//     boundaries when two corridors simply join — and build each chain with createSimpleTubeGeometry.
+//     the component's edges into maximal "chains" that run through every degree-2 node — crossing air path
+//     boundaries when two air paths simply join — and build each chain with createSimpleTubeGeometry.
 //
 //   - Junction nodes (degree > 2 and NOT a vertiport: a T, an X, a diverging point) have no single
 //     bisector plane, so there we fall back to CSG: a sphere at the node fuses every incident chain end.
@@ -45,13 +45,13 @@ export type ComponentEnvelope = {
   geometry: THREE.BufferGeometry;
 };
 
-type CorridorEdge = { a: string; b: string; radius: number; used: boolean };
+type AirPathEdge = { a: string; b: string; radius: number; used: boolean };
 
 /** The shared-node graph of one connected component: node positions/flags plus one edge per polyline segment. */
-type CorridorGraph = {
+type AirPathGraph = {
   position: Map<string, THREE.Vector3>;
   vertiport: Map<string, boolean>;
-  edges: CorridorEdge[];
+  edges: AirPathEdge[];
   /** node id -> indices into `edges` of every edge incident to it; its length is the node's degree. */
   adjacency: Map<string, number[]>;
 };
@@ -59,15 +59,15 @@ type CorridorGraph = {
 type Chain = { nodeIds: string[]; radius: number };
 type JunctionNode = { position: THREE.Vector3; radius: number };
 
-/** Builds one fused envelope geometry per connected component (grouped by `corridor.componentId`). */
-export function buildComponentEnvelopeGeometries(corridors: AirPath[]): ComponentEnvelope[] {
+/** Builds one fused envelope geometry per connected component (grouped by `airPath.componentId`). */
+export function buildComponentEnvelopeGeometries(airPaths: AirPath[]): ComponentEnvelope[] {
   const componentsById = new Map<number, AirPath[]>();
-  corridors.forEach((corridor) => {
-    const group = componentsById.get(corridor.componentId);
+  airPaths.forEach((airPath) => {
+    const group = componentsById.get(airPath.componentId);
     if (group) {
-      group.push(corridor);
+      group.push(airPath);
     } else {
-      componentsById.set(corridor.componentId, [corridor]);
+      componentsById.set(airPath.componentId, [airPath]);
     }
   });
 
@@ -78,10 +78,10 @@ export function buildComponentEnvelopeGeometries(corridors: AirPath[]): Componen
   evaluator.attributes = ["position", "normal"];
 
   const envelopes: ComponentEnvelope[] = [];
-  componentsById.forEach((componentCorridors, componentId) => {
-    const geometry = buildComponentEnvelope(componentCorridors, evaluator);
+  componentsById.forEach((componentAirPaths, componentId) => {
+    const geometry = buildComponentEnvelope(componentAirPaths, evaluator);
     if (geometry) {
-      envelopes.push({ componentId, color: componentCorridors[0].color, geometry });
+      envelopes.push({ componentId, color: componentAirPaths[0].color, geometry });
     }
   });
 
@@ -92,8 +92,8 @@ export function buildComponentEnvelopeGeometries(corridors: AirPath[]): Componen
  * Builds one watertight envelope geometry for a single connected component: bisector-miter tubes for the
  * degree-2 chains, plus a CSG sphere union at each junction node. Returns null if nothing was built.
  */
-function buildComponentEnvelope(corridors: AirPath[], evaluator: Evaluator): THREE.BufferGeometry | null {
-  const graph = buildCorridorGraph(corridors);
+function buildComponentEnvelope(airPaths: AirPath[], evaluator: Evaluator): THREE.BufferGeometry | null {
+  const graph = buildAirPathGraph(airPaths);
 
   const chainGeometries = extractChains(graph)
     .map((chain) => createSimpleTubeGeometry(groundTerminalPoints(graph, chain), chain.radius, ENVELOPE_RADIAL_SEGMENTS))
@@ -125,10 +125,10 @@ function buildComponentEnvelope(corridors: AirPath[], evaluator: Evaluator): THR
 }
 
 /** Builds the shared-node graph for one component: node positions/flags plus one edge per polyline segment. */
-function buildCorridorGraph(corridors: AirPath[]): CorridorGraph {
+function buildAirPathGraph(airPaths: AirPath[]): AirPathGraph {
   const position = new Map<string, THREE.Vector3>();
   const vertiport = new Map<string, boolean>();
-  const edges: CorridorEdge[] = [];
+  const edges: AirPathEdge[] = [];
   const adjacency = new Map<string, number[]>();
 
   const addIncidentEdge = (nodeId: string, edgeIndex: number): void => {
@@ -140,26 +140,26 @@ function buildCorridorGraph(corridors: AirPath[]): CorridorGraph {
     }
   };
 
-  corridors.forEach((corridor) => {
-    const points = corridor.points.map(toVector3);
-    corridor.nodeIds.forEach((nodeId, index) => {
+  airPaths.forEach((airPath) => {
+    const points = airPath.points.map(toVector3);
+    airPath.nodeIds.forEach((nodeId, index) => {
       if (!position.has(nodeId)) {
         position.set(nodeId, points[index]);
       }
-      // A node shared across corridors is a vertiport if any corridor flags it as one (they should agree).
-      vertiport.set(nodeId, (vertiport.get(nodeId) ?? false) || corridor.vertiportFlags[index]);
+      // A node shared across air paths is a vertiport if any air path flags it as one (they should agree).
+      vertiport.set(nodeId, (vertiport.get(nodeId) ?? false) || airPath.vertiportFlags[index]);
     });
 
-    for (let index = 0; index < corridor.nodeIds.length - 1; index += 1) {
+    for (let index = 0; index < airPath.nodeIds.length - 1; index += 1) {
       const edgeIndex = edges.length;
       edges.push({
-        a: corridor.nodeIds[index],
-        b: corridor.nodeIds[index + 1],
-        radius: corridor.envelopeRadius,
+        a: airPath.nodeIds[index],
+        b: airPath.nodeIds[index + 1],
+        radius: airPath.envelopeRadius,
         used: false,
       });
-      addIncidentEdge(corridor.nodeIds[index], edgeIndex);
-      addIncidentEdge(corridor.nodeIds[index + 1], edgeIndex);
+      addIncidentEdge(airPath.nodeIds[index], edgeIndex);
+      addIncidentEdge(airPath.nodeIds[index + 1], edgeIndex);
     }
   });
 
@@ -167,15 +167,15 @@ function buildCorridorGraph(corridors: AirPath[]): CorridorGraph {
 }
 
 /** A through node is a degree-2, non-vertiport node — the miter flows straight through it, so it never breaks a chain. */
-function isThroughNode(graph: CorridorGraph, nodeId: string): boolean {
+function isThroughNode(graph: AirPathGraph, nodeId: string): boolean {
   return (graph.adjacency.get(nodeId)?.length ?? 0) === 2 && !graph.vertiport.get(nodeId);
 }
 
 /**
  * Splits the component's edges into maximal chains. Each chain runs through degree-2 nodes (stitching
- * adjacent corridors) and ends at a break node — a junction, a degree-1 terminal, or a vertiport.
+ * adjacent air paths) and ends at a break node — a junction, a degree-1 terminal, or a vertiport.
  */
-function extractChains(graph: CorridorGraph): Chain[] {
+function extractChains(graph: AirPathGraph): Chain[] {
   const chains: Chain[] = [];
 
   // Root one chain at each break node per incident edge; the walk consumes every edge reachable through
@@ -203,7 +203,7 @@ function extractChains(graph: CorridorGraph): Chain[] {
 }
 
 /** Walks from a break node along one edge, continuing through every through-node until the next break node. */
-function walkChain(graph: CorridorGraph, startNodeId: string, firstEdgeIndex: number): Chain {
+function walkChain(graph: AirPathGraph, startNodeId: string, firstEdgeIndex: number): Chain {
   const nodeIds = [startNodeId];
   let radius = 0;
   let currentNodeId = startNodeId;
@@ -240,7 +240,7 @@ function walkChain(graph: CorridorGraph, startNodeId: string, firstEdgeIndex: nu
  * opaque ground hides it. So no perpendicular disk straddles y=0 and no end is left open. Junctions (fused
  * by a CSG sphere) and mid-air terminals are not extended.
  */
-function groundTerminalPoints(graph: CorridorGraph, chain: Chain): THREE.Vector3[] {
+function groundTerminalPoints(graph: AirPathGraph, chain: Chain): THREE.Vector3[] {
   const points = chain.nodeIds.map((nodeId) => graph.position.get(nodeId) as THREE.Vector3);
   const depth = chain.radius * UNDERGROUND_STUB_DEPTH_RADII;
   const lastIndex = chain.nodeIds.length - 1;
@@ -262,7 +262,7 @@ function undergroundStubPoint(point: THREE.Vector3, depth: number): THREE.Vector
 }
 
 /** A ground terminal is an exposed chain end (degree-1 or a vertiport, never a CSG-fused junction) sitting on y=0. */
-function isGroundTerminal(graph: CorridorGraph, nodeId: string): boolean {
+function isGroundTerminal(graph: AirPathGraph, nodeId: string): boolean {
   const position = graph.position.get(nodeId);
   if (!position || Math.abs(position.y) > GROUND_PLANE_EPSILON_METERS) {
     return false;
@@ -441,8 +441,8 @@ function chooseTubeNormal(tangent: THREE.Vector3): THREE.Vector3 {
   return new THREE.Vector3().crossVectors(reference, tangent).normalize();
 }
 
-/** Junction nodes are shared by 3+ edges and are not vertiports; each gets a sphere sized to its widest incident corridor. */
-function collectJunctionNodes(graph: CorridorGraph): JunctionNode[] {
+/** Junction nodes are shared by 3+ edges and are not vertiports; each gets a sphere sized to its widest incident air path. */
+function collectJunctionNodes(graph: AirPathGraph): JunctionNode[] {
   const junctions: JunctionNode[] = [];
   graph.adjacency.forEach((edgeIndices, nodeId) => {
     if (edgeIndices.length <= 2 || graph.vertiport.get(nodeId)) {

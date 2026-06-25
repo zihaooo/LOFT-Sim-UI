@@ -36,7 +36,7 @@ import { TelemetrySource } from "../fleet/telemetrySource";
 import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
-import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/corridor";
+import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/airPath";
 import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
 import {
   createDefaultControlState,

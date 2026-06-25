@@ -3,16 +3,16 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import {
-  CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
-  CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
-  CORRIDOR_DIRECTION_CONE_RADIUS_METERS,
-  CORRIDOR_DIRECTION_CONE_SPACING_METERS,
-  CORRIDOR_LINE_WIDTH_PIXELS,
+  AIR_PATH_DIRECTION_CONE_HEIGHT_METERS,
+  AIR_PATH_DIRECTION_CONE_RADIAL_SEGMENTS,
+  AIR_PATH_DIRECTION_CONE_RADIUS_METERS,
+  AIR_PATH_DIRECTION_CONE_SPACING_METERS,
+  AIR_PATH_LINE_WIDTH_PIXELS,
 } from "../constant";
 
 const CONE_AXIS = new THREE.Vector3(0, 1, 0);
 
-/** Drops arrow cones along a corridor at a fixed arc-length spacing, each oriented down the local direction. */
+/** Drops arrow cones along an air path at a fixed arc-length spacing, each oriented down the local direction. */
 export function appendDirectionCones(
   points: THREE.Vector3[],
   color: THREE.Color,
@@ -21,7 +21,7 @@ export function appendDirectionCones(
   colors: THREE.Color[],
 ): void {
   let traveled = 0;
-  let nextConeAt = CORRIDOR_DIRECTION_CONE_SPACING_METERS;
+  let nextConeAt = AIR_PATH_DIRECTION_CONE_SPACING_METERS;
 
   for (let index = 1; index < points.length; index += 1) {
     const start = points[index - 1];
@@ -38,20 +38,20 @@ export function appendDirectionCones(
       positions.push(start.clone().addScaledVector(direction, along));
       quaternions.push(orientation.clone());
       colors.push(color);
-      nextConeAt += CORRIDOR_DIRECTION_CONE_SPACING_METERS;
+      nextConeAt += AIR_PATH_DIRECTION_CONE_SPACING_METERS;
     }
     traveled += segmentLength;
   }
 }
 
-/** Batches every corridor centerline into one fat-line (Line2) draw call with per-vertex (per-component) colors. */
-export function buildCorridorLines(positions: number[], colors: number[]): LineSegments2 {
+/** Batches every air path centerline into one fat-line (Line2) draw call with per-vertex (per-component) colors. */
+export function buildAirPathLines(positions: number[], colors: number[]): LineSegments2 {
   const geometry = new LineSegmentsGeometry();
   geometry.setPositions(positions);
   geometry.setColors(colors);
   const material = new LineMaterial({
     vertexColors: true,
-    linewidth: CORRIDOR_LINE_WIDTH_PIXELS,
+    linewidth: AIR_PATH_LINE_WIDTH_PIXELS,
     worldUnits: false,
   });
   // Fat lines need the viewport size to size strokes in screen pixels; FleetScene keeps this current on resize.
@@ -59,16 +59,16 @@ export function buildCorridorLines(positions: number[], colors: number[]): LineS
   return new LineSegments2(geometry, material);
 }
 
-/** Packs every corridor's direction cones into one InstancedMesh with per-instance transform and color. */
+/** Packs every air path's direction cones into one InstancedMesh with per-instance transform and color. */
 export function buildConeInstancedMesh(
   positions: THREE.Vector3[],
   quaternions: THREE.Quaternion[],
   colors: THREE.Color[],
 ): THREE.InstancedMesh {
   const geometry = new THREE.ConeGeometry(
-    CORRIDOR_DIRECTION_CONE_RADIUS_METERS,
-    CORRIDOR_DIRECTION_CONE_HEIGHT_METERS,
-    CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS,
+    AIR_PATH_DIRECTION_CONE_RADIUS_METERS,
+    AIR_PATH_DIRECTION_CONE_HEIGHT_METERS,
+    AIR_PATH_DIRECTION_CONE_RADIAL_SEGMENTS,
   );
   const material = new THREE.MeshBasicMaterial();
   const mesh = new THREE.InstancedMesh(geometry, material, positions.length);

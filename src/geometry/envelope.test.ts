@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { AirCorridor, ScenePoint } from "../types";
 import { ENVELOPE_RADIAL_SEGMENTS } from "../constant";
 import { parseAirCorridors } from "../data/corridors";
-import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./corridorEnvelope";
+import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./envelope";
 
 const root = resolve(__dirname, "../..");
 const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");

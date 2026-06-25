@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import { parseRoutes } from "./routes";
 import { parseOsm } from "./common";
-import { createRouteGroup } from "../layer/corridor";
+import { createRouteGroup } from "../layer/airPath";
 
 const origin = { lat: 42.0, lon: -83.0 };
 const root = resolve(__dirname, "../..");
@@ -112,7 +112,7 @@ describe("parseRoutes", () => {
   // Geometry check: build the actual render objects headlessly and assert each route produced a
   // non-empty centerline + envelope, grouped under its own toggleable, correctly-named subgroup.
   it("createRouteGroup yields one named, non-empty subgroup per route", () => {
-    // buildCorridorLines reads window.innerWidth to size fat-line strokes; stub it for this headless build.
+    // buildAirPathLines reads window.innerWidth to size fat-line strokes; stub it for this headless build.
     vi.stubGlobal("window", { innerWidth: 1280, innerHeight: 720 });
     try {
       const routes = parseRoutes(airCorridorOsm, origin);

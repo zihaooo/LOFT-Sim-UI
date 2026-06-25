@@ -3,8 +3,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { AirPath } from "../types";
 import { ENVELOPE_OPACITY, ENVELOPE_ROUGHNESS } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
-import { buildComponentEnvelopeGeometries } from "../geometry/corridorEnvelope";
-import { appendDirectionCones, buildConeInstancedMesh, buildCorridorLines } from "../geometry/corridorCenterline";
+import { buildComponentEnvelopeGeometries } from "../geometry/envelope";
+import { appendDirectionCones, buildConeInstancedMesh, buildAirPathLines } from "../geometry/centerline";
 
 // Layout tradeoff: every corridor's centerline is batched into one LineSegments, and every
 // direction cone into one InstancedMesh, to keep the corridor layer at a constant ~3 draw calls
@@ -53,7 +53,7 @@ export function createCorridorGroup(corridors: AirPath[]): THREE.Group {
   });
 
   if (linePositions.length > 0) {
-    group.add(buildCorridorLines(linePositions, lineColors));
+    group.add(buildAirPathLines(linePositions, lineColors));
   }
 
   if (conePositions.length > 0) {

@@ -111,20 +111,19 @@ export const TREE_CANOPY_LIGHTNESS_BASE = 0.34;
 export const TREE_CANOPY_LIGHTNESS_STEP = 0.03;
 export const TREE_CANOPY_LIGHTNESS_VARIANTS = 3;
 
-// Corridor and envelope rendering
-export const CORRIDOR_LINE_RADIUS_METERS = 0.3;
+// Air path (corridor and route) and envelope rendering
 /** Centerline screen-space width in CSS pixels (Line2 fat lines; tune freely). */
-export const CORRIDOR_LINE_WIDTH_PIXELS = 1.5;
-export const CORRIDOR_DIRECTION_CONE_RADIUS_METERS = 1.2;
-export const CORRIDOR_DIRECTION_CONE_HEIGHT_METERS = 3.2;
-export const CORRIDOR_DIRECTION_CONE_RADIAL_SEGMENTS = 8;
-/** Arrow cones are dropped at this arc-length spacing along each corridor; smaller = more arrows. */
-export const CORRIDOR_DIRECTION_CONE_SPACING_METERS = 120;
+export const AIR_PATH_LINE_WIDTH_PIXELS = 1.5;
+export const AIR_PATH_DIRECTION_CONE_RADIUS_METERS = 1.2;
+export const AIR_PATH_DIRECTION_CONE_HEIGHT_METERS = 3.2;
+export const AIR_PATH_DIRECTION_CONE_RADIAL_SEGMENTS = 8;
+/** Arrow cones are dropped at this arc-length spacing along each air path; smaller = more arrows. */
+export const AIR_PATH_DIRECTION_CONE_SPACING_METERS = 120;
 export const ENVELOPE_RADIAL_SEGMENTS = 18;
 export const ENVELOPE_OPACITY = 0.1;
 export const ENVELOPE_ROUGHNESS = 0.45;
-/** Tube radius of a route's flight envelope, in meters (matches the corridor envelope radius). */
-export const ROUTE_ENVELOPE_RADIUS_METERS = 35;
+/** Tube radius of a flight envelope, in meters. */
+export const ENVELOPE_RADIUS_METERS = 35;
 
 // Vertiport ground markers (helipad-style camera-oriented decals)
 export const VERTIPORT_RADIUS_METERS = 35;
