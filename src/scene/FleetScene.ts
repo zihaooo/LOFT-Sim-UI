@@ -36,7 +36,7 @@ import { TelemetrySource } from "../fleet/telemetrySource";
 import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
-import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/airPath";
+import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
 import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
 import {
   createDefaultControlState,
@@ -390,9 +390,10 @@ export class FleetScene {
 
   /**
    * Shows only the selected UAV's route while the Route toggle is on: the group is hidden entirely
-   * unless routes are enabled, and within it only the `route:<selectedRouteId>` subgroup stays visible
-   * (each subgroup bundles its centerline and envelope, so they show/hide together). With nothing
-   * selected, no route is shown.
+   * unless routes are enabled, and within it only the `route:<selectedRouteId>` subgroup stays visible.
+   * Within the visible subgroup the centerline always shows while its envelope child follows the
+   * Envelopes toggle — the corridor and route envelopes share that one switch, which is unambiguous
+   * because the corridor and route layers are mutually exclusive. With nothing selected, no route is shown.
    */
   private updateRouteVisibility(): void {
     if (!this.params.routesVisible) {
@@ -405,6 +406,10 @@ export class FleetScene {
     const targetName = selectedRouteId === null ? null : `route:${selectedRouteId}`;
     for (const subgroup of this.routeGroup.children) {
       subgroup.visible = subgroup.name === targetName;
+      const envelope = subgroup.getObjectByName(ROUTE_ENVELOPE_CHILD_NAME);
+      if (envelope) {
+        envelope.visible = this.params.envelopesVisible;
+      }
     }
   }
 

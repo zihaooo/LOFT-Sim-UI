@@ -95,10 +95,17 @@ export function createFlightEnvelopeGroup(corridors: AirPath[]): THREE.Group {
 }
 
 /**
- * Builds one subgroup per route (named `route:<id>`), each holding that route's own centerline and
- * envelope. Routes are kept as separate objects rather than one merged batch so a single route can
- * later be shown/hidden (`subgroup.visible`) or recolored independently — at the cost of a few extra
- * draw calls, which is negligible for the handful of routes a scene carries.
+ * Name of the envelope child inside each route subgroup. Named so its visibility can be driven by the
+ * Envelopes toggle independently of the route's centerline (see FleetScene.updateRouteVisibility).
+ */
+export const ROUTE_ENVELOPE_CHILD_NAME = "route-envelope";
+
+/**
+ * Builds one subgroup per route (named `route:<id>`), each holding that route's own centerline plus an
+ * envelope child named `ROUTE_ENVELOPE_CHILD_NAME`. Routes are kept as separate objects rather than one
+ * merged batch so a single route can be shown/hidden (`subgroup.visible`) or recolored independently,
+ * and the named envelope child lets the Envelopes toggle gate the route envelope on its own — at the
+ * cost of a few extra draw calls, which is negligible for the handful of routes a scene carries.
  */
 export function createRouteGroup(routes: AirPath[]): THREE.Group {
   const group = new THREE.Group();
@@ -106,8 +113,10 @@ export function createRouteGroup(routes: AirPath[]): THREE.Group {
   routes.forEach((route) => {
     const subgroup = new THREE.Group();
     subgroup.name = `route:${route.id}`;
+    const envelope = createFlightEnvelopeGroup([route]);
+    envelope.name = ROUTE_ENVELOPE_CHILD_NAME;
     subgroup.add(createCorridorGroup([route]));
-    subgroup.add(createFlightEnvelopeGroup([route]));
+    subgroup.add(envelope);
     group.add(subgroup);
   });
 

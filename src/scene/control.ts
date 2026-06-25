@@ -77,41 +77,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   const pane = new Pane({ container: options.container });
   pane.registerPlugin(TweakpaneFileImportPlugin);
   const { state } = options;
-  const configState: ConfigControlState = {
-    mapFile: "",
-    corridorFile: "",
-    demandFile: "",
-  };
 
-  const configFolder = pane.addFolder({ title: "Config Files", expanded: false });
-  configFolder.addBinding(configState, "mapFile", {
-    label: "Map",
-    view: "file-input",
-    lineCount: 1,
-    filetypes: [".osm"],
-    invalidFiletypeMessage: "Select an .osm file.",
-  });
-  configFolder.addBinding(configState, "corridorFile", {
-    label: "Air corridor",
-    view: "file-input",
-    lineCount: 1,
-    filetypes: [".osm"],
-    invalidFiletypeMessage: "Select an .osm file.",
-  });
-  configFolder.addBinding(configState, "demandFile", {
-    label: "Demand",
-    view: "file-input",
-    lineCount: 1,
-    filetypes: [".json"],
-    invalidFiletypeMessage: "Select a .json file.",
-  });
-  configFolder.addButton({ title: "Reload scene" }).on("click", () => {
-    void options.onReloadScene({
-      mapFile: toFile(configState.mapFile),
-      corridorFile: toFile(configState.corridorFile),
-      demandFile: toFile(configState.demandFile),
-    });
-  });
 
   const controlFolder = pane.addFolder({ title: "Controls", expanded: true });
 
@@ -153,7 +119,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     }
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "routesVisible", { label: "Route" }).on("change", () => {
+  controlFolder.addBinding(state, "routesVisible", { label: "Selected UVA's Route" }).on("change", () => {
     if (syncingCorridorRoute) {
       return;
     }
@@ -187,6 +153,42 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   // so expose the Demo folder under `vite dev` only. Production is telemetry-backed,
   // and this branch is tree-shaken out of the production bundle.
   if (import.meta.env.DEV) {
+    const configState: ConfigControlState = {
+      mapFile: "",
+      corridorFile: "",
+      demandFile: "",
+    };
+
+    const configFolder = pane.addFolder({ title: "Config Files Override", expanded: false });
+    configFolder.addBinding(configState, "mapFile", {
+      label: "Base Map",
+      view: "file-input",
+      lineCount: 1,
+      filetypes: [".osm"],
+      invalidFiletypeMessage: "Select an .osm file.",
+    });
+    configFolder.addBinding(configState, "corridorFile", {
+      label: "Air Network",
+      view: "file-input",
+      lineCount: 1,
+      filetypes: [".osm"],
+      invalidFiletypeMessage: "Select an .osm file.",
+    });
+    configFolder.addBinding(configState, "demandFile", {
+      label: "Demand",
+      view: "file-input",
+      lineCount: 1,
+      filetypes: [".json"],
+      invalidFiletypeMessage: "Select a .json file.",
+    });
+    configFolder.addButton({ title: "Reload scene" }).on("click", () => {
+      void options.onReloadScene({
+        mapFile: toFile(configState.mapFile),
+        corridorFile: toFile(configState.corridorFile),
+        demandFile: toFile(configState.demandFile),
+      });
+    });
+
     let syncingDemoControls = false;
     const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
     demoFolder.addBinding(state, "demoTwoCorridors", { label: "Two Corridors" }).on("change", () => {
