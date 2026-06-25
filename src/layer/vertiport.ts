@@ -18,21 +18,25 @@ export function createVertiportGroup(vertiports: VertiportPoint[]): THREE.Group 
   const geometry = createVertiportGeometry();
   const material = new THREE.MeshBasicMaterial({
     map: createVertiportTexture(),
-    // The disc is fully opaque (the circle geometry only samples the marking, never the transparent
-    // texture corners), so it renders in the opaque pass — before the airspace layer that must occlude it.
+    // Opaque material: the geometry samples only the painted disc, never the texture's transparent corners,
+    // so the marker renders in the opaque pass — ahead of the airspace layer that must occlude it.
     //
-    // We keep the depth test ENABLED but force it to always pass (depthFunc = Always) rather than setting
-    // depthTest:false. Disabling the depth test also disables depth WRITES (a fragment can only update the
-    // depth buffer as part of a passing test), so with depthTest:false the marker would never store its
-    // own depth — roads would then test against the ground depth behind it and draw on top. With Always +
-    // depthWrite the marker still ignores buildings yet writes its depth, biased toward the camera past the
-    // roads' -2 via polygonOffset, so ground decals stay below it while the airspace layer (drawn later at
-    // AIRSPACE_RENDER_ORDER) still depth-tests against it and draws in front.
+    // depthFunc = Always + depthWrite (not depthTest:false): Always draws the disc over ground and buildings
+    // whatever is in front of it, while still writing depth. depthTest:false would also suppress those
+    // writes (depth is stored only on a passing test), leaving nothing for the airspace layer (later
+    // renderOrder) to test against — so a drone or corridor in front could no longer occlude the marker.
+    //
+    // polygonOffset: the disc and the road are coplanar (both y=0) and in different passes (opaque vs the
+    // road's transparent), so renderOrder can't order them — only this depth bias keeps the road off the
+    // disc. The bias unit is implementation-defined: the old 1-unit gap held on native GL (Linux) but
+    // collapsed on ANGLE/Metal (macOS Chrome), leaking the road through. The road clears the ground by
+    // 2 units (0 vs -2) reliably on both, so the disc takes the same margin over the road (-4 vs -2) —
+    // microscopic in NDC, nowhere near enough to stop an airborne drone (far nearer) from occluding it.
     side: THREE.DoubleSide,
     depthFunc: THREE.AlwaysDepth,
     depthWrite: true,
     polygonOffset: true,
-    polygonOffsetUnits: -3,
+    polygonOffsetUnits: -4,
   });
 
   vertiports.forEach((vertiport) => {
