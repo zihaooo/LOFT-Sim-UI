@@ -73,6 +73,13 @@ export type TreePoint = {
   height: number;
 };
 
+/** A vertiport terminal rendered as a flat, camera-oriented helipad marker on the ground. */
+export type VertiportPoint = {
+  id: string;
+  name: string;
+  position: ScenePoint;
+};
+
 export type FlowDefinition = {
   flowId: string;
   routeId: string;
@@ -106,5 +113,6 @@ export type SceneData = {
   buildings: BuildingFootprint[];
   roads: RoadPath[];
   trees: TreePoint[];
+  vertiports: VertiportPoint[];
   flows: FlowDefinition[];
 };

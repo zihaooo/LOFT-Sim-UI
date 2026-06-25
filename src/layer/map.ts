@@ -167,7 +167,7 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
     side: THREE.DoubleSide,
     // Bias road depth toward the camera to resolve z-fight.
     polygonOffset: true,
-    polygonOffsetUnits: -1,
+    polygonOffsetUnits: -2,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.renderOrder = 1;

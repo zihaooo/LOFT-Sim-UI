@@ -4,6 +4,7 @@ import Stats from "stats.js";
 import type { Pane } from "tweakpane";
 import type { SceneData, UavState } from "../types";
 import {
+  AIRSPACE_RENDER_ORDER,
   CAMERA_FAR_METERS,
   CAMERA_FOV_DEGREES,
   CAMERA_MIN_Y,
@@ -36,6 +37,7 @@ import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout 
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup } from "../layer/corridor";
+import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
 import {
   createDefaultControlState,
   createSimulationControls,
@@ -95,6 +97,7 @@ export class FleetScene {
   private readonly roadGroup: THREE.Group;
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
+  private readonly vertiportGroup: THREE.Group;
   private readonly labelNodes: Map<string, HTMLDivElement>;
   private readonly corridorLabelNodes: CorridorLabelNode[];
   private readonly simulationClockValue: HTMLElement;
@@ -170,6 +173,7 @@ export class FleetScene {
     this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.mapBounds);
     this.treeGroup = createTreeGroup(this.sceneData.trees);
     this.buildingGroup = createBuildingGroup(this.sceneData.buildings);
+    this.vertiportGroup = createVertiportGroup(this.sceneData.vertiports);
     this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
@@ -260,12 +264,31 @@ export class FleetScene {
       createGroundGroup(this.sceneData.mapBounds),
       this.roadGroup,
       this.treeGroup,
+      this.vertiportGroup,
       this.corridorGroup,
       this.envelopeGroup,
       this.routeGroup,
       this.buildingGroup,
       this.uavMesh,
     );
+
+    this.layerAirspaceAboveVertiports();
+  }
+
+  /**
+   * Lifts the airspace layer (drones, corridors, routes, envelopes) above the vertiport markers in
+   * render order. The markers draw with depthTest off so buildings can't hide them; pushing the airspace
+   * meshes to a later renderOrder makes them draw after — and depth-test against — the markers, so a
+   * drone or corridor in front of a marker still occludes it. Group nodes don't inherit renderOrder, so
+   * this is applied per object. Map geometry stays at the default 0, leaving it below the markers.
+   */
+  private layerAirspaceAboveVertiports(): void {
+    this.uavMesh.renderOrder = AIRSPACE_RENDER_ORDER;
+    [this.corridorGroup, this.envelopeGroup, this.routeGroup].forEach((group) => {
+      group.traverse((object) => {
+        object.renderOrder = AIRSPACE_RENDER_ORDER;
+      });
+    });
   }
 
   /** Mounts the control panel while keeping scene mutations inside FleetScene. */
@@ -339,6 +362,7 @@ export class FleetScene {
     this.updateCameraMode();
     this.controls.update();
     this.constrainCameraAboveHorizon();
+    updateVertiportBillboards(this.vertiportGroup, this.camera);
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateHudStats();

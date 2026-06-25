@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
 import { parseBuildings, parseMapBounds, parseRoads, parseTrees } from "./map";
+import { parseVertiports } from "./vertiport";
 import { parseFlowDefinitions } from "./flows";
 import { parseRoutes } from "./routes";
 import { createSceneData } from "./osm";
@@ -102,6 +103,43 @@ describe("OSM and flow parsing", () => {
     expect(bounds.depth).toBeGreaterThan(1_000);
     expect(bounds.min.x).toBeLessThan(bounds.max.x);
     expect(bounds.min.z).toBeLessThan(bounds.max.z);
+  });
+
+  it("extracts only vertiport nodes, resolving id/name and excluding plain corridor nodes", () => {
+    const corridorOsm = `
+      <osm version="0.6">
+        <node id="-1" lat="42.2900" lon="-83.7100">
+          <tag k="altitude" v="0" />
+          <tag k="node_type" v="vertiport" />
+          <tag k="object_id" v="vertiport1" />
+        </node>
+        <node id="-2" lat="42.2910" lon="-83.7100">
+          <tag k="altitude" v="30" />
+        </node>
+        <node id="-3" lat="42.2920" lon="-83.7090">
+          <tag k="altitude" v="0" />
+          <tag k="node_type" v="vertiport" />
+        </node>
+      </osm>
+    `;
+
+    const origin = { lat: 42.291, lon: -83.71 };
+    const vertiports = parseVertiports(corridorOsm, origin);
+
+    expect(vertiports).toHaveLength(2);
+    // object_id wins as both id and name; absent tags fall back to the OSM node id.
+    expect(vertiports[0]).toMatchObject({ id: "vertiport1", name: "vertiport1" });
+    expect(vertiports[1]).toMatchObject({ id: "-3", name: "-3" });
+    expect(vertiports[0].position).toEqual(projectGeoPoint({ lat: 42.29, lon: -83.71, altitude: 0 }, origin));
+  });
+
+  it("parses the four vertiports in the provided airspace network", () => {
+    const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
+    const vertiports = parseVertiports(corridorOsm, parseAirCorridors(corridorOsm)[0].geoPoints[0]);
+
+    expect(vertiports).toHaveLength(4);
+    expect(vertiports.map((vertiport) => vertiport.id)).toContain("michigan_medicine");
+    expect(vertiports.every((vertiport) => vertiport.id && vertiport.name)).toBe(true);
   });
 
   it("parses the provided flow definitions", () => {

@@ -126,6 +126,25 @@ export const ENVELOPE_ROUGHNESS = 0.45;
 /** Tube radius of a route's flight envelope, in meters (matches the corridor envelope radius). */
 export const ROUTE_ENVELOPE_RADIUS_METERS = 35;
 
+// Vertiport ground markers (helipad-style camera-oriented decals)
+export const VERTIPORT_RADIUS_METERS = 35;
+export const VERTIPORT_CIRCLE_SEGMENTS = 48;
+export const VERTIPORT_FILL_COLOR = "#ffffff";
+export const VERTIPORT_OUTLINE_COLOR = "#1f6fff";
+/** Marking texture resolution (power-of-two for mipmapping). */
+export const VERTIPORT_TEXTURE_SIZE = 256;
+/** Blue outline ring thickness as a fraction of the texture size. */
+export const VERTIPORT_OUTLINE_WIDTH_RATIO = 0.07;
+export const VERTIPORT_LETTER = "V";
+export const VERTIPORT_LETTER_FONT = "bold 180px sans-serif";
+/**
+ * Scene layering by render order. Map geometry (ground, buildings, roads, trees) stays at the default
+ * 0; the vertiport marker renders just above it so buildings can't hide it; the airspace layer (drones,
+ * corridors, routes, envelopes) renders above the marker so it occludes the marker when in front.
+ */
+export const VERTIPORT_RENDER_ORDER = 1;
+export const AIRSPACE_RENDER_ORDER = 2;
+
 // UAV rendering
 export const DRONE_MODEL_CANDIDATES = ["/data/model/drone.gltf"] as const;
 export const DRONE_MODEL_SPAN_METERS = 22;
