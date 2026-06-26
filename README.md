@@ -74,7 +74,9 @@ Files under `public/data/` are served by Vite at `/data/...` and copied into `di
 - `data/network/airspace_network.osm` — default air-corridor network
 - `data/network/map.osm` — buildings, roads, trees
 - `data/demand/flow.json` — default flow demand (standalone mode only)
-- `data/model/drone.gltf` — UAV model
+- `data/model/quadrotor.gltf` — quadrotor UAV model (the one currently rendered for all UAVs)
+- `data/model/fixedwing.gltf` — fixed-wing cargo UAV model (asset for future per-type rendering)
+- `data/model/hybrid.gltf` — hybrid tilt-rotor VTOL cargo UAV model (asset for future per-type rendering)
 
 Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and `stress_air_corridor.osm` / `stress_flow.json`. In telemetry-backed mode the network comes from the simulator's `/configs` and UAVs come from the websocket, so the bundled demand file is unused.
 

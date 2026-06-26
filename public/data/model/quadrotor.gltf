@@ -1,7 +1,7 @@
 {
   "asset": {
     "version": "2.0",
-    "generator": "LOFT_UI low-poly drone generator"
+    "generator": "LOFT_UI low-poly quadrotor generator"
   },
   "scene": 0,
   "scenes": [
@@ -14,13 +14,13 @@
   ],
   "nodes": [
     {
-      "name": "Drone",
+      "name": "Quadrotor",
       "mesh": 0
     }
   ],
   "meshes": [
     {
-      "name": "Drone",
+      "name": "Quadrotor",
       "primitives": [
         {
           "attributes": {

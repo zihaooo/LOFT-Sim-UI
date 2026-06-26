@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
-"""
-Generate a low-poly quadcopter drone as a self-contained glTF 2.0 file.
+"""Shared geometry + glTF 2.0 serialization helpers for the low-poly UAV generators.
 
-The drone faces -Z (glTF/Three.js convention) with +Y up. A red nose marker
-on the front face indicates orientation. Geometry is built from axis-aligned
-boxes with flat shading so it stays low-poly.
-
-Example:
-  python scripts/generate_drone_gltf.py -o public/data/model/drone.gltf
+All models face -Z (glTF/Three.js convention) with +Y up and +X right. Geometry is
+built from axis-aligned boxes with flat shading so the models stay low-poly; each box
+face carries its own four vertices so normals stay crisp. Per-type generators supply a
+parts table and a materials list, plus optional hooks for special primitives/materials
+(e.g. a semi-transparent spinning-rotor disc).
 """
 
-import argparse
 import base64
 import json
 import math
 import struct
-import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 Vec3 = Tuple[float, float, float]
 Box = Tuple[Vec3, Vec3]
 PlacedBox = Tuple[Box, float]  # (box, rotation around +Y in degrees)
+Primitive = Tuple[List[Vec3], List[Vec3], List[int]]  # positions, normals, indices
+MaterialSpec = Tuple[str, List[float], float, float]  # (name, baseColorRGBA, metallic, roughness)
 
 
-def make_box(mn: Vec3, mx: Vec3):
+def make_box(mn: Vec3, mx: Vec3) -> Primitive:
     x0, y0, z0 = mn
     x1, y1, z1 = mx
     # Each face uses its own 4 vertices for flat shading. Winding is CCW
@@ -56,7 +54,19 @@ def rotate_y(v: Vec3, angle_rad: float) -> Vec3:
     return (x * cos_a + z * sin_a, y, -x * sin_a + z * cos_a)
 
 
-def combine_boxes(items: List[PlacedBox]):
+def rotate_x(v: Vec3, angle_rad: float) -> Vec3:
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    x, y, z = v
+    return (x, y * cos_a - z * sin_a, y * sin_a + z * cos_a)
+
+
+def translate(points: List[Vec3], offset: Vec3) -> List[Vec3]:
+    ox, oy, oz = offset
+    return [(x + ox, y + oy, z + oz) for x, y, z in points]
+
+
+def combine_boxes(items: List[PlacedBox]) -> Primitive:
     all_pos: List[Vec3] = []
     all_norm: List[Vec3] = []
     all_idx: List[int] = []
@@ -73,8 +83,11 @@ def combine_boxes(items: List[PlacedBox]):
     return all_pos, all_norm, all_idx
 
 
-def make_disc(center: Vec3, radius: float, thickness: float, segments: int):
-    """Thin Y-axis-aligned disc (capped cylinder) approximating a spinning prop."""
+def make_disc(center: Vec3, radius: float, thickness: float, segments: int) -> Primitive:
+    """Thin Y-axis-aligned disc (capped cylinder) approximating a spinning prop.
+
+    Rotate the result (e.g. rotate_x by 90 deg) for props that spin about another axis.
+    """
     cx, cy, cz = center
     half = thickness / 2.0
     positions: List[Vec3] = []
@@ -128,95 +141,50 @@ def make_disc(center: Vec3, radius: float, thickness: float, segments: int):
     return positions, normals, indices
 
 
-# Drone parts grouped by material.
-# Forward = -Z, up = +Y, right = +X. Wingspan ~1.0m tip-to-tip.
-# Each entry is (box, rotation_around_Y_in_degrees). For the arm assembly,
-# a single canonical part pointing along -Z is instanced at 45/135/225/315 deg
-# so the wingtips sit at the four diagonal corners (X-configured quadcopter).
-ARM_ROTATIONS_DEG = (45.0, 135.0, 225.0, 315.0)
-
-CANONICAL_ARM:   Box = ((-0.025, -0.015, -0.50), (0.025, 0.015, -0.13))
-CANONICAL_MOTOR: Box = ((-0.04,  -0.025, -0.54), (0.04,  0.045, -0.46))
-CANONICAL_PROP:  Box = ((-0.16,   0.045, -0.508), (0.16,  0.055, -0.492))
-
-DRONE_PARTS: dict = {
-    "body": [
-        (((-0.15, -0.04, -0.15), (0.15, 0.04, 0.15)), 0.0),
-    ],
-    "front": [
-        (((-0.045, -0.022, -0.17), (0.045, 0.022, -0.15)), 0.0),
-    ],
-    "arm":   [(CANONICAL_ARM,   d) for d in ARM_ROTATIONS_DEG],
-    "motor": [(CANONICAL_MOTOR, d) for d in ARM_ROTATIONS_DEG],
-    "prop":  [(CANONICAL_PROP,  d) for d in ARM_ROTATIONS_DEG],
-    # Four thin vertical struts hanging the cargo box from the body underside.
-    "strut": [
-        ((( 0.075, -0.115, -0.075), (0.090, -0.040, -0.060)), 0.0),
-        (((-0.090, -0.115, -0.075), (-0.075, -0.040, -0.060)), 0.0),
-        ((( 0.075, -0.115,  0.060), (0.090, -0.040,  0.075)), 0.0),
-        (((-0.090, -0.115,  0.060), (-0.075, -0.040,  0.075)), 0.0),
-    ],
-    # Cardboard-style payload box slung beneath the airframe.
-    "cargo": [
-        (((-0.10, -0.22, -0.10), (0.10, -0.11, 0.10)), 0.0),
-    ],
-    # Strap/tape stripes wrapped around the cargo box for visual interest.
-    "tape": [
-        (((-0.012, -0.219, -0.101), (0.012, -0.111, 0.101)), 0.0),
-        (((-0.101, -0.219, -0.012), (0.101, -0.111, 0.012)), 0.0),
-    ],
-}
+def default_material(name: str, color: List[float], metallic: float, roughness: float) -> dict:
+    return {
+        "name": name,
+        "pbrMetallicRoughness": {
+            "baseColorFactor": color,
+            "metallicFactor": metallic,
+            "roughnessFactor": roughness,
+        },
+    }
 
 
-# (name, baseColorRGBA, metallicFactor, roughnessFactor)
-MATERIALS = [
-    ("body",  [0.20, 0.20, 0.22, 1.0], 0.20, 0.70),
-    ("front", [0.85, 0.15, 0.15, 1.0], 0.10, 0.55),
-    ("arm",   [0.32, 0.32, 0.34, 1.0], 0.20, 0.70),
-    ("motor", [0.08, 0.08, 0.10, 1.0], 0.60, 0.40),
-    ("prop",  [0.68, 0.70, 0.74, 1.0], 0.30, 0.50),
-    ("strut", [0.15, 0.15, 0.17, 1.0], 0.50, 0.45),
-    ("cargo", [0.78, 0.55, 0.30, 1.0], 0.05, 0.85),
-    ("tape",  [0.92, 0.82, 0.55, 1.0], 0.05, 0.75),
-]
+def build_gltf(
+    output_path: Path,
+    parts: Dict[str, List[PlacedBox]],
+    materials: List[MaterialSpec],
+    *,
+    generator_name: str,
+    node_name: str,
+    special_primitive: Optional[Callable[[str], Optional[Primitive]]] = None,
+    special_material: Optional[Callable[[str, List[float], float, float], Optional[dict]]] = None,
+) -> int:
+    """Serialize one mesh (one primitive per material) to a self-contained .gltf.
 
-
-# Spinning-rotor disc: thin, slightly translucent, centered above each motor.
-DISC_RADIUS = 0.16
-DISC_THICKNESS = 0.010
-DISC_SEGMENTS = 16
-CANONICAL_DISC_CENTER: Vec3 = (0.0, 0.050, -0.50)
-DISC_BASE_COLOR = [0.78, 0.80, 0.84, 0.45]
-
-
-def build_primitive(name: str, prop_style: str):
-    if name == "prop" and prop_style == "disc":
-        all_pos: List[Vec3] = []
-        all_norm: List[Vec3] = []
-        all_idx: List[int] = []
-        for deg in ARM_ROTATIONS_DEG:
-            center = rotate_y(CANONICAL_DISC_CENTER, math.radians(deg))
-            p, n, i = make_disc(center, DISC_RADIUS, DISC_THICKNESS, DISC_SEGMENTS)
-            offset = len(all_pos)
-            all_pos.extend(p)
-            all_norm.extend(n)
-            all_idx.extend(idx + offset for idx in i)
-        return all_pos, all_norm, all_idx
-    return combine_boxes(DRONE_PARTS[name])
-
-
-def build_gltf(output_path: Path, prop_style: str = "blade") -> None:
+    parts maps each material name to its placed boxes. special_primitive(name) may return
+    a (positions, normals, indices) tuple to override the default box geometry for that
+    material (return None to fall back to the parts table); special_material(name, ...) may
+    likewise override the generated PBR material. Returns the total triangle count.
+    """
     buf = bytearray()
     buffer_views: list = []
     accessors: list = []
     mesh_primitives: list = []
+    triangle_count = 0
 
     def align4() -> None:
         while len(buf) % 4 != 0:
             buf.append(0)
 
-    for material_index, (name, _color, _metallic, _roughness) in enumerate(MATERIALS):
-        positions, normals, indices = build_primitive(name, prop_style)
+    for material_index, (name, _color, _metallic, _roughness) in enumerate(materials):
+        primitive = special_primitive(name) if special_primitive else None
+        if primitive is None:
+            primitive = combine_boxes(parts[name])
+        positions, normals, indices = primitive
+        triangle_count += len(indices) // 3
 
         align4()
         pos_offset = len(buf)
@@ -278,39 +246,22 @@ def build_gltf(output_path: Path, prop_style: str = "blade") -> None:
             "mode": 4,
         })
 
-    materials = []
-    for name, color, metallic, roughness in MATERIALS:
-        if name == "prop" and prop_style == "disc":
-            mat = {
-                "name": "prop_disc",
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": DISC_BASE_COLOR,
-                    "metallicFactor": 0.05,
-                    "roughnessFactor": 0.85,
-                },
-                "alphaMode": "BLEND",
-                "doubleSided": True,
-            }
-        else:
-            mat = {
-                "name": name,
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": color,
-                    "metallicFactor": metallic,
-                    "roughnessFactor": roughness,
-                },
-            }
-        materials.append(mat)
+    out_materials = []
+    for name, color, metallic, roughness in materials:
+        mat = special_material(name, color, metallic, roughness) if special_material else None
+        if mat is None:
+            mat = default_material(name, color, metallic, roughness)
+        out_materials.append(mat)
 
     b64 = base64.b64encode(bytes(buf)).decode("ascii")
 
     gltf = {
-        "asset": {"version": "2.0", "generator": "LOFT_UI low-poly drone generator"},
+        "asset": {"version": "2.0", "generator": generator_name},
         "scene": 0,
         "scenes": [{"name": "Scene", "nodes": [0]}],
-        "nodes": [{"name": "Drone", "mesh": 0}],
-        "meshes": [{"name": "Drone", "primitives": mesh_primitives}],
-        "materials": materials,
+        "nodes": [{"name": node_name, "mesh": 0}],
+        "meshes": [{"name": node_name, "primitives": mesh_primitives}],
+        "materials": out_materials,
         "accessors": accessors,
         "bufferViews": buffer_views,
         "buffers": [{
@@ -321,28 +272,4 @@ def build_gltf(output_path: Path, prop_style: str = "blade") -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(gltf, indent=2))
-
-
-def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Generate a low-poly quadcopter drone glTF.")
-    p.add_argument("-o", "--output", default=Path("public/data/model/drone.gltf"), type=Path,
-                   help="Output .gltf path.")
-    p.add_argument("--prop-style", choices=("blade", "disc"), default="blade",
-                   help="Propeller appearance: 'blade' (static cuboid blades, default) "
-                        "or 'disc' (semi-transparent disc mimicking a spinning rotor).")
-    return p.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
-    build_gltf(args.output, prop_style=args.prop_style)
-    triangle_count = sum(
-        len(build_primitive(name, args.prop_style)[2]) // 3
-        for name, *_ in MATERIALS
-    )
-    print(f"wrote {args.output} ({triangle_count} triangles, prop_style={args.prop_style})")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return triangle_count

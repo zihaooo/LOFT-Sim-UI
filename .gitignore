@@ -47,8 +47,12 @@ coverage/
 public/data/**
 !public/data/**/
 !public/data/**/.gitkeep
-# The drone model is a UI asset (small, stable) and must ship in the build.
-!public/data/model/drone.gltf
+# The UAV models are UI assets (small, stable) and must ship in the build.
+!public/data/model/*.gltf
+
+# Python
+__pycache__/
+*.py[cod]
 
 # Performance profiling
 profile

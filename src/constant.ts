@@ -145,7 +145,7 @@ export const VERTIPORT_RENDER_ORDER = 1;
 export const AIRSPACE_RENDER_ORDER = 2;
 
 // UAV rendering
-export const DRONE_MODEL_CANDIDATES = ["/data/model/drone.gltf"] as const;
+export const DRONE_MODEL_CANDIDATES = ["/data/model/quadrotor.gltf"] as const;
 export const DRONE_MODEL_SPAN_METERS = 22;
 export const FALLBACK_UAV_RADIUS_METERS = 7;
 export const FALLBACK_UAV_HEIGHT_METERS = 22;
