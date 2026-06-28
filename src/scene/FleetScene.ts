@@ -10,6 +10,8 @@ import {
   CAMERA_MIN_Y,
   CAMERA_MODES,
   CAMERA_NEAR_METERS,
+  DEFAULT_VEHICLE_TYPE_CODE,
+  DRONE_MODEL_PATHS_BY_TYPE,
   FOLLOW_CAMERA_DISTANCE_METERS,
   FOLLOW_CAMERA_HEIGHT_METERS,
   FRAME_DELTA_MAX_SECONDS,
@@ -33,7 +35,9 @@ import { createUavMesh } from "../layer/drone";
 import { TelemetryClient } from "../telemetry/client";
 import { DemoFleetSource } from "../fleet/demoSource";
 import { TelemetrySource } from "../fleet/telemetrySource";
+import { UavInstanceWriter } from "../fleet/uavInstanceWriter";
 import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
+import type { UavModel } from "../geometry/drone";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
@@ -50,7 +54,8 @@ import {
 import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabelNode } from "./labels";
 import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
 
-export { loadDroneGeometry } from "../geometry/drone";
+export { loadUavModels, cloneUavModels } from "../geometry/drone";
+export type { UavModel } from "../geometry/drone";
 
 /** Shared empty map used for label projection before the first fleet frame is produced. */
 const EMPTY_UAV_STATE: Map<string, UavState> = new Map();
@@ -61,7 +66,7 @@ type FleetSceneOptions = {
   labelLayer: HTMLDivElement;
   stats: HTMLDivElement;
   sceneData: SceneData;
-  uavGeometry?: THREE.BufferGeometry | null;
+  uavModels?: Map<number, UavModel> | null;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
   activeDemoPreset?: DemoPreset | null;
@@ -90,7 +95,10 @@ export class FleetScene {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
   private readonly keys = new Set<string>();
-  private readonly uavMesh: THREE.InstancedMesh;
+  /** One InstancedMesh per vehicle type code (keys mirror DRONE_MODEL_PATHS_BY_TYPE). */
+  private readonly uavMeshes: Map<number, THREE.InstancedMesh>;
+  /** Writes drones into the per-type meshes each frame; shared by both fleet sources. */
+  private readonly uavWriter: UavInstanceWriter;
   private readonly corridorGroup: THREE.Group;
   private readonly envelopeGroup: THREE.Group;
   private readonly routeGroup: THREE.Group;
@@ -178,9 +186,8 @@ export class FleetScene {
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
-    this.uavMesh = createUavMesh(Math.max(this.demoSource.fleetSize, TELEMETRY_UAV_MESH_CAPACITY), options.uavGeometry ?? null);
-    this.uavMesh.count = 0;
-    this.uavMesh.frustumCulled = false; // All drones are in a single InstancedMesh frustumCulled is not necessary right now.
+    this.uavMeshes = this.createUavMeshes(options.uavModels ?? null);
+    this.uavWriter = new UavInstanceWriter(this.uavMeshes, DEFAULT_VEHICLE_TYPE_CODE);
     this.initializeStaticUavBoundingSphere();
     this.controlPane = this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
@@ -269,10 +276,37 @@ export class FleetScene {
       this.envelopeGroup,
       this.routeGroup,
       this.buildingGroup,
-      this.uavMesh,
     );
+    this.uavMeshes.forEach((mesh) => this.scene.add(mesh));
 
     this.layerAirspaceAboveVertiports();
+  }
+
+  /** Builds one InstancedMesh per vehicle type, using each type's loaded model (or a cone fallback). */
+  private createUavMeshes(models: Map<number, UavModel> | null): Map<number, THREE.InstancedMesh> {
+    const meshes = new Map<number, THREE.InstancedMesh>();
+    for (const code of Object.keys(DRONE_MODEL_PATHS_BY_TYPE).map(Number)) {
+      // The default type also carries the demo fleet, so size it for whichever roster is larger.
+      const capacity = code === DEFAULT_VEHICLE_TYPE_CODE
+        ? Math.max(this.demoSource.fleetSize, TELEMETRY_UAV_MESH_CAPACITY)
+        : TELEMETRY_UAV_MESH_CAPACITY;
+      const model = models?.get(code) ?? null;
+      const mesh = createUavMesh(capacity, model?.geometry ?? null, model?.materials ?? null);
+      mesh.count = 0;
+      mesh.frustumCulled = false; // Drones span the scene; a static bounding sphere drives raycasting instead.
+      meshes.set(code, mesh);
+    }
+    return meshes;
+  }
+
+  /** Resolves a raycast-hit InstancedMesh back to its vehicle type code, defaulting if it isn't a UAV mesh. */
+  private typeCodeForMesh(object: THREE.Object3D): number {
+    for (const [code, mesh] of this.uavMeshes) {
+      if (mesh === object) {
+        return code;
+      }
+    }
+    return DEFAULT_VEHICLE_TYPE_CODE;
   }
 
   /**
@@ -283,7 +317,9 @@ export class FleetScene {
    * this is applied per object. Map geometry stays at the default 0, leaving it below the markers.
    */
   private layerAirspaceAboveVertiports(): void {
-    this.uavMesh.renderOrder = AIRSPACE_RENDER_ORDER;
+    this.uavMeshes.forEach((mesh) => {
+      mesh.renderOrder = AIRSPACE_RENDER_ORDER;
+    });
     [this.corridorGroup, this.envelopeGroup, this.routeGroup].forEach((group) => {
       group.traverse((object) => {
         object.renderOrder = AIRSPACE_RENDER_ORDER;
@@ -325,7 +361,9 @@ export class FleetScene {
     this.telemetrySource?.reset();
     this.activeSource = this.demoSource;
     this.lastFrame = null;
-    this.uavMesh.count = 0;
+    this.uavMeshes.forEach((mesh) => {
+      mesh.count = 0;
+    });
     this.params.selectedUavId = "";
     this.clearUavLabels();
     this.params.cameraMode = CAMERA_MODES.FREE;
@@ -373,7 +411,7 @@ export class FleetScene {
   /** Runs telemetry when it has a live frame, otherwise the demo fleet, and adopts the frame's selection state. */
   private updateFleet(): void {
     const ctx: FleetFrameContext = {
-      mesh: this.uavMesh,
+      writer: this.uavWriter,
       elapsedSeconds: this.elapsedSeconds,
       selectedUavId: this.params.selectedUavId,
     };
@@ -530,13 +568,15 @@ export class FleetScene {
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const intersections = this.raycaster.intersectObject(this.uavMesh);
-    const instanceId = intersections[0]?.instanceId;
+    const intersections = this.raycaster.intersectObjects(Array.from(this.uavMeshes.values()));
+    const hit = intersections[0];
+    const instanceId = hit?.instanceId;
     if (instanceId === undefined) {
       return;
     }
 
-    const nextSelectedUavId = this.activeSource.selectAt(instanceId, this.params.selectedUavId);
+    const typeCode = this.typeCodeForMesh(hit.object);
+    const nextSelectedUavId = this.activeSource.selectAt(typeCode, instanceId, this.params.selectedUavId);
     if (nextSelectedUavId !== null) {
       this.params.selectedUavId = nextSelectedUavId;
     }
@@ -614,14 +654,17 @@ export class FleetScene {
       });
     });
 
-    const boundingSphere = new THREE.Sphere();
-    uavMovementBounds.getBoundingSphere(boundingSphere);
+    const movementSphere = new THREE.Sphere();
+    uavMovementBounds.getBoundingSphere(movementSphere);
 
-    if (!this.uavMesh.geometry.boundingSphere) {
-      this.uavMesh.geometry.computeBoundingSphere();
-    }
-    boundingSphere.radius += this.uavMesh.geometry.boundingSphere?.radius ?? 0;
-    this.uavMesh.boundingSphere = boundingSphere;
+    this.uavMeshes.forEach((mesh) => {
+      if (!mesh.geometry.boundingSphere) {
+        mesh.geometry.computeBoundingSphere();
+      }
+      const sphere = movementSphere.clone();
+      sphere.radius += mesh.geometry.boundingSphere?.radius ?? 0;
+      mesh.boundingSphere = sphere;
+    });
   }
 
   /** Starts at the middle of the ground plane's south edge, looking at the ground center. */

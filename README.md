@@ -39,6 +39,12 @@ npm run mock:ws     # serve it at ws://127.0.0.1:8765/ws (--hz 30|60|120)
 
 To render against the real simulator instead, run `loft-sim run --visualization web`, which serves this UI and its telemetry from the same origin.
 
+### Render smoke-test (manual)
+
+`npm run verify:render` drives the real app in a system Chrome (headless, WebGL via SwiftShader) to confirm the per-type UAV models render and that selecting a drone turns it solid red. It starts its own mock WS + Vite, captures `mock/render-check/{fleet,selected}.png`, and exits non-zero on failure.
+
+It needs a system Chrome/Chromium (`puppeteer-core` downloads no browser); set `CHROME_PATH` to override auto-detection. If no Chrome is found it **skips** (exit 0). This is an opt-in local check — it is not part of `npm test` and not a CI gate (a CI runner without Chrome would skip; for a real gated check use Playwright with a managed browser).
+
 ## Releases & distribution
 
 This UI is shipped as a versioned, checksummed build artifact rather than committed into LOFT-Sim:

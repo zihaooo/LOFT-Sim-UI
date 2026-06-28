@@ -1,7 +1,8 @@
 import "./styles.css";
 import { createSceneData } from "./data/osm";
 import type { ConfigFileSelection, DemoPreset } from "./scene/control";
-import { FleetScene, loadDroneGeometry } from "./scene/FleetScene";
+import { FleetScene, loadUavModels, cloneUavModels } from "./scene/FleetScene";
+import type { UavModel } from "./geometry/drone";
 
 const root = document.querySelector<HTMLDivElement>("#root");
 
@@ -38,7 +39,7 @@ type SceneSourceTexts = {
 
 let currentSources: SceneSourceTexts | null = null;
 let activeScene: FleetScene | null = null;
-let uavGeometry: Awaited<ReturnType<typeof loadDroneGeometry>> = null;
+let uavModels: Map<number, UavModel> | null = null;
 let reloadInProgress = false;
 let activeDemoPreset: DemoPreset | null = null;
 
@@ -50,7 +51,7 @@ async function start(): Promise<void> {
 
   try {
     currentSources = await loadInitialSources();
-    uavGeometry = await loadDroneGeometry();
+    uavModels = await loadUavModels();
     activeScene = mountScene(createSceneData(
       currentSources.corridorOsm,
       currentSources.buildingOsm,
@@ -151,7 +152,7 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
     labelLayer,
     stats,
     sceneData,
-    uavGeometry: uavGeometry?.clone() ?? null,
+    uavModels: uavModels ? cloneUavModels(uavModels) : null,
     onReloadScene: handleReloadScene,
     onLoadDemoPreset: handleLoadDemoPreset,
     activeDemoPreset,

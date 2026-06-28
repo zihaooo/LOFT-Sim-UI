@@ -197,15 +197,19 @@ def main() -> int:
         print("no object_type=route relations found", file=sys.stderr)
         return 2
 
+    # Cycle through the three vehicle types so mock telemetry exercises per-type model rendering.
+    vehicle_types = [("quadrotor", 1), ("fixed_wing", 2), ("hybrid", 3)]
+
     random.seed(args.seed)
     drones = []
     for index in range(args.drones):
         route = routes[index % len(routes)]
+        vehicle_type, vehicle_type_code = vehicle_types[index % len(vehicle_types)]
         drones.append({
             "handle": index + 1,
             "id": f"D{index + 1}",
-            "vehicle_type": "quadrotor",
-            "vehicle_type_code": 1,
+            "vehicle_type": vehicle_type,
+            "vehicle_type_code": vehicle_type_code,
             "route_handle": route["handle"],
             "offset_m": (route["length_m"] * ((index * 37) % max(args.drones, 1))) / max(args.drones, 1),
             "speed_mps": args.speed + (index % 7) * 0.8,

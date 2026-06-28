@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { AirRoute, FlowDefinition, UavSchedule, UavState } from "../types";
-import { SELECTED_UAV_COLOR } from "../constant";
+import { DEFAULT_VEHICLE_TYPE_CODE } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { setUavYawQuaternion } from "../geometry/drone";
 import { createFleet, getUavRoutePosition } from "./demoFleet";
@@ -17,13 +17,12 @@ export class DemoFleetSource implements FleetSource {
   /** Fleet indices ordered by departure time; consumed front-to-back as sim time advances. */
   private readonly pendingUavIndices: number[];
   private readonly activeUavIndices: number[] = [];
-  private readonly renderSlotToFleetIndex: number[] = [];
+  /** Per-vehicle-type slot -> fleet index (the demo only populates the default type), for resolving picks. */
+  private readonly slotToFleetIndexByType = new Map<number, number[]>();
   private readonly uavStateById = new Map<string, UavState>();
   private readonly matrix = new THREE.Matrix4();
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
-  private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly routeColor = new THREE.Color();
 
   private nextPendingUavIndex = 0;
   private selectedFleetIndex = -1;
@@ -44,7 +43,11 @@ export class DemoFleetSource implements FleetSource {
 
   /** Updates each active UAV's position/orientation and writes its instance matrix and tint color. */
   update(ctx: FleetFrameContext): FleetFrame {
-    const { mesh, elapsedSeconds, selectedUavId } = ctx;
+    const { writer, elapsedSeconds, selectedUavId } = ctx;
+    writer.begin();
+    for (const slots of this.slotToFleetIndexByType.values()) {
+      slots.length = 0;
+    }
     this.activateDepartedUavs(elapsedSeconds);
     this.uavStateById.clear();
     let activeCount = 0;
@@ -76,14 +79,14 @@ export class DemoFleetSource implements FleetSource {
         continue;
       }
 
-      const renderSlot = activeCount;
-      activeCount += 1;
-      this.renderSlotToFleetIndex[renderSlot] = index;
       this.uavStateById.set(uav.id, uavState);
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
-      mesh.setMatrixAt(renderSlot, this.matrix);
-      mesh.setColorAt(renderSlot, index === this.selectedFleetIndex ? this.selectedColor : this.routeColor.set(route.color));
+      const written = writer.write(DEFAULT_VEHICLE_TYPE_CODE, this.matrix, index === this.selectedFleetIndex);
+      if (written) {
+        activeCount += 1;
+        this.recordSlotFleetIndex(written.typeCode, written.slot, index);
+      }
 
       if (uav.id === selectedUavId) {
         selection = { position, tangent };
@@ -91,16 +94,7 @@ export class DemoFleetSource implements FleetSource {
       activeIndex += 1;
     }
 
-    this.renderSlotToFleetIndex.length = activeCount;
-    mesh.count = activeCount;
-    if (activeCount > 0) {
-      mesh.instanceMatrix.addUpdateRange(0, activeCount * 16);
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) {
-        mesh.instanceColor.addUpdateRange(0, activeCount * 3);
-        mesh.instanceColor.needsUpdate = true;
-      }
-    }
+    writer.commit();
 
     return {
       activeCount,
@@ -114,8 +108,8 @@ export class DemoFleetSource implements FleetSource {
     };
   }
 
-  selectAt(renderSlot: number, selectedUavId: string): string | null {
-    const fleetIndex = this.renderSlotToFleetIndex[renderSlot];
+  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null {
+    const fleetIndex = this.slotToFleetIndexByType.get(typeCode)?.[instanceId];
     if (fleetIndex === undefined || !this.fleet[fleetIndex]) {
       return null;
     }
@@ -133,9 +127,19 @@ export class DemoFleetSource implements FleetSource {
   reset(): void {
     this.nextPendingUavIndex = 0;
     this.activeUavIndices.length = 0;
-    this.renderSlotToFleetIndex.length = 0;
+    this.slotToFleetIndexByType.clear();
     this.uavStateById.clear();
     this.selectedFleetIndex = -1;
+  }
+
+  /** Records which fleet index occupies a per-type instance slot, for resolving raycast hits back to a UAV. */
+  private recordSlotFleetIndex(typeCode: number, slot: number, fleetIndex: number): void {
+    let slots = this.slotToFleetIndexByType.get(typeCode);
+    if (!slots) {
+      slots = [];
+      this.slotToFleetIndexByType.set(typeCode, slots);
+    }
+    slots[slot] = fleetIndex;
   }
 
   /** Promotes any pending UAVs whose departure time has been reached into the active set. */

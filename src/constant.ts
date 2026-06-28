@@ -145,7 +145,19 @@ export const VERTIPORT_RENDER_ORDER = 1;
 export const AIRSPACE_RENDER_ORDER = 2;
 
 // UAV rendering
-export const DRONE_MODEL_CANDIDATES = ["/data/model/quadrotor.gltf"] as const;
+// Vehicle type codes mirror the simulator wire protocol (LOFT-Sim loft/telemetry/protocol.py):
+// 1 = quadrotor, 2 = fixed-wing, 3 = hybrid (tilt-rotor). Each maps to its own gltf model.
+export const VEHICLE_TYPE_QUADROTOR = 1;
+export const VEHICLE_TYPE_FIXED_WING = 2;
+export const VEHICLE_TYPE_HYBRID = 3;
+/** Used when a drone's vehicleTypeCode is missing or unrecognized (and for the demo fleet). */
+export const DEFAULT_VEHICLE_TYPE_CODE = VEHICLE_TYPE_QUADROTOR;
+/** vehicleTypeCode -> model asset path. The keys define the full set of per-type instanced meshes. */
+export const DRONE_MODEL_PATHS_BY_TYPE: Readonly<Record<number, string>> = {
+  [VEHICLE_TYPE_QUADROTOR]: "/data/model/quadrotor.gltf",
+  [VEHICLE_TYPE_FIXED_WING]: "/data/model/fixedwing.gltf",
+  [VEHICLE_TYPE_HYBRID]: "/data/model/hybrid.gltf",
+};
 export const DRONE_MODEL_SPAN_METERS = 22;
 export const FALLBACK_UAV_RADIUS_METERS = 7;
 export const FALLBACK_UAV_HEIGHT_METERS = 22;

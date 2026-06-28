@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import type {AirCorridor, AirRoute, UavState} from "../types";
-import { ROUTE_COLORS, SELECTED_UAV_COLOR } from "../constant";
 import { setUavYawQuaternion } from "../geometry/drone";
 import type { TelemetryClient } from "../telemetry/client";
 import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
@@ -18,13 +17,12 @@ import {
  * client lifecycle and the mapping from binary drone handles to the scene's stable string ids.
  */
 export class TelemetrySource implements FleetSource {
-  private readonly renderSlotToHandle: number[] = [];
+  /** Per-vehicle-type slot -> drone handle, so a picked (type code, instanceId) resolves back to a drone. */
+  private readonly slotToHandleByType = new Map<number, number[]>();
   private readonly uavStateById = new Map<string, UavState>();
   private readonly matrix = new THREE.Matrix4();
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
-  private readonly selectedColor = new THREE.Color(SELECTED_UAV_COLOR);
-  private readonly routeColor = new THREE.Color();
   private readonly position = new THREE.Vector3();
   private readonly tangent = new THREE.Vector3(1, 0, 0);
   private readonly selectedPosition = new THREE.Vector3();
@@ -60,26 +58,21 @@ export class TelemetrySource implements FleetSource {
       return null;
     }
 
-    const { mesh } = ctx;
-    const capacity = mesh.instanceMatrix.count;
+    const { writer } = ctx;
+    writer.begin();
+    for (const slots of this.slotToHandleByType.values()) {
+      slots.length = 0;
+    }
     let selectedUavId = ctx.selectedUavId;
     let selectedRouteId: string | null = null;
     let selection: FleetSelection | null = null;
     this.uavStateById.clear();
-    this.renderSlotToHandle.length = 0;
     let activeCount = 0;
 
     for (const drone of snapshot.drones) {
-      if (activeCount >= capacity) {
-        break;
-      }
       if (drone.stateCode === 0) {
         continue;
       }
-
-      const renderSlot = activeCount;
-      activeCount += 1;
-      this.renderSlotToHandle[renderSlot] = drone.handle;
 
       this.position.set(drone.position.x, drone.position.y, drone.position.z);
       this.tangent.set(drone.velocity.x, drone.velocity.y, drone.velocity.z);
@@ -93,8 +86,12 @@ export class TelemetrySource implements FleetSource {
       const isSelected = drone.handle === this.selectedHandle || droneId === selectedUavId;
       setUavYawQuaternion(this.quaternion, this.tangent);
       this.matrix.compose(this.position, this.quaternion, this.scale);
-      mesh.setMatrixAt(renderSlot, this.matrix);
-      mesh.setColorAt(renderSlot, isSelected ? this.selectedColor : this.getRouteColor(drone));
+      const written = writer.write(drone.vehicleTypeCode, this.matrix, isSelected);
+      if (!written) {
+        continue;
+      }
+      activeCount += 1;
+      this.recordSlotHandle(written.typeCode, written.slot, drone.handle);
 
       if (isSelected) {
         selectedUavId = droneId;
@@ -113,16 +110,7 @@ export class TelemetrySource implements FleetSource {
       }
     }
 
-    this.renderSlotToHandle.length = activeCount;
-    mesh.count = activeCount;
-    if (activeCount > 0) {
-      mesh.instanceMatrix.addUpdateRange(0, activeCount * 16);
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) {
-        mesh.instanceColor.addUpdateRange(0, activeCount * 3);
-        mesh.instanceColor.needsUpdate = true;
-      }
-    }
+    writer.commit();
 
     return {
       activeCount,
@@ -136,8 +124,8 @@ export class TelemetrySource implements FleetSource {
     };
   }
 
-  selectAt(renderSlot: number, selectedUavId: string): string | null {
-    const handle = this.renderSlotToHandle[renderSlot];
+  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null {
+    const handle = this.slotToHandleByType.get(typeCode)?.[instanceId];
     if (handle === undefined) {
       return null;
     }
@@ -153,9 +141,19 @@ export class TelemetrySource implements FleetSource {
   }
 
   reset(): void {
-    this.renderSlotToHandle.length = 0;
+    this.slotToHandleByType.clear();
     this.uavStateById.clear();
     this.selectedHandle = -1;
+  }
+
+  /** Records which drone handle occupies a per-type instance slot, for resolving raycast hits back to a drone. */
+  private recordSlotHandle(typeCode: number, slot: number, handle: number): void {
+    let slots = this.slotToHandleByType.get(typeCode);
+    if (!slots) {
+      slots = [];
+      this.slotToHandleByType.set(typeCode, slots);
+    }
+    slots[slot] = handle;
   }
 
   /** Transport stats for the telemetry debug readout panel. */
@@ -183,12 +181,6 @@ export class TelemetrySource implements FleetSource {
 
   private getCorridorId(drone: TelemetryDroneState): string | undefined {
     return this.client.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
-  }
-
-  private getRouteColor(drone: TelemetryDroneState): THREE.Color {
-    const routeId = this.getRouteId(drone);
-    const route = routeId ? this.routeById.get(routeId) : undefined;
-    return this.routeColor.set(route?.color ?? ROUTE_COLORS[drone.routeHandle % ROUTE_COLORS.length]);
   }
 
   private describeSelection(snapshot: TelemetrySnapshot, selectedUavId: string): string {

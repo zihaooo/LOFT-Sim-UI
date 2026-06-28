@@ -1,9 +1,31 @@
 import type * as THREE from "three";
 import type { AirRoute, AirCorridor, UavState } from "../types";
 
-/** Inputs every fleet source needs to compute a frame and write instances into the shared mesh. */
+/**
+ * Writes UAV instances into per-vehicle-type InstancedMeshes for one frame. A source calls begin() once,
+ * then write() per visible drone, then commit(). The writer owns the per-mesh slot cursors so meshes a
+ * source doesn't populate this frame are cleared to zero (this is how switching sources drops stale
+ * instances). The per-instance color carries selection only: black = the model's own materials, the
+ * selection color = a solid highlight (see the material patch in layer/drone.ts).
+ *
+ * The concrete implementation is {@link UavInstanceWriter} in uavInstanceWriter.ts.
+ */
+export type UavFrameWriter = {
+  /** Resets every per-type cursor at the start of a frame. */
+  begin(): void;
+  /**
+   * Writes one instance into the mesh for `typeCode` (falling back to the default type when unknown),
+   * returning the resolved type and the instance slot within that mesh (for picking), or null when that
+   * mesh is at capacity.
+   */
+  write(typeCode: number, matrix: THREE.Matrix4, selected: boolean): { typeCode: number; slot: number } | null;
+  /** Publishes counts and flags GPU buffers for every mesh (including zeroing untouched ones). */
+  commit(): void;
+};
+
+/** Inputs every fleet source needs to compute a frame and write instances into the per-type meshes. */
 export type FleetFrameContext = {
-  mesh: THREE.InstancedMesh;
+  writer: UavFrameWriter;
   elapsedSeconds: number;
   selectedUavId: string;
 };
@@ -51,13 +73,14 @@ export type TelemetryDebugReadout = {
  * takes precedence whenever it has a live frame, otherwise the demo source renders the frontend fleet.
  */
 export interface FleetSource {
-  /** Writes instance matrices/colors into `ctx.mesh` and returns the frame, or null when it has nothing this frame. */
+  /** Writes this frame's instances via `ctx.writer` and returns the frame, or null when it has nothing this frame. */
   update(ctx: FleetFrameContext): FleetFrame | null;
   /**
-   * Toggles selection for a clicked render slot. Returns the new canonical selected id, `""` to clear the
-   * selection, or `null` when the slot maps to nothing (selection unchanged).
+   * Toggles selection for a clicked instance, identified by the hit mesh's vehicle type code and the
+   * instance slot within that mesh. Returns the new canonical selected id, `""` to clear the selection,
+   * or `null` when the slot maps to nothing (selection unchanged).
    */
-  selectAt(renderSlot: number, selectedUavId: string): string | null;
+  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null;
   /** Clears transient runtime + selection state without releasing externally owned resources. */
   reset(): void;
 }

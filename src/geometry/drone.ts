@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
-  DRONE_MODEL_CANDIDATES,
+  DRONE_MODEL_PATHS_BY_TYPE,
   DRONE_MODEL_SPAN_METERS,
   FALLBACK_UAV_HEIGHT_METERS,
   FALLBACK_UAV_RADIAL_SEGMENTS,
@@ -10,24 +10,53 @@ import {
   WORLD_UP,
 } from "../constant";
 
-/** Tries to load and merge a drone GLTF model into a single normalized geometry; returns null if unavailable. */
-export async function loadDroneGeometry(): Promise<THREE.BufferGeometry | null> {
-  const modelPath = await findExistingDroneModelPath();
-  if (!modelPath) {
-    return null;
-  }
+/** A loaded UAV model: one merged geometry (with per-material groups) plus the materials those groups index. */
+export type UavModel = {
+  geometry: THREE.BufferGeometry;
+  materials: THREE.Material[];
+};
 
-  try {
-    const loader = new GLTFLoader();
-    const gltf = await loader.loadAsync(modelPath);
-    return createDroneModelGeometry(gltf.scene);
-  } catch (error) {
-    console.warn(`Failed to load drone model from ${modelPath}; falling back to cone.`, error);
-    return null;
+/**
+ * Loads every per-type UAV model, keyed by vehicleTypeCode. Each model's gltf materials are preserved
+ * (geometry merged with groups) so the InstancedMesh can render the model's own colors. Types whose asset
+ * is missing or fails to load are simply omitted; the caller falls back to a cone for those.
+ */
+export async function loadUavModels(): Promise<Map<number, UavModel>> {
+  const loader = new GLTFLoader();
+  const entries = await Promise.all(
+    Object.entries(DRONE_MODEL_PATHS_BY_TYPE).map(async ([code, path]) => {
+      const model = await loadUavModel(loader, path);
+      return [Number(code), model] as const;
+    }),
+  );
+
+  const models = new Map<number, UavModel>();
+  for (const [code, model] of entries) {
+    if (model) {
+      models.set(code, model);
+    }
   }
+  return models;
 }
 
-/** Creates a forward-pointing cone used in place of the drone model when the GLTF asset can't be loaded. */
+/** Deep-copies a model so each FleetScene owns disposable geometry/materials (the scene disposes them on teardown). */
+export function cloneUavModel(model: UavModel): UavModel {
+  return {
+    geometry: model.geometry.clone(),
+    materials: model.materials.map((material) => material.clone()),
+  };
+}
+
+/** Clones every model in a per-type map (see cloneUavModel). */
+export function cloneUavModels(models: Map<number, UavModel>): Map<number, UavModel> {
+  const cloned = new Map<number, UavModel>();
+  for (const [code, model] of models) {
+    cloned.set(code, cloneUavModel(model));
+  }
+  return cloned;
+}
+
+/** Creates a forward-pointing cone used in place of a UAV model when its gltf asset can't be loaded. */
 export function createFallbackUavGeometry(): THREE.BufferGeometry {
   const geometry = new THREE.ConeGeometry(
     FALLBACK_UAV_RADIUS_METERS,
@@ -49,15 +78,19 @@ export function setUavYawQuaternion(quaternion: THREE.Quaternion, tangent: THREE
   quaternion.setFromAxisAngle(WORLD_UP, Math.atan2(tangent.x, tangent.z));
 }
 
-/** Returns the first drone-model candidate path that exists, or null when none can be fetched. */
-async function findExistingDroneModelPath(): Promise<string | null> {
-  for (const path of DRONE_MODEL_CANDIDATES) {
-    if (await assetExists(path)) {
-      return path;
-    }
+/** Loads one gltf and bakes it into a normalized model, returning null when the asset is unavailable. */
+async function loadUavModel(loader: GLTFLoader, modelPath: string): Promise<UavModel | null> {
+  if (!(await assetExists(modelPath))) {
+    return null;
   }
 
-  return null;
+  try {
+    const gltf = await loader.loadAsync(modelPath);
+    return buildUavModel(gltf.scene);
+  } catch (error) {
+    console.warn(`Failed to load UAV model from ${modelPath}; falling back to cone.`, error);
+    return null;
+  }
 }
 
 /** HEAD-checks an asset URL and rejects HTML responses (which usually indicate a dev-server fallback page). */
@@ -71,9 +104,14 @@ async function assetExists(path: string): Promise<boolean> {
   }
 }
 
-/** Walks the GLTF scene, baking world transforms into a single merged-and-normalized geometry. */
-function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | null {
+/**
+ * Walks the gltf scene, baking world transforms into one merged geometry while keeping each source mesh's
+ * material. Merging with groups means group i indexes materials[i], so the InstancedMesh renders the model's
+ * own colors. Returns null when the scene carries no geometry.
+ */
+function buildUavModel(root: THREE.Object3D): UavModel | null {
   const geometries: THREE.BufferGeometry[] = [];
+  const materials: THREE.Material[] = [];
   root.updateWorldMatrix(true, true);
 
   root.traverse((object) => {
@@ -84,13 +122,15 @@ function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | 
     const geometry = object.geometry.clone();
     geometry.applyMatrix4(object.matrixWorld);
     geometries.push(geometry);
+    const material = Array.isArray(object.material) ? object.material[0] : object.material;
+    materials.push(material.clone());
   });
 
   if (geometries.length === 0) {
     return null;
   }
 
-  const merged = mergeGeometries(geometries, false);
+  const merged = mergeGeometries(geometries, true);
   geometries.forEach((geometry) => geometry.dispose());
 
   if (!merged) {
@@ -98,7 +138,7 @@ function createDroneModelGeometry(root: THREE.Object3D): THREE.BufferGeometry | 
   }
 
   normalizeDroneGeometry(merged);
-  return merged;
+  return { geometry: merged, materials };
 }
 
 /** Type guard: true when an Object3D is a THREE.Mesh that actually carries geometry. */
