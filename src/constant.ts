@@ -89,6 +89,8 @@ export const BUILDING_ROUGHNESS = 0.72;
 export const BUILDING_METALNESS = 0.04;
 export const ROAD_MIN_SEGMENT_LENGTH_METERS = 0.01;
 export const ROAD_OPACITY = 0.9;
+/** Lifts road quads above the ground plane to resolve z-fighting. */
+export const ROAD_Y_OFFSET_METERS = 0.02;
 export const TREE_TRUNK_COLOR = "#6f563a";
 export const TREE_TRUNK_ROUGHNESS = 0.86;
 export const TREE_TRUNK_RADIUS_TOP = 0.55;
@@ -128,6 +130,8 @@ export const ENVELOPE_RADIUS_METERS = 35;
 // Vertiport ground markers (helipad-style camera-oriented decals)
 export const VERTIPORT_RADIUS_METERS = 35;
 export const VERTIPORT_CIRCLE_SEGMENTS = 48;
+/** Lifts vertiport markers above the ground plane (above the road) to resolve z-fighting. */
+export const VERTIPORT_Y_OFFSET_METERS = 0.04;
 export const VERTIPORT_FILL_COLOR = "#ffffff";
 export const VERTIPORT_OUTLINE_COLOR = "#1f6fff";
 /** Marking texture resolution (power-of-two for mipmapping). */

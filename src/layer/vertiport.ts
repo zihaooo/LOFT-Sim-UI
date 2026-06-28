@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { VertiportPoint } from "../types";
-import { VERTIPORT_RENDER_ORDER } from "../constant";
+import { VERTIPORT_RENDER_ORDER, VERTIPORT_Y_OFFSET_METERS } from "../constant";
 import { createVertiportGeometry, createVertiportTexture } from "../geometry/vertiport";
 
 /**
@@ -42,7 +42,11 @@ export function createVertiportGroup(vertiports: VertiportPoint[]): THREE.Group 
 
   vertiports.forEach((vertiport) => {
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(vertiport.position.x, vertiport.position.y, vertiport.position.z);
+    mesh.position.set(
+      vertiport.position.x,
+      vertiport.position.y + VERTIPORT_Y_OFFSET_METERS,
+      vertiport.position.z,
+    );
     mesh.renderOrder = VERTIPORT_RENDER_ORDER;
     group.add(mesh);
   });

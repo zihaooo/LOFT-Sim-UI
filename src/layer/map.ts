@@ -9,6 +9,7 @@ import {
   GROUND_SEGMENTS,
   ROAD_MIN_SEGMENT_LENGTH_METERS,
   ROAD_OPACITY,
+  ROAD_Y_OFFSET_METERS,
   TREE_CANOPY_COLOR,
   TREE_CANOPY_DETAIL,
   TREE_CANOPY_HUE_BASE,
@@ -119,7 +120,7 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
 
       const offsetX = (-dz / length) * halfWidth;
       const offsetZ = (dx / length) * halfWidth;
-      const y = Math.max(start.y, end.y);
+      const y = Math.max(start.y, end.y) + ROAD_Y_OFFSET_METERS;
       const quad = clipHorizontalPolygonToBounds(
         [
           { x: start.x + offsetX, y, z: start.z + offsetZ },
