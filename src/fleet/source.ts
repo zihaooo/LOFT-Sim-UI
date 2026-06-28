@@ -76,11 +76,11 @@ export interface FleetSource {
   /** Writes this frame's instances via `ctx.writer` and returns the frame, or null when it has nothing this frame. */
   update(ctx: FleetFrameContext): FleetFrame | null;
   /**
-   * Toggles selection for a clicked instance, identified by the hit mesh's vehicle type code and the
-   * instance slot within that mesh. Returns the new canonical selected id, `""` to clear the selection,
-   * or `null` when the slot maps to nothing (selection unchanged).
+   * Resolves a clicked instance, identified by the hit mesh's vehicle type code and the instance slot
+   * within that mesh, to its canonical UAV id, or `null` when the slot maps to nothing. Pure lookup with
+   * no side effects: FleetScene owns the toggle/clear policy and feeds the result back via `selectedUavId`.
    */
-  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null;
+  resolveId(typeCode: number, instanceId: number): string | null;
   /** Clears transient runtime + selection state without releasing externally owned resources. */
   reset(): void;
 }

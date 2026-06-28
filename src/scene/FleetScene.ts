@@ -557,7 +557,11 @@ export class FleetScene {
     }
   }
 
-  /** Left-click selects the UAV under the cursor via raycasting, delegating slot resolution to the active source. */
+  /**
+   * Left-click toggles selection of the UAV under the cursor: raycast to an instance slot, ask the active
+   * source for that slot's canonical id, then select it — or clear when it was already selected. This is
+   * the single owner of the toggle/clear policy; sources only resolve slots to ids.
+   */
   private handlePointerDown = (event: PointerEvent): void => {
     if (event.button !== 0) {
       return;
@@ -576,10 +580,11 @@ export class FleetScene {
     }
 
     const typeCode = this.typeCodeForMesh(hit.object);
-    const nextSelectedUavId = this.activeSource.selectAt(typeCode, instanceId, this.params.selectedUavId);
-    if (nextSelectedUavId !== null) {
-      this.params.selectedUavId = nextSelectedUavId;
+    const hitUavId = this.activeSource.resolveId(typeCode, instanceId);
+    if (hitUavId === null) {
+      return;
     }
+    this.params.selectedUavId = hitUavId === this.params.selectedUavId ? "" : hitUavId;
   };
 
   /** Suppresses the browser context menu so right-drag is free to rotate the orbit camera. */

@@ -25,7 +25,6 @@ export class DemoFleetSource implements FleetSource {
   private readonly scale = new THREE.Vector3(1, 1, 1);
 
   private nextPendingUavIndex = 0;
-  private selectedFleetIndex = -1;
 
   constructor(routes: AirRoute[], flows: FlowDefinition[], routeById: Map<string, AirRoute>) {
     this.routeById = routeById;
@@ -82,7 +81,7 @@ export class DemoFleetSource implements FleetSource {
       this.uavStateById.set(uav.id, uavState);
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
-      const written = writer.write(DEFAULT_VEHICLE_TYPE_CODE, this.matrix, index === this.selectedFleetIndex);
+      const written = writer.write(DEFAULT_VEHICLE_TYPE_CODE, this.matrix, uav.id === selectedUavId);
       if (written) {
         activeCount += 1;
         this.recordSlotFleetIndex(written.typeCode, written.slot, index);
@@ -108,20 +107,13 @@ export class DemoFleetSource implements FleetSource {
     };
   }
 
-  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null {
+  resolveId(typeCode: number, instanceId: number): string | null {
     const fleetIndex = this.slotToFleetIndexByType.get(typeCode)?.[instanceId];
     if (fleetIndex === undefined || !this.fleet[fleetIndex]) {
       return null;
     }
 
-    const uavId = this.fleet[fleetIndex].id;
-    if (fleetIndex === this.selectedFleetIndex || uavId === selectedUavId) {
-      this.selectedFleetIndex = -1;
-      return "";
-    }
-
-    this.selectedFleetIndex = fleetIndex;
-    return uavId;
+    return this.fleet[fleetIndex].id;
   }
 
   reset(): void {
@@ -129,7 +121,6 @@ export class DemoFleetSource implements FleetSource {
     this.activeUavIndices.length = 0;
     this.slotToFleetIndexByType.clear();
     this.uavStateById.clear();
-    this.selectedFleetIndex = -1;
   }
 
   /** Records which fleet index occupies a per-type instance slot, for resolving raycast hits back to a UAV. */

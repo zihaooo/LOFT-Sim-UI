@@ -63,7 +63,11 @@ export class TelemetrySource implements FleetSource {
     for (const slots of this.slotToHandleByType.values()) {
       slots.length = 0;
     }
-    let selectedUavId = ctx.selectedUavId;
+    // Re-anchor the selected handle from the canonical id every frame so selection changes (toggled and
+    // owned by FleetScene) take effect here, while a still-streaming prior handle survives a registry id
+    // remap. selectedUavId lingers unchanged when the selected drone is absent from this snapshot.
+    this.selectedHandle = this.resolveSelectedHandle(snapshot, ctx.selectedUavId);
+    let selectedUavId = this.selectedHandle === -1 ? ctx.selectedUavId : this.getDroneId(this.selectedHandle);
     let selectedRouteId: string | null = null;
     let selection: FleetSelection | null = null;
     this.uavStateById.clear();
@@ -82,8 +86,7 @@ export class TelemetrySource implements FleetSource {
         this.tangent.normalize();
       }
 
-      const droneId = this.getDroneId(drone.handle);
-      const isSelected = drone.handle === this.selectedHandle || droneId === selectedUavId;
+      const isSelected = drone.handle === this.selectedHandle;
       setUavYawQuaternion(this.quaternion, this.tangent);
       this.matrix.compose(this.position, this.quaternion, this.scale);
       const written = writer.write(drone.vehicleTypeCode, this.matrix, isSelected);
@@ -94,13 +97,12 @@ export class TelemetrySource implements FleetSource {
       this.recordSlotHandle(written.typeCode, written.slot, drone.handle);
 
       if (isSelected) {
-        selectedUavId = droneId;
         selectedRouteId = this.getRouteId(drone) ?? null;
         selection = {
           position: this.selectedPosition.copy(this.position),
           tangent: this.selectedTangent.copy(this.tangent),
         };
-        this.uavStateById.set(droneId, {
+        this.uavStateById.set(this.getDroneId(drone.handle), {
           position: drone.position,
           tangent: { x: this.tangent.x, y: this.tangent.y, z: this.tangent.z },
           distance: 0,
@@ -124,20 +126,40 @@ export class TelemetrySource implements FleetSource {
     };
   }
 
-  selectAt(typeCode: number, instanceId: number, selectedUavId: string): string | null {
+  resolveId(typeCode: number, instanceId: number): string | null {
     const handle = this.slotToHandleByType.get(typeCode)?.[instanceId];
     if (handle === undefined) {
       return null;
     }
 
-    const droneId = this.getDroneId(handle);
-    if (handle === this.selectedHandle || droneId === selectedUavId) {
-      this.selectedHandle = -1;
-      return "";
+    return this.getDroneId(handle);
+  }
+
+  /**
+   * Maps the canonical selected id back to a live drone handle for this snapshot. Prefers a current id
+   * match; failing that, keeps the previously anchored handle if it is still streaming, so selection
+   * survives a handle's id changing once the registry catches up. Returns -1 when nothing is selected
+   * or the selected drone has left this snapshot.
+   */
+  private resolveSelectedHandle(snapshot: TelemetrySnapshot, selectedUavId: string): number {
+    if (selectedUavId === "") {
+      return -1;
     }
 
-    this.selectedHandle = handle;
-    return droneId;
+    let priorHandleStillLive = false;
+    for (const drone of snapshot.drones) {
+      if (drone.stateCode === 0) {
+        continue;
+      }
+      if (this.getDroneId(drone.handle) === selectedUavId) {
+        return drone.handle;
+      }
+      if (drone.handle === this.selectedHandle) {
+        priorHandleStillLive = true;
+      }
+    }
+
+    return priorHandleStillLive ? this.selectedHandle : -1;
   }
 
   reset(): void {

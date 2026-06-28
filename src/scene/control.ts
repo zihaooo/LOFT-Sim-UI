@@ -105,33 +105,40 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   });
 
   // Corridors and Routes are mutually exclusive: enabling one disables the other (both may be off).
-  // The guard suppresses the re-entrant change event that pane.refresh() fires for the cleared toggle.
-  let syncingCorridorRoute = false;
+  // Envelopes follow whichever of the two the user toggles: turning Corridors or Routes on shows
+  // Envelopes, turning either off hides them. Toggling Envelopes directly leaves Corridors/Routes alone.
+  // The guard suppresses re-entrant change events that pane.refresh() fires for toggles we set here.
+  let syncingLayers = false;
   controlFolder.addBinding(state, "corridorsVisible", { label: "Corridors" }).on("change", () => {
-    if (syncingCorridorRoute) {
+    if (syncingLayers) {
       return;
     }
+    syncingLayers = true;
     if (state.corridorsVisible && state.routesVisible) {
-      syncingCorridorRoute = true;
       state.routesVisible = false;
-      pane.refresh();
-      syncingCorridorRoute = false;
     }
+    state.envelopesVisible = state.corridorsVisible;
+    pane.refresh();
+    syncingLayers = false;
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "routesVisible", { label: "Selected UVA's Route" }).on("change", () => {
-    if (syncingCorridorRoute) {
+    if (syncingLayers) {
       return;
     }
+    syncingLayers = true;
     if (state.routesVisible && state.corridorsVisible) {
-      syncingCorridorRoute = true;
       state.corridorsVisible = false;
-      pane.refresh();
-      syncingCorridorRoute = false;
     }
+    state.envelopesVisible = state.routesVisible;
+    pane.refresh();
+    syncingLayers = false;
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "envelopesVisible", { label: "Envelopes" }).on("change", () => {
+    if (syncingLayers) {
+      return;
+    }
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "buildingsVisible", { label: "Buildings" }).on("change", () => {
