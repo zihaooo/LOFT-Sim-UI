@@ -34,7 +34,9 @@ ARM_ROTATIONS_DEG = (45.0, 135.0, 225.0, 315.0)
 
 CANONICAL_ARM:   Box = ((-0.025, -0.015, -0.50), (0.025, 0.015, -0.13))
 CANONICAL_MOTOR: Box = ((-0.04,  -0.025, -0.54), (0.04,  0.045, -0.46))
-CANONICAL_PROP:  Box = ((-0.16,   0.045, -0.508), (0.16,  0.055, -0.492))
+# Prop sits 0.005 above the motor top (y=0.045) so it clears it; a coplanar bottom would
+# z-fight with the motor's top face (worst with the translucent disc, which covers it fully).
+CANONICAL_PROP:  Box = ((-0.16,   0.050, -0.508), (0.16,  0.060, -0.492))
 
 DRONE_PARTS: dict = {
     "body": [
@@ -82,7 +84,8 @@ MATERIALS = [
 DISC_RADIUS = 0.16
 DISC_THICKNESS = 0.010
 DISC_SEGMENTS = 16
-CANONICAL_DISC_CENTER = (0.0, 0.050, -0.50)
+# Centered in the raised prop band [0.050, 0.060] so the disc's bottom cap clears the motor top.
+CANONICAL_DISC_CENTER = (0.0, 0.055, -0.50)
 DISC_BASE_COLOR = [0.78, 0.80, 0.84, 0.45]
 
 
