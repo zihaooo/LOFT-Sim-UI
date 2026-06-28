@@ -28,10 +28,11 @@ export function createVertiportGroup(vertiports: VertiportPoint[]): THREE.Group 
     //
     // polygonOffset: the disc and the road are coplanar (both y=0) and in different passes (opaque vs the
     // road's transparent), so renderOrder can't order them — only this depth bias keeps the road off the
-    // disc. The bias unit is implementation-defined: the old 1-unit gap held on native GL (Linux) but
-    // collapsed on ANGLE/Metal (macOS Chrome), leaking the road through. The road clears the ground by
-    // 2 units (0 vs -2) reliably on both, so the disc takes the same margin over the road (-4 vs -2) —
-    // microscopic in NDC, nowhere near enough to stop an airborne drone (far nearer) from occluding it.
+    // disc. The bias unit is implementation-defined, so a sub-2-unit gap is unreliable: it can hold on
+    // native GL (Linux) yet collapse on ANGLE/Metal (macOS Chrome) and leak the road through. The road
+    // clears the ground by 2 units (0 vs -2) reliably on both, so the disc takes the same margin over the
+    // road (-4 vs -2) — microscopic in NDC, nowhere near enough to stop an airborne drone (far nearer)
+    // from occluding it.
     side: THREE.DoubleSide,
     depthFunc: THREE.AlwaysDepth,
     depthWrite: true,

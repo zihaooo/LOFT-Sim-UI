@@ -21,8 +21,8 @@ import { toVector3 } from "./coordinates";
 //
 // A component with no junctions needs no CSG at all — its miter tubes already read as one solid and are
 // merged directly. A component with junctions is CSG-unioned (chain tubes + junction spheres) into one
-// watertight blob. Either way the old approach's per-edge cylinders and per-node spheres are gone, cutting
-// brush count by ~10x on the sample data. Vertiport nodes never get a sphere and always end a chain, so the
+// watertight blob. Stitching edges into maximal chains keeps the brush count low — one brush per chain
+// rather than one per edge. Vertiport nodes never get a sphere and always end a chain, so the
 // chain's flat end cap becomes a clean terminal. A chain end resting on the ground is extended straight down
 // into a buried stub (groundTerminalPoints), so the tube bends to vertical and plunges into the ground with
 // its flat cap hidden below the surface, instead of an open disk straddling y=0. Everything here runs once

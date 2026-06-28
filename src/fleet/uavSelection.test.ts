@@ -5,10 +5,11 @@ import { UavInstanceWriter } from "./uavInstanceWriter";
 import { SELECTED_UAV_COLOR } from "../constant";
 
 /**
- * Guards the UAV selection highlight. The original bug: the selection material patch guarded the per-instance
- * color override with `#ifdef USE_INSTANCING_COLOR`, but three.js only emits that macro into the vertex
- * prefix and surfaces instanceColor to the fragment via `USE_COLOR` — so the override compiled out and the
- * selected drone never turned red. These tests lock the data path and the macro the patch must use.
+ * Guards the UAV selection highlight. The selection material patch must guard its per-instance color
+ * override with `USE_COLOR`, not `USE_INSTANCING_COLOR`: three.js emits the latter only into the vertex
+ * prefix and surfaces instanceColor to the fragment via `USE_COLOR`, so guarding on `USE_INSTANCING_COLOR`
+ * compiles the override out and leaves the selected drone unpainted. These tests lock the data path and
+ * the macro the patch must use.
  */
 describe("UAV selection highlight", () => {
   it("writes the selection color to the selected instance and black to the rest", () => {
@@ -44,7 +45,7 @@ describe("UAV selection highlight", () => {
     expect(shader.fragmentShader).not.toContain("#include <color_fragment>");
     expect(shader.fragmentShader).toContain("diffuseColor.rgb = vColor");
     expect(shader.fragmentShader).toContain("#ifdef USE_COLOR");
-    // The original bug guarded on USE_INSTANCING_COLOR, which the fragment never receives.
+    // The fragment never receives USE_INSTANCING_COLOR, so the patch must not guard on it.
     expect(shader.fragmentShader).not.toContain("USE_INSTANCING_COLOR");
   });
 });
