@@ -107,7 +107,7 @@ export type UavState = {
 
 export type SceneData = {
   origin: ProjectionOrigin;
-  mapBounds: SceneBounds;
+  sceneBounds: SceneBounds;
   corridors: AirCorridor[];
   routes: AirRoute[];
   buildings: BuildingFootprint[];

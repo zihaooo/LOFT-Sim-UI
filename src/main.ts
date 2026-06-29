@@ -181,18 +181,18 @@ async function loadSourcesFromApi(): Promise<SceneSourceTexts> {
   }
 
   const configs = (await response.json()) as { corridorOsm?: string; buildingOsm?: string };
-  if (!configs.corridorOsm || !configs.buildingOsm) {
-    throw new Error("/configs response is missing corridorOsm or buildingOsm.");
+  if (!configs.corridorOsm) {
+    throw new Error("/configs response is missing corridorOsm.");
   }
 
-  return { corridorOsm: configs.corridorOsm, buildingOsm: configs.buildingOsm, flowJson: "" };
+  return { corridorOsm: configs.corridorOsm, buildingOsm: configs.buildingOsm ?? "", flowJson: "" };
 }
 
 /** Reads the bundled startup files into the same shape used for later reloads. */
 async function loadDefaultSources(): Promise<SceneSourceTexts> {
   const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
     loadText("/data/network/airspace_network.osm"),
-    loadText("/data/network/map.osm"),
+    loadOptionalText("/data/network/map.osm"),
     loadText("/data/demand/flow.json"),
   ]);
 
@@ -204,7 +204,7 @@ async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTe
   if (preset === "stressTest") {
     const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
       loadText("/data/network/stress_air_corridor.osm"),
-      loadText("/data/network/map.osm"),
+      loadOptionalText("/data/network/map.osm"),
       loadText("/data/demand/stress_flow.json"),
     ]);
 
@@ -212,7 +212,7 @@ async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTe
   } else if (preset === "twoCorridors") {
       const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
           loadText("/data/network/two_air_corridor.osm"),
-          loadText("/data/network/map.osm"),
+          loadOptionalText("/data/network/map.osm"),
           loadText("/data/demand/two_flow.json"),
       ]);
 
@@ -232,6 +232,12 @@ async function mergeUploadedSources(
     buildingOsm: files.mapFile ? await files.mapFile.text() : sources.buildingOsm,
     flowJson: files.demandFile ? await files.demandFile.text() : sources.flowJson,
   };
+}
+
+/** Fetches an optional text asset, returning an empty string when it is absent (the map is optional). */
+async function loadOptionalText(path: string): Promise<string> {
+  const response = await fetch(path);
+  return response.ok ? response.text() : "";
 }
 
 /** Fetches a text asset and throws when the response is not OK so caller errors are explicit. */

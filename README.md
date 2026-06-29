@@ -77,8 +77,8 @@ src/
 
 Files under `public/data/` are served by Vite at `/data/...` and copied into `dist/data/` during production builds. The default scene loads:
 
-- `data/network/airspace_network.osm` — default air-corridor network
-- `data/network/map.osm` — buildings, roads, trees
+- `data/network/airspace_network.osm` — default air-corridor network (also defines the scene bounds, ground size, and initial camera)
+- `data/network/map.osm` — buildings, roads, trees (optional; the scene renders from the airspace network alone when it is absent)
 - `data/demand/flow.json` — default flow demand (standalone mode only)
 - `data/model/quadrotor.gltf` — quadrotor UAV model (the one currently rendered for all UAVs)
 - `data/model/fixedwing.gltf` — fixed-wing cargo UAV model (asset for future per-type rendering)
@@ -102,4 +102,4 @@ Camera and selection:
 
 ## Coordinate system
 
-City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
+City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. The scene bounds and initial camera are derived from the airspace network — its node extent padded by 500 m on each side — and any base map is clipped to those bounds. The ground plane extends a further 250 m so the clipped map sits inside a margin of bare ground. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.

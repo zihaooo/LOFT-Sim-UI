@@ -16,6 +16,7 @@ import {
   FOLLOW_CAMERA_HEIGHT_METERS,
   FRAME_DELTA_MAX_SECONDS,
   FREE_CAMERA_PAN_METERS_PER_SECOND,
+  GROUND_PADDING_METERS,
   INITIAL_CAMERA_HEIGHT_METERS,
   INITIAL_CAMERA_X_OFFSET_METERS,
   MAX_DEVICE_PIXEL_RATIO,
@@ -31,6 +32,7 @@ import {
   WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
+import { padSceneBounds } from "../geometry/map";
 import { createUavMesh } from "../layer/drone";
 import { TelemetryClient } from "../telemetry/client";
 import { DemoFleetSource } from "../fleet/demoSource";
@@ -178,9 +180,9 @@ export class FleetScene {
     this.controls.screenSpacePanning = false;
     this.controls.mouseButtons = ORBIT_MOUSE_BUTTONS;
 
-    this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.mapBounds);
-    this.treeGroup = createTreeGroup(this.sceneData.trees);
-    this.buildingGroup = createBuildingGroup(this.sceneData.buildings);
+    this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.sceneBounds);
+    this.treeGroup = createTreeGroup(this.sceneData.trees, this.sceneData.sceneBounds);
+    this.buildingGroup = createBuildingGroup(this.sceneData.buildings, this.sceneData.sceneBounds);
     this.vertiportGroup = createVertiportGroup(this.sceneData.vertiports);
     this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
@@ -265,10 +267,12 @@ export class FleetScene {
 
     this.setInitialCameraFrame();
 
+    // The ground plane extends past the scene bounds so the clipped map is not flush with its edge.
+    const groundBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
     this.scene.add(
       createLightingGroup(),
       createSkyDome(),
-      createGroundGroup(this.sceneData.mapBounds),
+      createGroundGroup(groundBounds),
       this.roadGroup,
       this.treeGroup,
       this.vertiportGroup,
@@ -332,6 +336,11 @@ export class FleetScene {
     return createSimulationControls({
       container: panel,
       state: this.params,
+      availableLayers: {
+        buildings: this.buildingGroup.children.length > 0,
+        roads: this.roadGroup.children.length > 0,
+        trees: this.treeGroup.children.length > 0,
+      },
       formatSpeed: (speedLevelIndex) => `${this.getSimulationSpeed(speedLevelIndex)}x`,
       normalizeSpeedLevelIndex: (speedLevelIndex) => this.toSpeedLevelIndex(speedLevelIndex),
       onRunningChange: (running) => this.telemetrySource?.setRunning(running),
@@ -647,12 +656,13 @@ export class FleetScene {
 
   /** Covers every possible UAV position so InstancedMesh raycasting does not depend on stale moving-instance bounds. */
   private initializeStaticUavBoundingSphere(): void {
-    const bounds = this.sceneData.mapBounds;
+    const bounds = this.sceneData.sceneBounds;
     const uavMovementBounds = new THREE.Box3(
       toVector3(bounds.min),
       toVector3(bounds.max),
     );
 
+    // sceneBounds is flat at y=0; expand by corridor points to give the sphere its vertical (altitude) extent.
     this.sceneData.corridors.forEach((corridor) => {
       corridor.points.forEach((point) => {
         uavMovementBounds.expandByPoint(toVector3(point));
@@ -674,7 +684,7 @@ export class FleetScene {
 
   /** Starts at the middle of the ground plane's south edge, looking at the ground center. */
   private setInitialCameraFrame(): void {
-    const bounds = this.sceneData.mapBounds;
+    const bounds = this.sceneData.sceneBounds;
     const centerX = (bounds.min.x + bounds.max.x) / 2;
     const centerZ = (bounds.min.z + bounds.max.z) / 2;
 

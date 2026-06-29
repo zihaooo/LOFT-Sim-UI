@@ -69,6 +69,23 @@ export function clipHorizontalPolygonToBounds(polygon: ScenePoint[], bounds: Sce
   );
 }
 
+/** Tests whether a point lies inside the scene bounds in the x/z plane. */
+export function isWithinHorizontalBounds(point: ScenePoint, bounds: SceneBounds): boolean {
+  return (
+    point.x >= bounds.min.x &&
+    point.x <= bounds.max.x &&
+    point.z >= bounds.min.z &&
+    point.z <= bounds.max.z
+  );
+}
+
+/** Expands scene bounds outward by a uniform margin in the x/z plane. */
+export function padSceneBounds(bounds: SceneBounds, margin: number): SceneBounds {
+  const min = { x: bounds.min.x - margin, y: 0, z: bounds.min.z - margin };
+  const max = { x: bounds.max.x + margin, y: 0, z: bounds.max.z + margin };
+  return { min, max, width: max.x - min.x, depth: max.z - min.z };
+}
+
 /** Memoizes THREE.Color instances by hex string to avoid per-segment allocations during road meshing. */
 export function getCachedColor(cache: Map<string, THREE.Color>, value: string): THREE.Color {
   const cached = cache.get(value);

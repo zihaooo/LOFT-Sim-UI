@@ -36,6 +36,7 @@ import {
   createBoundedGrid,
   createBuildingGeometry,
   getCachedColor,
+  isWithinHorizontalBounds,
 } from "../geometry/map";
 
 /** Builds the ground plane sized to scene bounds plus an overlaid reference grid. */
@@ -58,13 +59,18 @@ export function createGroundGroup(bounds: SceneBounds): THREE.Group {
   return group;
 }
 
-/** Merges all building footprints into one shadowed mesh for cheap rendering. */
-export function createBuildingGroup(buildings: BuildingFootprint[]): THREE.Group {
+/** Merges all building footprints (clipped to the scene bounds) into one shadowed mesh for cheap rendering. */
+export function createBuildingGroup(buildings: BuildingFootprint[], bounds: SceneBounds): THREE.Group {
   const group = new THREE.Group();
   const geometries: THREE.BufferGeometry[] = [];
 
   buildings.forEach((building) => {
-    const geometry = createBuildingGeometry(building);
+    const clipped = clipHorizontalPolygonToBounds(building.points, bounds);
+    if (clipped.length < 3) {
+      return;
+    }
+
+    const geometry = createBuildingGeometry({ ...building, points: clipped });
     if (geometry) {
       geometries.push(geometry);
     }
@@ -177,10 +183,11 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
   return group;
 }
 
-/** Creates instanced trunk and canopy meshes per tree, sized from per-tree radius/height with hue variation. */
-export function createTreeGroup(trees: TreePoint[]): THREE.Group {
+/** Creates instanced trunk and canopy meshes per tree (clipped to the scene bounds), sized from per-tree radius/height with hue variation. */
+export function createTreeGroup(trees: TreePoint[], bounds: SceneBounds): THREE.Group {
   const group = new THREE.Group();
-  if (trees.length === 0) {
+  const visibleTrees = trees.filter((tree) => isWithinHorizontalBounds(tree.position, bounds));
+  if (visibleTrees.length === 0) {
     return group;
   }
 
@@ -195,7 +202,7 @@ export function createTreeGroup(trees: TreePoint[]): THREE.Group {
     roughness: TREE_TRUNK_ROUGHNESS,
     metalness: 0,
   });
-  const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, trees.length);
+  const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, visibleTrees.length);
 
   const canopyGeometry = new THREE.IcosahedronGeometry(1, TREE_CANOPY_DETAIL);
   const canopyMaterial = new THREE.MeshStandardMaterial({
@@ -203,14 +210,14 @@ export function createTreeGroup(trees: TreePoint[]): THREE.Group {
     roughness: TREE_CANOPY_ROUGHNESS,
     metalness: 0,
   });
-  const canopyMesh = new THREE.InstancedMesh(canopyGeometry, canopyMaterial, trees.length);
+  const canopyMesh = new THREE.InstancedMesh(canopyGeometry, canopyMaterial, visibleTrees.length);
   const matrix = new THREE.Matrix4();
   const identity = new THREE.Quaternion();
   const position = new THREE.Vector3();
   const scale = new THREE.Vector3();
   const color = new THREE.Color();
 
-  trees.forEach((tree, index) => {
+  visibleTrees.forEach((tree, index) => {
     const baseY = tree.position.y;
     const trunkHeight = Math.max(tree.height * TREE_TRUNK_HEIGHT_RATIO, TREE_TRUNK_MIN_HEIGHT_METERS);
     const trunkRadius = Math.max(tree.radius * TREE_TRUNK_RADIUS_RATIO, TREE_TRUNK_MIN_RADIUS_METERS);

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { projectGeoPoint } from "./common";
+import { parseOsm, projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
-import { parseBuildings, parseMapBounds, parseRoads, parseTrees } from "./map";
+import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
 import { parseFlowDefinitions } from "./flows";
 import { parseRoutes } from "./routes";
@@ -93,15 +93,20 @@ describe("OSM and flow parsing", () => {
     expect(trees.every((tree) => tree.height > 0 && tree.radius > 0)).toBe(true);
   });
 
-  it("computes the scene-space map bounds from the provided map nodes", () => {
+  it("computes padded scene bounds from the airspace-network nodes", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
-    const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
-    const bounds = parseMapBounds(mapOsm, origin);
+    const nodes = Array.from(parseOsm(corridorOsm).nodes.values());
+    const projected = nodes.map((node) => projectGeoPoint(node, origin));
+    const rawMinX = Math.min(...projected.map((point) => point.x));
+    const rawMaxX = Math.max(...projected.map((point) => point.x));
 
-    expect(bounds.width).toBeGreaterThan(1_000);
-    expect(bounds.depth).toBeGreaterThan(1_000);
-    expect(bounds.min.x).toBeLessThan(bounds.max.x);
+    const bounds = computeSceneBounds(nodes, origin);
+
+    // 500m padding is applied on every side of the raw node extent.
+    expect(bounds.min.x).toBeCloseTo(rawMinX - 500);
+    expect(bounds.max.x).toBeCloseTo(rawMaxX + 500);
+    expect(bounds.width).toBeCloseTo(rawMaxX - rawMinX + 1_000);
     expect(bounds.min.z).toBeLessThan(bounds.max.z);
   });
 
@@ -184,13 +189,29 @@ describe("OSM and flow parsing", () => {
 
     expect(sceneData.corridors).toHaveLength(2);
     expect(sceneData.flows).toHaveLength(2);
-    expect(sceneData.mapBounds.width).toBeGreaterThan(1_000);
-    expect(sceneData.mapBounds.depth).toBeGreaterThan(1_000);
+    expect(sceneData.sceneBounds.width).toBeGreaterThan(1_000);
+    expect(sceneData.sceneBounds.depth).toBeGreaterThan(1_000);
     expect(sceneData.buildings.length).toBeGreaterThan(100);
     expect(sceneData.roads.length).toBeGreaterThan(100);
     expect(sceneData.trees.length).toBeGreaterThan(10);
     expect(Number.isFinite(sceneData.origin.lat)).toBe(true);
     expect(Number.isFinite(sceneData.origin.lon)).toBe(true);
+  });
+
+  it("builds scene data from the airspace network alone when no map is provided", () => {
+    const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
+    const sceneData = createSceneData(corridorOsm, "");
+
+    expect(sceneData.corridors).toHaveLength(2);
+    expect(sceneData.buildings).toEqual([]);
+    expect(sceneData.roads).toEqual([]);
+    expect(sceneData.trees).toEqual([]);
+    expect(sceneData.sceneBounds.width).toBeGreaterThan(1_000);
+    expect(sceneData.sceneBounds.depth).toBeGreaterThan(1_000);
+  });
+
+  it("throws when the airspace network has no nodes", () => {
+    expect(() => createSceneData(`<osm version="0.6"></osm>`, "")).toThrow();
   });
 });
 

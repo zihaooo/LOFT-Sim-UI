@@ -6,7 +6,8 @@ import type {
   ScenePoint,
   TreePoint,
 } from "../types";
-import { ROAD_STYLES } from "../constant";
+import { BBOX_PADDING_METERS, ROAD_STYLES } from "../constant";
+import { padSceneBounds } from "../geometry/map";
 import { parseOsm, projectGeoPoint, type OsmNode } from "./common";
 
 /** Extracts building (or building:part) ways as planar footprints, dropping any with fewer than 3 vertices. */
@@ -81,10 +82,10 @@ export function parseTrees(osmText: string, origin: ProjectionOrigin): TreePoint
     });
 }
 
-/** Computes the axis-aligned scene bounds covering all OSM nodes in the file under the given projection origin. */
-export function parseMapBounds(osmText: string, origin: ProjectionOrigin): SceneBounds {
-  const { nodes } = parseOsm(osmText);
-  return createSceneBounds(Array.from(nodes.values()).map((node) => projectGeoPoint(node, origin)));
+/** Computes the scene bounds covering the given nodes (projected under the origin), padded outward on every side. */
+export function computeSceneBounds(nodes: OsmNode[], origin: ProjectionOrigin): SceneBounds {
+  const bounds = createSceneBounds(nodes.map((node) => projectGeoPoint(node, origin)));
+  return padSceneBounds(bounds, BBOX_PADDING_METERS);
 }
 
 /** Builds a SceneBounds from projected x/z extrema, with a unit-square fallback when the input is empty. */

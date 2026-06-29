@@ -45,6 +45,9 @@ export const FOLLOW_CAMERA_DISTANCE_METERS = 95;
 export const FOLLOW_CAMERA_HEIGHT_METERS = 58;
 export const INITIAL_CAMERA_HEIGHT_METERS = 3_000;
 export const INITIAL_CAMERA_X_OFFSET_METERS = -1;
+// Scene bounds padding (the ground plane is padded an extra GROUND_PADDING_METERS beyond the scene bounds)
+export const BBOX_PADDING_METERS = 500;
+export const GROUND_PADDING_METERS = 150;
 
 // Renderer and orbit controls
 export const MAX_DEVICE_PIXEL_RATIO = 2;

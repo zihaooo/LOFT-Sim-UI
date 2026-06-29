@@ -32,6 +32,13 @@ export type ConfigFileSelection = {
   demandFile: File | null;
 };
 
+/** Which map-derived layers have rendered geometry; empty ones get their toggle disabled. */
+type LayerAvailability = {
+  buildings: boolean;
+  roads: boolean;
+  trees: boolean;
+};
+
 type ConfigFileInputValue = "" | File | null;
 
 type ConfigControlState = {
@@ -43,6 +50,7 @@ type ConfigControlState = {
 type SimulationControlsOptions = {
   container: HTMLElement;
   state: SimulationControlState;
+  availableLayers: LayerAvailability;
   formatSpeed: (speedLevelIndex: number) => string;
   normalizeSpeedLevelIndex: (speedLevelIndex: number) => number;
   onRunningChange: (running: boolean) => void;
@@ -141,13 +149,22 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     }
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "buildingsVisible", { label: "Buildings" }).on("change", () => {
+  controlFolder.addBinding(state, "buildingsVisible", {
+    label: "Buildings",
+    disabled: !options.availableLayers.buildings,
+  }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "roadsVisible", { label: "Roads" }).on("change", () => {
+  controlFolder.addBinding(state, "roadsVisible", {
+    label: "Roads",
+    disabled: !options.availableLayers.roads,
+  }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "treesVisible", { label: "Trees" }).on("change", () => {
+  controlFolder.addBinding(state, "treesVisible", {
+    label: "Trees",
+    disabled: !options.availableLayers.trees,
+  }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "uavLabelsVisible", { label: "Labels" });
