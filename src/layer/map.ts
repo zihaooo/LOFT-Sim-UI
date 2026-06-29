@@ -8,7 +8,6 @@ import {
   GROUND_COLOR,
   GROUND_SEGMENTS,
   ROAD_MIN_SEGMENT_LENGTH_METERS,
-  ROAD_OPACITY,
   ROAD_Y_OFFSET_METERS,
   TREE_CANOPY_COLOR,
   TREE_CANOPY_DETAIL,
@@ -162,11 +161,13 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
 
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
-    transparent: true,
-    opacity: ROAD_OPACITY,
-    depthWrite: false,
     side: THREE.DoubleSide,
-    // Bias road depth toward the camera to resolve z-fight.
+    // Opaque (colors pre-blended over the ground in ROAD_STYLES): overlapping quads at intersections and
+    // corners overwrite instead of alpha-blending, so there is no double-darkening. depthWrite is off so
+    // those coplanar overlaps don't z-fight each other — each quad only ever depth-tests against the
+    // ground, which is stable. depthTest stays on so buildings/drones in front still occlude the road,
+    // and the polygon offset keeps the road biased over the ground plane.
+    depthWrite: false,
     polygonOffset: true,
     polygonOffsetUnits: -2,
   });

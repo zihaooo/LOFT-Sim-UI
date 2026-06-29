@@ -5,27 +5,27 @@ export const METERS_PER_DEGREE_LAT = 111_320;
 export const CORRIDOR_COLORS = ["#47c2ff"];
 export const ROUTE_COLORS = ["#f7b955", "#8fd15a", "#ff6f91", "#b892ff"];
 export const ROAD_STYLES: Record<string, { width: number; color: string }> = {
-  motorway: { width: 13, color: "#d4c7b6" },
-  motorway_link: { width: 8, color: "#d4c7b6" },
-  trunk: { width: 11, color: "#d4c7b6" },
-  trunk_link: { width: 7, color: "#d4c7b6" },
-  primary: { width: 10, color: "#d3cab8" },
-  primary_link: { width: 6.5, color: "#d3cab8" },
-  secondary: { width: 8.5, color: "#cfc8b8" },
-  secondary_link: { width: 5.5, color: "#cfc8b8" },
-  tertiary: { width: 7, color: "#c9c5b4" },
-  tertiary_link: { width: 5, color: "#c9c5b4" },
-  residential: { width: 5.2, color: "#bfc0b1" },
-  unclassified: { width: 5, color: "#bfc0b1" },
-  living_street: { width: 4.2, color: "#bfc0b1" },
-  road: { width: 4.5, color: "#bfc0b1" },
-  service: { width: 3.4, color: "#afb6a8" },
-  track: { width: 2.6, color: "#a8b59b" },
-  pedestrian: { width: 2.8, color: "#a8b59b" },
-  footway: { width: 1.7, color: "#91a482" },
-  path: { width: 1.6, color: "#91a482" },
-  cycleway: { width: 1.7, color: "#91a482" },
-  steps: { width: 1.5, color: "#91a482" },
+  motorway: { width: 13, color: "#d5c9b9" },
+  motorway_link: { width: 8, color: "#d5c9b9" },
+  trunk: { width: 11, color: "#d5c9b9" },
+  trunk_link: { width: 7, color: "#d5c9b9" },
+  primary: { width: 10, color: "#d4ccba" },
+  primary_link: { width: 6.5, color: "#d4ccba" },
+  secondary: { width: 8.5, color: "#d0caba" },
+  secondary_link: { width: 5.5, color: "#d0caba" },
+  tertiary: { width: 7, color: "#cbc7b7" },
+  tertiary_link: { width: 5, color: "#cbc7b7" },
+  residential: { width: 5.2, color: "#c2c3b4" },
+  unclassified: { width: 5, color: "#c2c3b4" },
+  living_street: { width: 4.2, color: "#c2c3b4" },
+  road: { width: 4.5, color: "#c2c3b4" },
+  service: { width: 3.4, color: "#b3baac" },
+  track: { width: 2.6, color: "#adb9a0" },
+  pedestrian: { width: 2.8, color: "#adb9a0" },
+  footway: { width: 1.7, color: "#98aa8a" },
+  path: { width: 1.6, color: "#98aa8a" },
+  cycleway: { width: 1.7, color: "#98aa8a" },
+  steps: { width: 1.5, color: "#98aa8a" },
 };
 
 // Simulation scheduling
@@ -88,7 +88,6 @@ export const BUILDING_COLOR = "#aeb9bc";
 export const BUILDING_ROUGHNESS = 0.72;
 export const BUILDING_METALNESS = 0.04;
 export const ROAD_MIN_SEGMENT_LENGTH_METERS = 0.01;
-export const ROAD_OPACITY = 0.9;
 /** Lifts road quads above the ground plane to resolve z-fighting. */
 export const ROAD_Y_OFFSET_METERS = 0.02;
 export const TREE_TRUNK_COLOR = "#6f563a";
