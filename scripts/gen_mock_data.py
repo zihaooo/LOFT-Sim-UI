@@ -31,13 +31,33 @@ ROUTE_OBJECT_TYPE = "route"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate mock telemetry route/drone data.")
-    parser.add_argument("--network", type=Path, default=Path("public/data/network/airspace_network.osm"), help="Input airspace-network OSM.")
-    parser.add_argument("--output", type=Path, default=Path("mock/mock_telemetry.json"), help="Output JSON path.")
-    parser.add_argument("--drones", type=int, default=1000, help="Number of mock drones.")
-    parser.add_argument("--speed", type=float, default=28.0, help="Base mock speed in m/s.")
-    parser.add_argument("--noise", type=float, default=0.0, help="Position noise amplitude in meters.")
-    parser.add_argument("--seed", type=int, default=7, help="Deterministic random seed.")
+    parser = argparse.ArgumentParser(
+        description="Generate mock telemetry route/drone data."
+    )
+    parser.add_argument(
+        "--network",
+        type=Path,
+        default=Path("public/data/network/airspace_network.osm"),
+        help="Input airspace-network OSM.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("mock/mock_telemetry.json"),
+        help="Output JSON path.",
+    )
+    parser.add_argument(
+        "--drones", type=int, default=200, help="Number of mock drones."
+    )
+    parser.add_argument(
+        "--speed", type=float, default=28.0, help="Base mock speed in m/s."
+    )
+    parser.add_argument(
+        "--noise", type=float, default=0.0, help="Position noise amplitude in meters."
+    )
+    parser.add_argument(
+        "--seed", type=int, default=7, help="Deterministic random seed."
+    )
     return parser.parse_args()
 
 
@@ -100,7 +120,9 @@ def main() -> int:
 
     tree = ET.parse(args.network)
     root = tree.getroot()
-    node_elems = {node.get("id"): node for node in root.findall("node") if node.get("id")}
+    node_elems = {
+        node.get("id"): node for node in root.findall("node") if node.get("id")
+    }
     lats = [parse_float(node.get("lat")) for node in node_elems.values()]
     lons = [parse_float(node.get("lon")) for node in node_elems.values()]
     if not lats or not lons:
@@ -110,7 +132,9 @@ def main() -> int:
     origin_lat = min(lats)
     origin_lon = min(lons)
     mid_lat = (min(lats) + max(lats)) / 2.0
-    meters_per_degree_lon = METERS_PER_DEGREE_LAT * max(math.cos(math.radians(mid_lat)), 1e-6)
+    meters_per_degree_lon = METERS_PER_DEGREE_LAT * max(
+        math.cos(math.radians(mid_lat)), 1e-6
+    )
 
     # ref-ordered node lists per way, so route members can be stitched in member order below.
     way_node_refs = {
@@ -143,12 +167,14 @@ def main() -> int:
         handle = len(corridors) + 1
         corridor_handle_by_way[way_id] = handle
         # Id from the `object_id` tag so it matches parseAirCorridors; fall back to way.id when absent.
-        corridors.append({
-            "handle": handle,
-            "id": tags.get("object_id") or way_id,
-            "from": tags.get("from", ""),
-            "to": tags.get("to", ""),
-        })
+        corridors.append(
+            {
+                "handle": handle,
+                "id": tags.get("object_id") or way_id,
+                "from": tags.get("from", ""),
+                "to": tags.get("to", ""),
+            }
+        )
 
     routes = []
     for relation in root.findall("relation"):
@@ -157,7 +183,10 @@ def main() -> int:
             continue
 
         members = [
-            (way_node_refs.get(member.get("ref"), []), corridor_handle_by_way.get(member.get("ref"), 0))
+            (
+                way_node_refs.get(member.get("ref"), []),
+                corridor_handle_by_way.get(member.get("ref"), 0),
+            )
             for member in relation.findall("member")
             if member.get("type") == "way"
         ]
@@ -177,18 +206,20 @@ def main() -> int:
         length_m, cumulative_lengths = polyline_length(points)
         # Id from the `object_id` tag so it matches parseRoutes; fall back to the relation id when absent.
         route_id = tags.get("object_id") or relation.get("id", str(len(routes) + 1))
-        routes.append({
-            "handle": len(routes) + 1,
-            "id": route_id,
-            "from": tags.get("from", ""),
-            "to": tags.get("to", ""),
-            "points": points,
-            "length_m": length_m,
-            "cumulative_lengths": cumulative_lengths,
-            # Per-segment corridor handle (length == segments == points - 1): a node's handle is the
-            # corridor that contributed it, so the segment ending at point[i+1] uses point_handles[i+1].
-            "corridor_handles": point_handles[1:],
-        })
+        routes.append(
+            {
+                "handle": len(routes) + 1,
+                "id": route_id,
+                "from": tags.get("from", ""),
+                "to": tags.get("to", ""),
+                "points": points,
+                "length_m": length_m,
+                "cumulative_lengths": cumulative_lengths,
+                # Per-segment corridor handle (length == segments == points - 1): a node's handle is the
+                # corridor that contributed it, so the segment ending at point[i+1] uses point_handles[i+1].
+                "corridor_handles": point_handles[1:],
+            }
+        )
 
     if not corridors:
         print("no airspace=yes corridor ways found", file=sys.stderr)
@@ -199,22 +230,27 @@ def main() -> int:
 
     # Cycle through the three vehicle types so mock telemetry exercises per-type model rendering.
     vehicle_types = [("quadrotor", 1), ("fixed_wing", 2), ("hybrid", 3)]
+    speed_coef_by_type_code = {1: 1.0, 2: 2.0, 3: 1.5}
+    route_idx_by_type_code = {1: 1, 2: 5, 3: 4}
 
     random.seed(args.seed)
     drones = []
     for index in range(args.drones):
-        route = routes[index % len(routes)]
         vehicle_type, vehicle_type_code = vehicle_types[index % len(vehicle_types)]
-        drones.append({
-            "handle": index + 1,
-            "id": f"D{index + 1}",
-            "vehicle_type": vehicle_type,
-            "vehicle_type_code": vehicle_type_code,
-            "route_handle": route["handle"],
-            "offset_m": (route["length_m"] * ((index * 37) % max(args.drones, 1))) / max(args.drones, 1),
-            "speed_mps": args.speed + (index % 7) * 0.8,
-            "noise_seed": random.random() * 10_000.0,
-        })
+        route = routes[route_idx_by_type_code[vehicle_type_code]]
+        drones.append(
+            {
+                "handle": index + 1,
+                "id": f"D{index + 1}",
+                "vehicle_type": vehicle_type,
+                "vehicle_type_code": vehicle_type_code,
+                "route_handle": route["handle"],
+                "offset_m": (route["length_m"] * ((index * 223) % max(args.drones, 1)))
+                / max(args.drones, 1),
+                "speed_mps": args.speed * speed_coef_by_type_code[vehicle_type_code],
+                "noise_seed": random.random() * 10_000.0,
+            }
+        )
 
     payload = {
         "projection": {
@@ -231,7 +267,9 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    print(f"wrote {args.output} with {len(corridors)} corridors, {len(routes)} routes and {len(drones)} drones")
+    print(
+        f"wrote {args.output} with {len(corridors)} corridors, {len(routes)} routes and {len(drones)} drones"
+    )
     return 0
 
 
