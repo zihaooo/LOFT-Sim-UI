@@ -109,6 +109,40 @@ def merge_route_members(
     return merged, node_handles
 
 
+def group_routes_by_shared_corridor(routes: list[dict]) -> list[int]:
+    """Assign each route a group id so that any two routes sharing a corridor land in the same group.
+
+    Where two routes ride the same physical corridor (a merge or diverge), their drones must share a
+    speed -- otherwise a faster type catches and passes through a slower one on that shared segment.
+    Routes are unioned over shared corridor handles, so transitive sharing (A-B, B-C) collapses A, B
+    and C into one group. Returns a parallel list whose entries are group ids; each id is the index
+    of the lowest-indexed route in the group, so ids are stable and independent of iteration order."""
+    parent = list(range(len(routes)))
+
+    def find(node: int) -> int:
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    def union(a: int, b: int) -> None:
+        root_a, root_b = find(a), find(b)
+        if root_a != root_b:
+            # Keep the lower index as root so group ids are the smallest member index.
+            parent[max(root_a, root_b)] = min(root_a, root_b)
+
+    # handle 0 marks a segment with no registered corridor, so it never ties routes together.
+    corridor_sets = [
+        {handle for handle in route["corridor_handles"] if handle} for route in routes
+    ]
+    for i in range(len(routes)):
+        for j in range(i + 1, len(routes)):
+            if corridor_sets[i] & corridor_sets[j]:
+                union(i, j)
+
+    return [find(i) for i in range(len(routes))]
+
+
 def main() -> int:
     args = parse_args()
     if args.drones < 0:
@@ -228,16 +262,49 @@ def main() -> int:
         print("no object_type=route relations found", file=sys.stderr)
         return 2
 
-    # Cycle through the three vehicle types so mock telemetry exercises per-type model rendering.
+    # Every route that shares a corridor with another runs the same vehicle type, so drones on a
+    # shared segment move at one speed and never pass through each other; within a route, uniform
+    # speed plus even arc-length spacing keeps same-route drones apart too. Each connected group of
+    # routes gets a type, cycling so all three vehicle models still appear across the network.
+    # (Known residual: same-speed drones from two routes can still briefly fly coincident where the
+    # routes merge -- a same-model close-formation pass, not a different-speed pass-through. Fully
+    # removing it needs altitude separation, which the route-derived telemetry positions can't carry.)
     vehicle_types = [("quadrotor", 1), ("fixed_wing", 2), ("hybrid", 3)]
-    speed_coef_by_type_code = {1: 1.0, 2: 2.0, 3: 1.5}
-    route_idx_by_type_code = {1: 1, 2: 5, 3: 4}
+    # Per-type cruise-speed multipliers on --speed, ordered for realism:
+    # quadrotor (slowest) < hybrid (baseline) < fixed_wing (fastest).
+    speed_coef_by_type_code = {1: 0.6, 2: 1.6, 3: 1.0}
+
+    route_groups = group_routes_by_shared_corridor(routes)
+    # Number each group by first appearance (lowest route index) so the type cycle is deterministic.
+    group_position: dict[int, int] = {}
+    for group_id in route_groups:
+        group_position.setdefault(group_id, len(group_position))
+    vehicle_type_by_route_index = [
+        vehicle_types[group_position[group_id] % len(vehicle_types)]
+        for group_id in route_groups
+    ]
+
+    # Round-robin drones onto routes, recording each drone's slot within its route for even spacing.
+    route_of_drone: list[int] = []
+    slot_of_drone: list[int] = []
+    drones_on_route = [0] * len(routes)
+    for index in range(args.drones):
+        route_index = index % len(routes)
+        route_of_drone.append(route_index)
+        slot_of_drone.append(drones_on_route[route_index])
+        drones_on_route[route_index] += 1
 
     random.seed(args.seed)
     drones = []
     for index in range(args.drones):
-        vehicle_type, vehicle_type_code = vehicle_types[index % len(vehicle_types)]
-        route = routes[route_idx_by_type_code[vehicle_type_code]]
+        route_index = route_of_drone[index]
+        route = routes[route_index]
+        vehicle_type, vehicle_type_code = vehicle_type_by_route_index[route_index]
+        # drones_on_route[route_index] >= 1 for any route that received a drone, so this never divides by 0.
+        spacing_m = route["length_m"] / drones_on_route[route_index]
+        # A distinct per-route phase (< one spacing, so spacing stays even) keeps routes that share a
+        # start hub from stacking their first drones at offset 0 at t=0.
+        phase_m = (route_index / len(routes)) * spacing_m
         drones.append(
             {
                 "handle": index + 1,
@@ -245,9 +312,9 @@ def main() -> int:
                 "vehicle_type": vehicle_type,
                 "vehicle_type_code": vehicle_type_code,
                 "route_handle": route["handle"],
-                "offset_m": (route["length_m"] * ((index * 223) % max(args.drones, 1)))
-                / max(args.drones, 1),
-                "speed_mps": args.speed * speed_coef_by_type_code[vehicle_type_code],
+                "offset_m": phase_m + slot_of_drone[index] * spacing_m,
+                "speed_mps": args.speed
+                * speed_coef_by_type_code.get(vehicle_type_code, 1.0),
                 "noise_seed": random.random() * 10_000.0,
             }
         )
