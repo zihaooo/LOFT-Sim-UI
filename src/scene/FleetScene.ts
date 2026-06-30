@@ -389,6 +389,7 @@ export class FleetScene {
 
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
+    this.vertiportGroup.visible = visibility.vertiportsVisible;
     this.corridorGroup.visible = visibility.corridorsVisible;
     // Corridor envelope follows its own toggle but hides while routes are shown (the two are exclusive).
     this.envelopeGroup.visible = visibility.envelopesVisible && !visibility.routesVisible;

@@ -12,6 +12,7 @@ export type SimulationControlState = {
   demoTwoCorridors: boolean;
   demoStressTest: boolean;
   cameraMode: CameraMode;
+  vertiportsVisible: boolean;
   corridorsVisible: boolean;
   routesVisible: boolean;
   envelopesVisible: boolean;
@@ -24,7 +25,7 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
+  "vertiportsVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -72,6 +73,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     demoTwoCorridors: activeDemoPreset === "twoCorridors",
     demoStressTest: activeDemoPreset === "stressTest",
     cameraMode: CAMERA_MODES.FREE,
+    vertiportsVisible: true,
     corridorsVisible: true,
     routesVisible: false,
     envelopesVisible: true,
@@ -113,6 +115,10 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
       Free: CAMERA_MODES.FREE,
       Follow: CAMERA_MODES.FOLLOW_SELECTED_UAV,
     },
+  });
+
+  controlFolder.addBinding(state, "vertiportsVisible", { label: "Vertiports" }).on("change", () => {
+    options.onLayerVisibilityChange(state);
   });
 
   // Corridors and Routes are mutually exclusive: enabling one disables the other (both may be off).
