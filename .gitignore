@@ -49,6 +49,9 @@ public/data/**
 !public/data/**/.gitkeep
 # The UAV models are UI assets (small, stable) and must ship in the build.
 !public/data/model/*.gltf
+# Per-type drone shadow profiles (computed by scripts/compute_shadow_params.py) are imported at build
+# time by src/layer/shadowProfiles.ts, so the file must be committed or a fresh build can't resolve it.
+!public/data/model/shadow_profiles.json
 
 # Python
 __pycache__/

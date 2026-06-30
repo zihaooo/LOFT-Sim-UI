@@ -33,7 +33,7 @@ import {
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { padSceneBounds } from "../geometry/map";
-import { createUavMesh } from "../layer/drone";
+import { createBlobShadowMesh, createUavMesh } from "../layer/drone";
 import { TelemetryClient } from "../telemetry/client";
 import { DemoFleetSource } from "../fleet/demoSource";
 import { TelemetrySource } from "../fleet/telemetrySource";
@@ -99,6 +99,14 @@ export class FleetScene {
   private readonly keys = new Set<string>();
   /** One InstancedMesh per vehicle type code (keys mirror DRONE_MODEL_PATHS_BY_TYPE). */
   private readonly uavMeshes: Map<number, THREE.InstancedMesh>;
+  /** One shared decal per drone, drawing its altitude-faded ground shadow (drones don't cast into the shadow map). */
+  private readonly blobShadowMesh: THREE.InstancedMesh;
+  /**
+   * Height of the surface that receives a blob shadow at (x, z). v1 is flat ground (0); swap for a building
+   * height field (built once from sceneData.buildings) to land shadows on rooftops — see CONTEXT.md. With the
+   * sun-angle projection, a correct height field must march along the ray, not just sample under the drone.
+   */
+  private readonly surfaceHeightAt = (_x: number, _z: number): number => 0;
   /** Writes drones into the per-type meshes each frame; shared by both fleet sources. */
   private readonly uavWriter: UavInstanceWriter;
   private readonly corridorGroup: THREE.Group;
@@ -189,7 +197,13 @@ export class FleetScene {
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
     this.uavMeshes = this.createUavMeshes(options.uavModels ?? null);
-    this.uavWriter = new UavInstanceWriter(this.uavMeshes, DEFAULT_VEHICLE_TYPE_CODE);
+    // One blob slot per possible drone across every type, so no written drone can ever lack a shadow.
+    let blobCapacity = 0;
+    for (const mesh of this.uavMeshes.values()) {
+      blobCapacity += mesh.instanceMatrix.count;
+    }
+    this.blobShadowMesh = createBlobShadowMesh(blobCapacity);
+    this.uavWriter = new UavInstanceWriter(this.uavMeshes, DEFAULT_VEHICLE_TYPE_CODE, this.blobShadowMesh, this.surfaceHeightAt);
     this.initializeStaticUavBoundingSphere();
     this.controlPane = this.createControlPane(options.panel);
     const readouts = createReadoutPanels(options.panel);
@@ -270,7 +284,7 @@ export class FleetScene {
     // The ground plane extends past the scene bounds so the clipped map is not flush with its edge.
     const groundBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
     this.scene.add(
-      createLightingGroup(),
+      createLightingGroup(this.sceneData.sceneBounds),
       createSkyDome(),
       createGroundGroup(groundBounds),
       this.roadGroup,
@@ -282,6 +296,7 @@ export class FleetScene {
       this.buildingGroup,
     );
     this.uavMeshes.forEach((mesh) => this.scene.add(mesh));
+    this.scene.add(this.blobShadowMesh);
 
     this.layerAirspaceAboveVertiports();
   }
@@ -349,6 +364,26 @@ export class FleetScene {
       onResetSimulation: () => this.resetSimulation(),
       onReloadScene: this.onReloadScene,
       onLoadDemoPreset: this.onLoadDemoPreset,
+      onShadowsToggle: (enabled) => this.applyShadowsEnabled(enabled),
+    });
+  }
+
+  /** Enables or disables shadow rendering, recompiling materials so the change takes effect at runtime. */
+  private applyShadowsEnabled(enabled: boolean): void {
+    this.renderer.shadowMap.enabled = enabled;
+    this.renderer.shadowMap.needsUpdate = true;
+    // Drone shadows are a separate decal layer, not the shadow map, so the toggle must hide them explicitly
+    // for "Shadows" to govern every shadow in the scene.
+    this.blobShadowMesh.visible = enabled;
+    // Whether a material samples the shadow map is baked into its compiled shader program, so existing
+    // materials must be flagged for recompile; otherwise toggling shadowMap.enabled has no visible effect.
+    this.scene.traverse((object) => {
+      const material = (object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] }).material;
+      if (Array.isArray(material)) {
+        material.forEach((entry) => (entry.needsUpdate = true));
+      } else if (material) {
+        material.needsUpdate = true;
+      }
     });
   }
 

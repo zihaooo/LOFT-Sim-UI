@@ -75,9 +75,42 @@ export const HEMISPHERE_GROUND_COLOR = "#879281";
 export const HEMISPHERE_LIGHT_INTENSITY = 2.6;
 export const SUN_COLOR = "#ffffff";
 export const SUN_INTENSITY = 2.4;
-export const SUN_POSITION = new THREE.Vector3(-900, 1_400, 700);
-export const SUN_SHADOW_BOUNDS_METERS = 2_500;
+// Sun placement is an offset from the active scene's center (encodes the sun's direction + distance),
+// so the light + its shadow frustum re-center on whichever preset is loaded rather than the world origin.
+export const SUN_OFFSET = new THREE.Vector3(-900, 1_400, 700);
 export const SUN_SHADOW_MAP_SIZE = 2_048;
+// Vertical extent (metres) the shadow frustum must span so tall buildings/trees stay inside it as casters.
+export const SHADOW_SCENE_HEIGHT_METERS = 300;
+// Fractional padding added to the fitted shadow frustum so soft (PCF) edges are not clipped at the scene rim.
+export const SHADOW_FIT_MARGIN = 0.05;
+
+// Drone blob shadows. Drones use a cheap ground decal — a per-type composite of rectangles fitted to each
+// model's silhouette (see scripts/compute_shadow_params.py + layer/shadowProfiles) — instead of casting into
+// the shared shadow map (which flickers on their small, thin, fast geometry). The shadow is sized to the
+// drone's footprint, oriented to its heading, and grows + fades with altitude, mimicking how a small high
+// object loses its ground shadow in reality.
+export const BLOB_SHADOW_GROWTH_PER_METER = 0.001; // gentle widening of the shadow with altitude (m per m)
+export const BLOB_SHADOW_FADE_HEIGHT_METERS = 1_000; // altitude at which the shadow has fully faded out
+export const BLOB_SHADOW_MAX_OPACITY = 0.1; // a soft grey contact shadow, not ink-black
+export const BLOB_SHADOW_MIN_OPACITY = 0.001; // blobs fainter than this are skipped (culled), bounding transparent fill
+export const BLOB_SHADOW_Y_OFFSET_METERS = 0.03; // lifts the decal above ground (0) and roads (0.02), below vertiports (0.04)
+// Half-size of the shadow quad in normalized profile units (1 = the drone's footprint half-span). Must
+// exceed the widest rect (~1.14 for the quad arms) plus the soft band (EDGE_BLUR), or the edge gets clipped
+// at the quad. It only enlarges the (mostly transparent) quad margin — the shadow's world size is
+// independent of it.
+export const BLOB_SHADOW_QUAD_HALF_EXTENT = 1.5;
+// Half-width of the soft band straddling each rectangle edge, in profile units (1 = footprint half-span):
+// alpha ramps from 1 just inside to 0 just outside. Larger = blurrier; the 50% edge stays on the rect.
+export const BLOB_SHADOW_EDGE_BLUR = 0.12;
+// Smooth-union radius (profile units) for joining a type's rects: the rectangles are merged with a
+// smooth-min in distance space so the joints (the X crossing, wing/fuselage) fill in and round over
+// instead of creasing — a plain max() union leaves sharp, faceted notches there. Larger = rounder joints.
+export const BLOB_SHADOW_UNION_SMOOTH = 0.1;
+// Horizontal ground offset per metre of altitude when projecting a point along the sun's parallel rays.
+// Derived from SUN_OFFSET so it tracks the sun; the ray length cancels, leaving a simple component ratio.
+export const SHADOW_OFFSET_X_PER_M = -SUN_OFFSET.x / SUN_OFFSET.y;
+export const SHADOW_OFFSET_Z_PER_M = -SUN_OFFSET.z / SUN_OFFSET.y;
+
 export const SKY_DOME_COLOR = "#c8dced";
 export const SKY_DOME_RADIUS_METERS = 8_000;
 export const GROUND_COLOR = "#d9ddcf";

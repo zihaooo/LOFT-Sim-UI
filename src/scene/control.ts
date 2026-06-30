@@ -19,6 +19,7 @@ export type SimulationControlState = {
   roadsVisible: boolean;
   treesVisible: boolean;
   uavLabelsVisible: boolean;
+  shadowsEnabled: boolean;
 };
 
 export type LayerVisibilityState = Pick<
@@ -59,6 +60,7 @@ type SimulationControlsOptions = {
   onResetSimulation: () => void;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
+  onShadowsToggle: (enabled: boolean) => void;
 };
 
 /** Creates the default mutable control state shared by Tweakpane bindings and FleetScene. */
@@ -77,6 +79,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     roadsVisible: true,
     treesVisible: true,
     uavLabelsVisible: false,
+    shadowsEnabled: true,
   };
 }
 
@@ -168,6 +171,9 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     options.onLayerVisibilityChange(state);
   });
   controlFolder.addBinding(state, "uavLabelsVisible", { label: "Labels" });
+  controlFolder.addBinding(state, "shadowsEnabled", { label: "Shadows" }).on("change", () => {
+    options.onShadowsToggle(state.shadowsEnabled);
+  });
   controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
     options.onResetSimulation();
     pane.refresh();
