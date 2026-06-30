@@ -7,6 +7,7 @@ import {
   BUILDING_ROUGHNESS,
   GROUND_COLOR,
   GROUND_SEGMENTS,
+  ROAD_DRAW_PRIORITY,
   ROAD_MIN_SEGMENT_LENGTH_METERS,
   ROAD_Y_OFFSET_METERS,
   TREE_CANOPY_COLOR,
@@ -108,7 +109,14 @@ export function createRoadGroup(roads: RoadPath[], bounds: SceneBounds): THREE.G
   const colorByValue = new Map<string, THREE.Color>();
   let vertexIndex = 0;
 
-  roads.forEach((road) => {
+  // Draw lowest-class roads first so higher-class roads land later in the index buffer. Because the
+  // material has depthWrite off, coplanar overlaps are painter-ordered, so the last-drawn (most
+  // important) road wins at intersections instead of a minor road bleeding over a major one.
+  const orderedRoads = [...roads].sort(
+    (a, b) => (ROAD_DRAW_PRIORITY[a.kind] ?? 0) - (ROAD_DRAW_PRIORITY[b.kind] ?? 0),
+  );
+
+  orderedRoads.forEach((road) => {
     const color = getCachedColor(colorByValue, road.color);
     const halfWidth = road.width / 2;
 

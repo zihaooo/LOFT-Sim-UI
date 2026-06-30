@@ -28,6 +28,15 @@ export const ROAD_STYLES: Record<string, { width: number; color: string }> = {
   steps: { width: 1.5, color: "#98aa8a" },
 };
 
+// Draw priority per highway class: higher = more important. Roads are sorted by this so
+// minor roads are drawn first and major roads (motorway, trunk, ...) are drawn last, letting
+// the higher class paint over the lower one at intersections instead of bleeding through.
+// Derived from ROAD_STYLES insertion order, which already runs most-important → least-important.
+const ROAD_KINDS_BY_IMPORTANCE = Object.keys(ROAD_STYLES);
+export const ROAD_DRAW_PRIORITY: Record<string, number> = Object.fromEntries(
+  ROAD_KINDS_BY_IMPORTANCE.map((kind, index) => [kind, ROAD_KINDS_BY_IMPORTANCE.length - index]),
+);
+
 // Simulation scheduling
 export const DEFAULT_UAV_SPEED_METERS_PER_SECOND = 12;
 
