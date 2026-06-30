@@ -133,8 +133,8 @@ def bake_rect(e: Dict[str, float], cx0: float, cz0: float, half: float) -> Dict[
 
 def quadrotor_profile() -> Tuple[List[Dict[str, float]], List[XZ]]:
     body = placed_corners(qr.DRONE_PARTS["body"][0][0]) + placed_corners(qr.DRONE_PARTS["front"][0][0])
-    # Arm rects span the thin arm + motor only. The wide props (CANONICAL_PROP) are spinning discs — including
-    # them would bloat the bars into thick wedges, so they cast no shadow (as the spinning discs they are).
+    # Arm rects span the thin arm + motor only; the wide props (CANONICAL_PROP) are spinning discs that would
+    # bloat the bars, so they cast no shadow.
     arm_boxes = [qr.CANONICAL_ARM, qr.CANONICAL_MOTOR]
     diag_a = [pt for rot in (45.0, 225.0) for box in arm_boxes for pt in placed_corners(box, rot)]
     diag_b = [pt for rot in (135.0, 315.0) for box in arm_boxes for pt in placed_corners(box, rot)]

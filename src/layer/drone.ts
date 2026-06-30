@@ -34,9 +34,8 @@ export function createUavMesh(
   // shader patch is compiled in from the first frame and no instance defaults to white.
   mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
   mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-  // Drones do NOT cast into the shared shadow map: their small, thin, fast geometry aliases into the
-  // city-scale map and shimmers. Their ground shadow is drawn by the altitude-faded blob layer instead
-  // (createBlobShadowMesh). Buildings/trees keep their real shadow-map shadows.
+  // Drones don't cast into the shared shadow map (their small, thin geometry shimmers in it); their ground
+  // shadow is the altitude-faded blob layer instead (createBlobShadowMesh). Buildings/trees still cast.
   mesh.castShadow = false;
   return mesh;
 }

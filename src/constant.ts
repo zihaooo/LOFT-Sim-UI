@@ -76,7 +76,7 @@ export const HEMISPHERE_LIGHT_INTENSITY = 2.6;
 export const SUN_COLOR = "#ffffff";
 export const SUN_INTENSITY = 2.4;
 // Sun placement is an offset from the active scene's center (encodes the sun's direction + distance),
-// so the light + its shadow frustum re-center on whichever preset is loaded rather than the world origin.
+// so the light + its shadow frustum re-center on whichever preset is loaded.
 export const SUN_OFFSET = new THREE.Vector3(-900, 1_400, 700);
 export const SUN_SHADOW_MAP_SIZE = 2_048;
 // Vertical extent (metres) the shadow frustum must span so tall buildings/trees stay inside it as casters.
@@ -103,8 +103,8 @@ export const BLOB_SHADOW_QUAD_HALF_EXTENT = 1.5;
 // alpha ramps from 1 just inside to 0 just outside. Larger = blurrier; the 50% edge stays on the rect.
 export const BLOB_SHADOW_EDGE_BLUR = 0.12;
 // Smooth-union radius (profile units) for joining a type's rects: the rectangles are merged with a
-// smooth-min in distance space so the joints (the X crossing, wing/fuselage) fill in and round over
-// instead of creasing — a plain max() union leaves sharp, faceted notches there. Larger = rounder joints.
+// smooth-min in distance space so the joints (the X crossing, wing/fuselage) round over instead of
+// creasing. Larger = rounder joints.
 export const BLOB_SHADOW_UNION_SMOOTH = 0.1;
 // Horizontal ground offset per metre of altitude when projecting a point along the sun's parallel rays.
 // Derived from SUN_OFFSET so it tracks the sun; the ray length cancels, leaving a simple component ratio.
