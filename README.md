@@ -91,7 +91,7 @@ Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and 
 The Tweakpane panel has three sections:
 
 - **Config Files** — upload a custom map, air-corridor, or demand file and **Reload scene**.
-- **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (corridors, routes, flight envelopes, buildings, roads, trees, labels), a **Shadows** on/off toggle (building/tree shadows plus drones' altitude-faded ground shadows), and **Reset simulation**.
+- **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (vertiports, corridors, routes, flight envelopes, buildings, roads, trees, labels), a **Shadows** on/off toggle (building/tree shadows plus drones' altitude-faded ground shadows), and **Reset simulation**.
 - **Demo** — load the frontend-only **Two Corridors** or **Stress Test** preset (toggling off restores the default telemetry-backed scene).
 
 Camera and selection:
