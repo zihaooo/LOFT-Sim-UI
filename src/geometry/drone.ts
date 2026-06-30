@@ -78,6 +78,32 @@ export function setUavYawQuaternion(quaternion: THREE.Quaternion, tangent: THREE
   quaternion.setFromAxisAngle(WORLD_UP, Math.atan2(tangent.x, tangent.z));
 }
 
+// Body axes for the backend's positive-pitch (nose-up) and positive-roll (right-wing-down) in the model frame
+// (forward +Z, up +Y): nose-up rotates about local -X, right-wing-down about local -Z.
+const UAV_PITCH_AXIS = new THREE.Vector3(-1, 0, 0);
+const UAV_ROLL_AXIS = new THREE.Vector3(0, 0, -1);
+const uavAttitudeScratch = new THREE.Quaternion();
+
+/**
+ * Writes the UAV's body attitude from the backend's aerospace Euler angles (radians). The simulator integrates
+ * velocity as speed*(cos yaw, sin yaw) in its East/North plane and the sim->scene map sends East->z, North->x,
+ * so the scene heading atan2(x, z) equals `yaw` exactly: a rotation about world up that matches the legacy
+ * velocity-derived heading while moving but stays stable at hover, where velocity collapses to numerical noise.
+ * Pitch and roll also come straight from telemetry, so they are stable too. Composed yaw -> pitch -> roll.
+ */
+export function setUavAttitudeQuaternion(
+  quaternion: THREE.Quaternion,
+  yaw: number,
+  pitch: number,
+  roll: number,
+): void {
+  quaternion.setFromAxisAngle(WORLD_UP, yaw);
+  uavAttitudeScratch.setFromAxisAngle(UAV_PITCH_AXIS, pitch);
+  quaternion.multiply(uavAttitudeScratch);
+  uavAttitudeScratch.setFromAxisAngle(UAV_ROLL_AXIS, roll);
+  quaternion.multiply(uavAttitudeScratch);
+}
+
 /** Loads one gltf and bakes it into a normalized model, returning null when the asset is unavailable. */
 async function loadUavModel(loader: GLTFLoader, modelPath: string): Promise<UavModel | null> {
   if (!(await assetExists(modelPath))) {

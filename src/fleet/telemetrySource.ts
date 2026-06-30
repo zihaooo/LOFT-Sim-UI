@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type {AirCorridor, AirRoute, UavState} from "../types";
-import { setUavYawQuaternion } from "../geometry/drone";
+import { setUavAttitudeQuaternion } from "../geometry/drone";
 import type { TelemetryClient } from "../telemetry/client";
 import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
 import {
@@ -87,7 +87,9 @@ export class TelemetrySource implements FleetSource {
       }
 
       const isSelected = drone.handle === this.selectedHandle;
-      setUavYawQuaternion(this.quaternion, this.tangent);
+      // Orient from the backend's reported attitude rather than the velocity tangent, which stays stable when
+      // the UAV hovers and its velocity collapses to noise (see setUavAttitudeQuaternion).
+      setUavAttitudeQuaternion(this.quaternion, drone.yaw, drone.pitch, drone.roll);
       this.matrix.compose(this.position, this.quaternion, this.scale);
       const written = writer.write(drone.vehicleTypeCode, this.matrix, isSelected);
       if (!written) {

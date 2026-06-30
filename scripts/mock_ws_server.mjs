@@ -253,7 +253,9 @@ function sampleRoute(route, drone, timeSeconds) {
     vx: (dx / length) * drone.speed_mps,
     vy: (dy / length) * drone.speed_mps,
     vz: (dz / length) * drone.speed_mps,
-    yaw: Math.atan2(dx, dy),
+    // Match the simulator: velocity is speed*(cos yaw, sin yaw) in the East(x)/North(y) plane, so
+    // yaw = atan2(north, east) = atan2(vy, vx). (dx, dy) share the velocity's direction.
+    yaw: Math.atan2(dy, dx),
     corridorHandle,
   };
 }
