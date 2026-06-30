@@ -65,13 +65,37 @@ select {
   width: 320px;
   min-width: 0;
   max-height: calc(100vh - 32px);
-  padding: 16px;
+  padding: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   background: #142126;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   box-shadow: 0 18px 44px rgba(11, 20, 24, 0.24);
+  /* Firefox: slim translucent thumb in the panel's grey family, no track. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(187, 188, 196, 0.32) transparent;
+}
+
+/* Chromium/WebKit: a floating, rounded thumb that matches the dark theme. */
+.control-panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.control-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.control-panel::-webkit-scrollbar-thumb {
+  background-color: rgba(187, 188, 196, 0.28);
+  border-radius: 8px;
+  /* Transparent border + padding-box clip insets the thumb so it floats off the edge. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.control-panel::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(187, 188, 196, 0.45);
 }
 
 .hud {
@@ -228,6 +252,19 @@ select {
 .control-panel .tp-rotv {
   --tp-blade-value-width: 150px;
   max-width: 100%;
+}
+
+.control-panel .tp-lblv {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* Checkbox rows don't need the wide value column the slider/dropdown rely on, so shrink
+   it to just the box and hand the freed width to the label (e.g. "Selected UVA's Route"
+   fits on one line). --bld-vw is Tweakpane's resolved value-column width; overriding it
+   here wins for this row since the default is declared up on .tp-rotv. */
+.control-panel .tp-lblv:has(.tp-ckbv_w) {
+  --bld-vw: 20px;
 }
 
 .control-readout {

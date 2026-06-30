@@ -110,7 +110,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   });
 
   controlFolder.addBinding(state, "cameraMode", {
-    label: "Camera",
+    label: "View",
     options: {
       Free: CAMERA_MODES.FREE,
       Follow: CAMERA_MODES.FOLLOW_SELECTED_UAV,
@@ -180,15 +180,17 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   controlFolder.addBinding(state, "shadowsEnabled", { label: "Shadows" }).on("change", () => {
     options.onShadowsToggle(state.shadowsEnabled);
   });
-  controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
-    options.onResetSimulation();
-    pane.refresh();
-  });
 
   // Demo presets rely on bundled OSM/demand fixtures that ship only in dev builds,
   // so expose the Demo folder under `vite dev` only. Production is telemetry-backed,
   // and this branch is tree-shaken out of the production bundle.
   if (import.meta.env.DEV) {
+    // The backend simulator is not support reset yet.
+    controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
+      options.onResetSimulation();
+      pane.refresh();
+    });
+
     const configState: ConfigControlState = {
       mapFile: "",
       corridorFile: "",

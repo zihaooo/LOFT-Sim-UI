@@ -28,6 +28,7 @@ import {
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
   SIMULATION_SPEED_LEVELS,
+  SUPPORTED_VEHICLE_TYPE_NAMES,
   TELEMETRY_UAV_MESH_CAPACITY,
   WORLD_UP,
 } from "../constant";
@@ -120,9 +121,12 @@ export class FleetScene {
   private readonly corridorLabelNodes: CorridorLabelNode[];
   private readonly simulationClockValue: HTMLElement;
   private readonly sceneCorridorsValue: HTMLElement;
+  private readonly sceneRoutesValue: HTMLElement;
+  private readonly sceneVertiportsValue: HTMLElement;
   private readonly sceneBuildingsValue: HTMLElement;
   private readonly sceneRoadsValue: HTMLElement;
   private readonly sceneTreesValue: HTMLElement;
+  private readonly sceneUavTypesValue: HTMLElement;
   private readonly cameraPositionValue: HTMLElement;
   private readonly cameraLookAtValue: HTMLElement;
   private readonly telemetryConnectionValue: HTMLElement;
@@ -209,9 +213,13 @@ export class FleetScene {
     const readouts = createReadoutPanels(options.panel);
     this.simulationClockValue = readouts.simulationClockValue;
     this.sceneCorridorsValue = readouts.sceneCorridorsValue;
+    this.sceneRoutesValue = readouts.sceneRoutesValue;
+    this.sceneVertiportsValue = readouts.sceneVertiportsValue;
     this.sceneBuildingsValue = readouts.sceneBuildingsValue;
     this.sceneRoadsValue = readouts.sceneRoadsValue;
     this.sceneTreesValue = readouts.sceneTreesValue;
+    this.sceneUavTypesValue = readouts.sceneUavTypesValue;
+    this.sceneUavTypesValue.textContent = SUPPORTED_VEHICLE_TYPE_NAMES;
     this.cameraPositionValue = readouts.cameraPositionValue;
     this.cameraLookAtValue = readouts.cameraLookAtValue;
     this.telemetryConnectionValue = readouts.telemetryConnectionValue;
@@ -736,6 +744,8 @@ export class FleetScene {
   private updateReadoutPanels(): void {
     this.simulationClockValue.textContent = formatSimulationTime(this.lastFrame?.simTimeSeconds ?? this.elapsedSeconds);
     this.sceneCorridorsValue.textContent = this.sceneData.corridors.length.toLocaleString();
+    this.sceneRoutesValue.textContent = this.sceneData.routes.length.toLocaleString();
+    this.sceneVertiportsValue.textContent = this.sceneData.vertiports.length.toLocaleString();
     this.sceneBuildingsValue.textContent = this.sceneData.buildings.length.toLocaleString();
     this.sceneRoadsValue.textContent = this.sceneData.roads.length.toLocaleString();
     this.sceneTreesValue.textContent = this.sceneData.trees.length.toLocaleString();

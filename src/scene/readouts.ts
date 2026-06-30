@@ -5,9 +5,12 @@ import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX } from "..
 export type ReadoutPanels = {
   simulationClockValue: HTMLElement;
   sceneCorridorsValue: HTMLElement;
+  sceneRoutesValue: HTMLElement;
+  sceneVertiportsValue: HTMLElement;
   sceneBuildingsValue: HTMLElement;
   sceneRoadsValue: HTMLElement;
   sceneTreesValue: HTMLElement;
+  sceneUavTypesValue: HTMLElement;
   cameraPositionValue: HTMLElement;
   cameraLookAtValue: HTMLElement;
   telemetryConnectionValue: HTMLElement;
@@ -46,8 +49,16 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   sceneDebugPanel.innerHTML = `
       <div class="control-readout__title">Scene Debug</div>
       <div class="control-readout__row">
+        <span>Vertiports</span>
+        <code data-readout="scene-vertiports">0</code>
+      </div>
+      <div class="control-readout__row">
         <span>Corridors</span>
         <code data-readout="scene-corridors">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>Routes</span>
+        <code data-readout="scene-routes">0</code>
       </div>
       <div class="control-readout__row">
         <span>Buildings</span>
@@ -61,6 +72,10 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
         <span>Trees</span>
         <code data-readout="scene-trees">0</code>
       </div>
+      <div class="control-readout__row">
+        <span>Support UAV</span>
+        <code data-readout="scene-uav-types">-</code>
+      </div>
     `;
 
   const cameraDebugPanel = document.createElement("section");
@@ -69,11 +84,11 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
       <div class="control-readout__title">Camera Debug</div>
       <div class="control-readout__row">
         <span>Position</span>
-        <code data-readout="camera-position">x 0.0 · y 0.0 · z 0.0</code>
+        <code data-readout="camera-position">(0.0, 0.0, 0.0)</code>
       </div>
       <div class="control-readout__row">
         <span>Lookat</span>
-        <code data-readout="camera-lookat">x 0.0 · y 0.0 · z 0.0</code>
+        <code data-readout="camera-lookat">(0.0, 0.0, 0.0)</code>
       </div>
     `;
 
@@ -116,9 +131,12 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   return {
     simulationClockValue: requireReadout(simulationPanel, "simulation-clock"),
     sceneCorridorsValue: requireReadout(sceneDebugPanel, "scene-corridors"),
+    sceneRoutesValue: requireReadout(sceneDebugPanel, "scene-routes"),
+    sceneVertiportsValue: requireReadout(sceneDebugPanel, "scene-vertiports"),
     sceneBuildingsValue: requireReadout(sceneDebugPanel, "scene-buildings"),
     sceneRoadsValue: requireReadout(sceneDebugPanel, "scene-roads"),
     sceneTreesValue: requireReadout(sceneDebugPanel, "scene-trees"),
+    sceneUavTypesValue: requireReadout(sceneDebugPanel, "scene-uav-types"),
     cameraPositionValue: requireReadout(cameraDebugPanel, "camera-position"),
     cameraLookAtValue: requireReadout(cameraDebugPanel, "camera-lookat"),
     telemetryConnectionValue: requireReadout(telemetryDebugPanel, "telemetry-connection"),
@@ -141,9 +159,9 @@ export function formatSimulationTime(seconds: number): string {
   return `${pad2(hours)}:${pad2(minutes)}:${pad2(wholeSeconds)}.${tenths}`;
 }
 
-/** Pretty-prints a Vector3 as `x ## · y ## · z ##` for the camera debug readouts. */
+/** Pretty-prints a Vector3 as `(x ##, y ##, z ##)` for the camera debug readouts. */
 export function formatVector(vector: THREE.Vector3): string {
-  return `x ${vector.x.toFixed(1)} · y ${vector.y.toFixed(1)} · z ${vector.z.toFixed(1)}`;
+  return `(${vector.x.toFixed(1)}, ${vector.y.toFixed(1)}, ${vector.z.toFixed(1)})`;
 }
 
 /** Left-pads an integer to 2 digits with a leading zero for clock formatting. */

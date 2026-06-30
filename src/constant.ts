@@ -206,6 +206,16 @@ export const DRONE_MODEL_PATHS_BY_TYPE: Readonly<Record<number, string>> = {
   [VEHICLE_TYPE_FIXED_WING]: "/data/model/fixedwing.gltf",
   [VEHICLE_TYPE_HYBRID]: "/data/model/hybrid.gltf",
 };
+/** vehicleTypeCode -> human-readable name, used for debug/readout display. */
+export const VEHICLE_TYPE_NAMES_BY_CODE: Readonly<Record<number, string>> = {
+  [VEHICLE_TYPE_QUADROTOR]: "quadrotor",
+  [VEHICLE_TYPE_FIXED_WING]: "fixed-wing",
+  [VEHICLE_TYPE_HYBRID]: "hybrid",
+};
+/** Comma-separated names of the UAV types the app can render, derived from the model set. */
+export const SUPPORTED_VEHICLE_TYPE_NAMES = Object.keys(DRONE_MODEL_PATHS_BY_TYPE)
+  .map((code) => VEHICLE_TYPE_NAMES_BY_CODE[Number(code)] ?? `type ${code}`)
+  .join(", ");
 export const DRONE_MODEL_SPAN_METERS = 22;
 export const FALLBACK_UAV_RADIUS_METERS = 7;
 export const FALLBACK_UAV_HEIGHT_METERS = 22;
