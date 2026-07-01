@@ -58,6 +58,7 @@ type SimulationControlsOptions = {
   onRunningChange: (running: boolean) => void;
   onSpeedChange: (speedLevelIndex: number) => void;
   onLayerVisibilityChange: (visibility: LayerVisibilityState) => void;
+  onResetView: () => void;
   onResetSimulation: () => void;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
@@ -179,6 +180,13 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   controlFolder.addBinding(state, "uavLabelsVisible", { label: "Labels" });
   controlFolder.addBinding(state, "shadowsEnabled", { label: "Shadows" }).on("change", () => {
     options.onShadowsToggle(state.shadowsEnabled);
+  });
+
+  // A pure client-side camera action (no backend dependency), so it stays available in every build —
+  // in dev it renders directly above the dev-only "Reset simulation" button.
+  controlFolder.addButton({ title: "Reset view" }).on("click", () => {
+    options.onResetView();
+    pane.refresh();
   });
 
   // Demo presets rely on bundled OSM/demand fixtures that ship only in dev builds,

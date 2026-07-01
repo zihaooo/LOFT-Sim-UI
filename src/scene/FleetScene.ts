@@ -24,6 +24,7 @@ import {
   ORBIT_MAX_DISTANCE_METERS,
   ORBIT_MIN_DISTANCE_METERS,
   ORBIT_MOUSE_BUTTONS,
+  RESET_VIEW_DURATION_SECONDS,
   SCENE_BACKGROUND_COLOR,
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
@@ -63,6 +64,11 @@ export type { UavModel } from "../geometry/drone";
 
 /** Shared empty map used for label projection before the first fleet frame is produced. */
 const EMPTY_UAV_STATE: Map<string, UavState> = new Map();
+
+/** Ease-in-out cubic for a smooth accelerate/decelerate camera fly-back; maps [0,1] -> [0,1]. */
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 type FleetSceneOptions = {
   host: HTMLDivElement;
@@ -141,6 +147,11 @@ export class FleetScene {
   private readonly selectedTangent = new THREE.Vector3(1, 0, 0);
   private readonly initialCameraPosition = new THREE.Vector3();
   private readonly initialTarget = new THREE.Vector3();
+  /** Camera pose captured when a "Reset view" fly-back begins; end pose is the initial frame above. */
+  private readonly viewResetStartPosition = new THREE.Vector3();
+  private readonly viewResetStartTarget = new THREE.Vector3();
+  private viewResetElapsedSeconds = 0;
+  private isResettingView = false;
 
   /** Source that produced the most recent frame; the raycast selection is routed back to it. */
   private activeSource: FleetSource;
@@ -370,6 +381,7 @@ export class FleetScene {
       onRunningChange: (running) => this.telemetrySource?.setRunning(running),
       onSpeedChange: (speedLevelIndex) => this.telemetrySource?.setSpeed(this.getSimulationSpeed(speedLevelIndex)),
       onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
+      onResetView: () => this.resetView(),
       onResetSimulation: () => this.resetSimulation(),
       onReloadScene: this.onReloadScene,
       onLoadDemoPreset: this.onLoadDemoPreset,
@@ -425,6 +437,34 @@ export class FleetScene {
     this.controls.target.copy(this.initialTarget);
   }
 
+  /** Starts a smooth fly-back from the current camera pose to the initial framing (position + look-at target). */
+  private resetView(): void {
+    // Follow mode drives the camera every frame, so drop to Free or the tween would be fought and snap back.
+    this.params.cameraMode = CAMERA_MODES.FREE;
+    this.viewResetStartPosition.copy(this.camera.position);
+    this.viewResetStartTarget.copy(this.controls.target);
+    this.viewResetElapsedSeconds = 0;
+    this.isResettingView = true;
+  }
+
+  /** Advances an in-flight "Reset view" tween, easing camera position and orbit target toward the initial frame. */
+  private updateViewReset(delta: number): void {
+    if (!this.isResettingView) {
+      return;
+    }
+    // Suspend orbit input for the flight so a stray drag can't fight the tween; restored when it lands.
+    this.controls.enabled = false;
+    this.viewResetElapsedSeconds += delta;
+    const progress = Math.min(this.viewResetElapsedSeconds / RESET_VIEW_DURATION_SECONDS, 1);
+    const eased = easeInOutCubic(progress);
+    this.camera.position.lerpVectors(this.viewResetStartPosition, this.initialCameraPosition, eased);
+    this.controls.target.lerpVectors(this.viewResetStartTarget, this.initialTarget, eased);
+    if (progress >= 1) {
+      this.isResettingView = false;
+      this.controls.enabled = true;
+    }
+  }
+
   /** Returns the simulation-speed multiplier for the given speed-level slider index. */
   private getSimulationSpeed(speedLevelIndex = this.params.speedLevelIndex): number {
     return SIMULATION_SPEED_LEVELS[this.toSpeedLevelIndex(speedLevelIndex)] ?? SIMULATION_SPEED_LEVELS[0];
@@ -452,6 +492,7 @@ export class FleetScene {
     this.updateFleet();
     this.updateRouteVisibility();
     this.updateCameraMode();
+    this.updateViewReset(delta);
     this.controls.update();
     this.constrainCameraAboveHorizon();
     updateVertiportBillboards(this.vertiportGroup, this.camera);
