@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { BuildingFootprint, SceneBounds, ScenePoint } from "../types";
-import { GRID_COLOR, GRID_OPACITY, GRID_Y_OFFSET_METERS } from "../constant";
+import { GRID_SPACING_TICKS, GRID_TARGET_CELL_COUNT, GRID_Y_OFFSET_METERS } from "../constant";
 
 /** Extrudes a 2D footprint into a 3D building geometry; returns null when the footprint has no points. */
 export function createBuildingGeometry(building: BuildingFootprint): THREE.BufferGeometry | null {
@@ -25,10 +25,9 @@ export function createBuildingGeometry(building: BuildingFootprint): THREE.Buffe
   return geometry;
 }
 
-/** Builds a LineSegments grid of horizontal/vertical lines at adaptive spacing covering the scene bounds. */
-export function createBoundedGrid(bounds: SceneBounds): THREE.LineSegments {
+/** Builds the grid's line-segment geometry: horizontal/vertical lines at `spacing` meters covering the scene bounds. */
+export function buildGridGeometry(bounds: SceneBounds, spacing: number): THREE.BufferGeometry {
   const positions: number[] = [];
-  const spacing = chooseGridSpacing(Math.max(bounds.width, bounds.depth));
   const y = GRID_Y_OFFSET_METERS;
   const firstX = Math.ceil(bounds.min.x / spacing) * spacing;
   const firstZ = Math.ceil(bounds.min.z / spacing) * spacing;
@@ -43,13 +42,26 @@ export function createBoundedGrid(bounds: SceneBounds): THREE.LineSegments {
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  const material = new THREE.LineBasicMaterial({
-    color: GRID_COLOR,
-    transparent: true,
-    opacity: GRID_OPACITY,
-    depthWrite: false,
+  return geometry;
+}
+
+/**
+ * Picks the initial "Grid Size" tick index from the scene bounds: the tick whose spacing lands nearest
+ * to longestDimension / GRID_TARGET_CELL_COUNT. Choosing the nearest tick in the fixed array inherently
+ * clamps both ends (tiny scenes get the smallest tick, huge scenes the largest).
+ */
+export function initialGridSpacingIndex(bounds: SceneBounds): number {
+  const target = Math.max(bounds.width, bounds.depth) / GRID_TARGET_CELL_COUNT;
+  let bestIndex = 0;
+  let bestDelta = Infinity;
+  GRID_SPACING_TICKS.forEach((tick, index) => {
+    const delta = Math.abs(tick - target);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestIndex = index;
+    }
   });
-  return new THREE.LineSegments(geometry, material);
+  return bestIndex;
 }
 
 /** Clips a polygon (in x/z) against the four scene-bounds edges using Sutherland-Hodgman. */
@@ -96,14 +108,6 @@ export function getCachedColor(cache: Map<string, THREE.Color>, value: string): 
   const color = new THREE.Color(value);
   cache.set(value, color);
   return color;
-}
-
-/** Picks a reference grid spacing in meters based on the longest scene dimension. */
-function chooseGridSpacing(size: number): number {
-  if (size > 6_000) return 200;
-  if (size > 3_000) return 100;
-  if (size > 1_500) return 50;
-  return 25;
 }
 
 /** Sutherland-Hodgman one-edge clip: keeps inside vertices and inserts intersections where edges cross the clip line. */

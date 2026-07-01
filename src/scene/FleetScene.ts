@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import type { Pane } from "tweakpane";
-import type { SceneData, UavState } from "../types";
+import type { SceneBounds, SceneData, UavState } from "../types";
 import {
   AIRSPACE_RENDER_ORDER,
   CAMERA_FAR_METERS,
@@ -16,6 +16,7 @@ import {
   FOLLOW_CAMERA_HEIGHT_METERS,
   FRAME_DELTA_MAX_SECONDS,
   FREE_CAMERA_PAN_METERS_PER_SECOND,
+  GRID_SPACING_TICKS,
   GROUND_PADDING_METERS,
   INITIAL_CAMERA_HEIGHT_METERS,
   INITIAL_CAMERA_X_OFFSET_METERS,
@@ -34,7 +35,7 @@ import {
   WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
-import { padSceneBounds } from "../geometry/map";
+import { buildGridGeometry, initialGridSpacingIndex, padSceneBounds } from "../geometry/map";
 import { createBlobShadowMesh, createUavMesh } from "../layer/drone";
 import { TelemetryClient } from "../telemetry/client";
 import { DemoFleetSource } from "../fleet/demoSource";
@@ -43,7 +44,7 @@ import { UavInstanceWriter } from "../fleet/uavInstanceWriter";
 import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
 import type { UavModel } from "../geometry/drone";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
-import { createBuildingGroup, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
+import { createBuildingGroup, createGrid, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
 import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
 import {
@@ -124,6 +125,10 @@ export class FleetScene {
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
   private readonly vertiportGroup: THREE.Group;
+  /** Standalone reference-grid layer; its geometry is swapped in place when the "Grid Size" slider changes. */
+  private readonly grid: THREE.LineSegments;
+  /** Padded ground bounds shared by the ground plane and the grid; reused when rebuilding the grid geometry. */
+  private readonly gridBounds: SceneBounds;
   private readonly labelNodes: Map<string, HTMLDivElement>;
   private readonly corridorLabelNodes: CorridorLabelNode[];
   private readonly simulationClockValue: HTMLElement;
@@ -187,6 +192,8 @@ export class FleetScene {
     this.activeSource = this.demoSource;
 
     this.params = createDefaultControlState(options.activeDemoPreset ?? null);
+    // Seed the grid spacing from the scene size before the control pane binds to it (no pane refresh needed).
+    this.params.gridSpacingIndex = initialGridSpacingIndex(this.sceneData.sceneBounds);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_DEVICE_PIXEL_RATIO));
@@ -212,6 +219,9 @@ export class FleetScene {
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
+    // The grid shares the ground plane's padded bounds; both are built from this once-computed box.
+    this.gridBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
+    this.grid = createGrid(this.gridBounds, GRID_SPACING_TICKS[this.params.gridSpacingIndex]);
     this.uavMeshes = this.createUavMeshes(options.uavModels ?? null);
     // One blob slot per possible drone across every type, so no written drone can ever lack a shadow.
     let blobCapacity = 0;
@@ -301,12 +311,12 @@ export class FleetScene {
 
     this.setInitialCameraFrame();
 
-    // The ground plane extends past the scene bounds so the clipped map is not flush with its edge.
-    const groundBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
+    // The ground plane (and grid) extend past the scene bounds so the clipped map is not flush with the edge.
     this.scene.add(
       createLightingGroup(this.sceneData.sceneBounds),
       createSkyDome(),
-      createGroundGroup(groundBounds),
+      createGroundGroup(this.gridBounds),
+      this.grid,
       this.roadGroup,
       this.treeGroup,
       this.vertiportGroup,
@@ -386,6 +396,7 @@ export class FleetScene {
       onReloadScene: this.onReloadScene,
       onLoadDemoPreset: this.onLoadDemoPreset,
       onShadowsToggle: (enabled) => this.applyShadowsEnabled(enabled),
+      onGridSpacingChange: (spacingMeters) => this.setGridSpacing(spacingMeters),
     });
   }
 
@@ -418,6 +429,13 @@ export class FleetScene {
     this.buildingGroup.visible = visibility.buildingsVisible;
     this.roadGroup.visible = visibility.roadsVisible;
     this.treeGroup.visible = visibility.treesVisible;
+    this.grid.visible = visibility.gridVisible;
+  }
+
+  /** Rebuilds the grid's line geometry at a new spacing (meters), disposing the old geometry. */
+  private setGridSpacing(spacingMeters: number): void {
+    this.grid.geometry.dispose();
+    this.grid.geometry = buildGridGeometry(this.gridBounds, spacingMeters);
   }
 
   /** Resets mutable simulation state while preserving loaded scene assets and control bindings. */

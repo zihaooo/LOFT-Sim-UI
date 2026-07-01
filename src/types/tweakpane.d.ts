@@ -4,6 +4,7 @@ declare module "tweakpane" {
   };
 
   export type BindingApi<T = unknown> = {
+    disabled: boolean;
     on(eventName: "change", handler: (event: TpChangeEvent<T>) => void): BindingApi<T>;
   };
 

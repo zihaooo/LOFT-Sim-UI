@@ -128,7 +128,11 @@ export const GROUND_COLOR = "#d9ddcf";
 export const GROUND_SEGMENTS = 24;
 export const GRID_COLOR = "#9da79b";
 export const GRID_Y_OFFSET_METERS = 0.04;
-export const GRID_OPACITY = 0.28;
+export const GRID_OPACITY = 0.4;
+// Selectable grid-line spacings (meters) for the "Grid Size" slider; the initial pick is bbox-derived.
+export const GRID_SPACING_TICKS = [100, 200, 500, 1000, 2000, 5000, 10_000] as const;
+// Target number of grid cells across the scene's longest dimension when choosing the initial spacing.
+export const GRID_TARGET_CELL_COUNT = 15;
 
 // Static scene geometry
 export const BUILDING_COLOR = "#aeb9bc";

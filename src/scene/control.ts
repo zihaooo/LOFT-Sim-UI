@@ -1,6 +1,6 @@
 import { Pane } from "tweakpane";
 import * as TweakpaneFileImportPlugin from "tweakpane-plugin-file-import";
-import { CAMERA_MODES, SIMULATION_SPEED_LEVELS } from "../constant";
+import { CAMERA_MODES, GRID_SPACING_TICKS, SIMULATION_SPEED_LEVELS } from "../constant";
 
 export type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
 export type DemoPreset = "twoCorridors" | "stressTest";
@@ -21,11 +21,14 @@ export type SimulationControlState = {
   treesVisible: boolean;
   uavLabelsVisible: boolean;
   shadowsEnabled: boolean;
+  gridVisible: boolean;
+  /** Index into GRID_SPACING_TICKS; the grid-line spacing selected by the "Grid Size" slider. */
+  gridSpacingIndex: number;
 };
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "vertiportsVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible"
+  "vertiportsVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -63,6 +66,7 @@ type SimulationControlsOptions = {
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
   onShadowsToggle: (enabled: boolean) => void;
+  onGridSpacingChange: (spacingMeters: number) => void;
 };
 
 /** Creates the default mutable control state shared by Tweakpane bindings and FleetScene. */
@@ -83,6 +87,9 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     treesVisible: true,
     uavLabelsVisible: false,
     shadowsEnabled: true,
+    gridVisible: true,
+    // Placeholder; FleetScene overwrites this with a bbox-derived index before the pane reads it.
+    gridSpacingIndex: 0,
   };
 }
 
@@ -182,6 +189,24 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     options.onShadowsToggle(state.shadowsEnabled);
   });
 
+  // Grid-line spacing is an index into GRID_SPACING_TICKS: the ticks aren't evenly spaced, so a raw value
+  // slider can't snap to them (same pattern as the Speed slider above). The slider is declared before its
+  // "Grid" toggle so the toggle's change handler can close over it and grey it out while the grid is hidden.
+  const gridSpacingSlider = controlFolder.addBinding(state, "gridSpacingIndex", {
+    label: "Grid Size",
+    min: 0,
+    max: GRID_SPACING_TICKS.length - 1,
+    step: 1,
+    format: (value: number) => formatGridSpacing(GRID_SPACING_TICKS[Math.round(value)]),
+  }).on("change", () => {
+    options.onGridSpacingChange(GRID_SPACING_TICKS[state.gridSpacingIndex]);
+  });
+  controlFolder.addBinding(state, "gridVisible", { label: "Grid" }).on("change", () => {
+    gridSpacingSlider.disabled = !state.gridVisible;
+    options.onLayerVisibilityChange(state);
+  });
+  gridSpacingSlider.disabled = !state.gridVisible;
+
   // A pure client-side camera action (no backend dependency), so it stays available in every build —
   // in dev it renders directly above the dev-only "Reset simulation" button.
   controlFolder.addButton({ title: "Reset view" }).on("click", () => {
@@ -273,4 +298,9 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
 /** Normalizes the file-input plugin's initial empty string and delete state into a File-or-null value. */
 function toFile(value: ConfigFileInputValue): File | null {
   return value instanceof File ? value : null;
+}
+
+/** Formats a grid-line spacing in meters, switching to kilometers at 1000 m and above. */
+function formatGridSpacing(meters: number): string {
+  return meters >= 1000 ? `${meters / 1000} km` : `${meters} m`;
 }

@@ -5,6 +5,8 @@ import {
   BUILDING_COLOR,
   BUILDING_METALNESS,
   BUILDING_ROUGHNESS,
+  GRID_COLOR,
+  GRID_OPACITY,
   GROUND_COLOR,
   GROUND_SEGMENTS,
   ROAD_DRAW_PRIORITY,
@@ -33,14 +35,14 @@ import {
   TREE_TRUNK_ROUGHNESS,
 } from "../constant";
 import {
+  buildGridGeometry,
   clipHorizontalPolygonToBounds,
-  createBoundedGrid,
   createBuildingGeometry,
   getCachedColor,
   isWithinHorizontalBounds,
 } from "../geometry/map";
 
-/** Builds the ground plane sized to scene bounds plus an overlaid reference grid. */
+/** Builds the ground plane sized to scene bounds. The reference grid is a separate layer (see createGrid). */
 export function createGroundGroup(bounds: SceneBounds): THREE.Group {
   const group = new THREE.Group();
   const centerX = (bounds.min.x + bounds.max.x) / 2;
@@ -51,13 +53,30 @@ export function createGroundGroup(bounds: SceneBounds): THREE.Group {
     color: GROUND_COLOR,
     roughness: 0.9,
     metalness: 0,
+    // Bias the ground backward in depth-buffer space so the coplanar grid lines win the depth test at every
+    // distance. Lines can't use POLYGON_OFFSET_FILL, and the grid's fixed 0.04 m lift falls below depth
+    // precision far from the camera (near=1/far=20000), so the grid z-fights the ground toward the horizon.
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   });
   const ground = new THREE.Mesh(geometry, material);
   ground.position.set(centerX, 0, centerZ);
   ground.receiveShadow = true;
-  group.add(ground, createBoundedGrid(bounds));
+  group.add(ground);
 
   return group;
+}
+
+/** Builds the reference grid as a standalone LineSegments layer at the given line spacing (meters). */
+export function createGrid(bounds: SceneBounds, spacing: number): THREE.LineSegments {
+  const material = new THREE.LineBasicMaterial({
+    color: GRID_COLOR,
+    transparent: true,
+    opacity: GRID_OPACITY,
+    depthWrite: false,
+  });
+  return new THREE.LineSegments(buildGridGeometry(bounds, spacing), material);
 }
 
 /** Merges all building footprints (clipped to the scene bounds) into one shadowed mesh for cheap rendering. */
