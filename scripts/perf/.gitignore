@@ -1,0 +1,2 @@
+# Per-run output is ephemeral
+*.json

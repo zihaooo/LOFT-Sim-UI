@@ -10,7 +10,9 @@
     "test": "vitest run",
     "mock:data": "python3 scripts/gen_mock_data.py --network public/data/network/airspace_network.osm --output mock/mock_telemetry.json --drones 1000",
     "mock:ws": "node scripts/mock_ws_server.mjs --data mock/mock_telemetry.json --hz 60",
-    "verify:render": "node scripts/verify-render.mjs"
+    "verify:render": "node scripts/verify-render.mjs",
+    "perf": "node scripts/perf/perf-bench.mjs",
+    "perf:record": "node scripts/perf/perf-bench.mjs --record"
   },
   "dependencies": {
     "stats.js": "^0.17.0",
