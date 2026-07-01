@@ -80,7 +80,9 @@ export const HIDDEN_UAV_SCALE = new THREE.Vector3(0, 0, 0);
 // Scene environment
 export const SKY_DOME_COLOR = "#c8dced";
 export const SKY_DOME_RADIUS_METERS = 8_000;
-export const SCENE_BACKGROUND_COLOR = SKY_DOME_COLOR; // We enabled renderer.clippingPlanes for y < 0
+// Matches the sky dome: the below-ground clipping plane removes the dome's lower hemisphere, so the
+// background shows through below the horizon — keeping the two equal hides that seam.
+export const SCENE_BACKGROUND_COLOR = SKY_DOME_COLOR;
 export const SCENE_FOG_NEAR_METERS = 1_500;
 export const SCENE_FOG_FAR_METERS = 7_500;
 export const HEMISPHERE_SKY_COLOR = "#f2f8ff";
@@ -123,7 +125,6 @@ export const BLOB_SHADOW_UNION_SMOOTH = 0.1;
 // Derived from SUN_OFFSET so it tracks the sun; the ray length cancels, leaving a simple component ratio.
 export const SHADOW_OFFSET_X_PER_M = -SUN_OFFSET.x / SUN_OFFSET.y;
 export const SHADOW_OFFSET_Z_PER_M = -SUN_OFFSET.z / SUN_OFFSET.y;
-
 
 export const GROUND_COLOR = "#d9ddcf";
 export const GROUND_SEGMENTS = 24;

@@ -201,8 +201,10 @@ export class FleetScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Clip the half-space below the ground plane (keeps y >= 0), hiding sub-surface geometry such as the
-    // buried envelope ground-terminal stubs. Global clipping needs no localClippingEnabled flag.
+    // Clip the half-space below the ground (keeps y >= -0.1), hiding sub-surface geometry such as the
+    // buried envelope ground-terminal stubs. The 0.1 m offset drops the cut just below y=0 so the ground
+    // plane (y=0) and its coplanar grid stay safely on the kept side instead of straddling the clip
+    // boundary and flickering. Global clipping needs no localClippingEnabled flag.
     this.renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.1)];
     this.host.appendChild(this.renderer.domElement);
 
