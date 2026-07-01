@@ -56,6 +56,7 @@ import {
 } from "./control";
 import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabelNode } from "./labels";
 import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
+import { createHud, updateHud, type HudRefs } from "./hud";
 
 export { loadUavModels, cloneUavModels } from "../geometry/drone";
 export type { UavModel } from "../geometry/drone";
@@ -80,7 +81,7 @@ export class FleetScene {
   private readonly host: HTMLDivElement;
   private readonly panel: HTMLDivElement;
   private readonly labelLayer: HTMLDivElement;
-  private readonly stats: HTMLDivElement;
+  private readonly hud: HudRefs;
   private readonly sceneData: SceneData;
   private readonly onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   private readonly onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
@@ -158,7 +159,7 @@ export class FleetScene {
     this.host = options.host;
     this.panel = options.panel;
     this.labelLayer = options.labelLayer;
-    this.stats = options.stats;
+    this.hud = createHud(options.stats);
     this.sceneData = options.sceneData;
     this.onReloadScene = options.onReloadScene;
     this.onLoadDemoPreset = options.onLoadDemoPreset;
@@ -559,21 +560,12 @@ export class FleetScene {
   /** Refreshes the HUD with simulation-facing state, keeping transport metrics in the debug panel. */
   private updateHudStats(): void {
     const frame = this.lastFrame;
-    const activeCount = frame?.activeCount ?? 0;
-    const parts = [`Status: ${this.params.running ? "Playing" : "Paused"}`];
-    parts.push(`Speed: ${this.getSimulationSpeed()}x`);
-
-    if (frame && frame.scheduledCount !== null) {
-      // Demo fleet exposes its full schedule; telemetry streams an open-ended active count.
-      parts.push(`UAVs: ${activeCount.toLocaleString()} active / ${frame.scheduledCount.toLocaleString()} scheduled`);
-    } else {
-      parts.push(`UAVs: ${activeCount.toLocaleString()} active`);
-    }
-
-    parts.push(`Corridors: ${this.sceneData.corridors.length.toLocaleString()}`);
-    parts.push(`Selected: ${frame?.selectedSummary ?? "none"}`);
-
-    this.stats.textContent = parts.join(" · ");
+    updateHud(this.hud, {
+      running: this.params.running,
+      speed: this.getSimulationSpeed(),
+      activeCount: frame?.activeCount ?? 0,
+      selectedSummary: frame?.selectedSummary ?? null,
+    });
   }
 
   /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */

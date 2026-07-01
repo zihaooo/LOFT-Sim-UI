@@ -122,9 +122,39 @@ select {
 }
 
 .hud__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-size: 13px;
   line-height: 1.45;
   color: rgba(246, 251, 255, 0.78);
+}
+
+.hud-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hud-sep {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.hud-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-value--status.is-playing {
+  color: #6ee7a8;
+}
+
+.hud-value--status.is-paused {
+  color: #f5c469;
+}
+
+.hud-value--selected.is-empty {
+  color: rgba(246, 251, 255, 0.4);
 }
 
 .help-panel {
