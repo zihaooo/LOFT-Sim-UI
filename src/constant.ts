@@ -78,7 +78,9 @@ export const WORLD_UP = new THREE.Vector3(0, 1, 0);
 export const HIDDEN_UAV_SCALE = new THREE.Vector3(0, 0, 0);
 
 // Scene environment
-export const SCENE_BACKGROUND_COLOR = "#dce7ef";
+export const SKY_DOME_COLOR = "#c8dced";
+export const SKY_DOME_RADIUS_METERS = 8_000;
+export const SCENE_BACKGROUND_COLOR = SKY_DOME_COLOR; // We enabled renderer.clippingPlanes for y < 0
 export const SCENE_FOG_NEAR_METERS = 1_500;
 export const SCENE_FOG_FAR_METERS = 7_500;
 export const HEMISPHERE_SKY_COLOR = "#f2f8ff";
@@ -122,8 +124,7 @@ export const BLOB_SHADOW_UNION_SMOOTH = 0.1;
 export const SHADOW_OFFSET_X_PER_M = -SUN_OFFSET.x / SUN_OFFSET.y;
 export const SHADOW_OFFSET_Z_PER_M = -SUN_OFFSET.z / SUN_OFFSET.y;
 
-export const SKY_DOME_COLOR = "#c8dced";
-export const SKY_DOME_RADIUS_METERS = 8_000;
+
 export const GROUND_COLOR = "#d9ddcf";
 export const GROUND_SEGMENTS = 24;
 export const GRID_COLOR = "#9da79b";

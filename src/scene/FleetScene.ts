@@ -201,6 +201,9 @@ export class FleetScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Clip the half-space below the ground plane (keeps y >= 0), hiding sub-surface geometry such as the
+    // buried envelope ground-terminal stubs. Global clipping needs no localClippingEnabled flag.
+    this.renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.1)];
     this.host.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
