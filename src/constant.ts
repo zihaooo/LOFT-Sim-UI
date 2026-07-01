@@ -200,12 +200,18 @@ export const VEHICLE_TYPE_FIXED_WING = 2;
 export const VEHICLE_TYPE_HYBRID = 3;
 /** Used when a drone's vehicleTypeCode is missing or unrecognized (and for the demo fleet). */
 export const DEFAULT_VEHICLE_TYPE_CODE = VEHICLE_TYPE_QUADROTOR;
-/** vehicleTypeCode -> model asset path. The keys define the full set of per-type instanced meshes. */
-export const DRONE_MODEL_PATHS_BY_TYPE: Readonly<Record<number, string>> = {
+/**
+ * vehicleTypeCode -> model asset path. The keys define the full set of per-type instanced meshes and are
+ * the single source of truth for the closed set of vehicle type codes (see {@link VehicleTypeCode}).
+ * `as const satisfies` keeps the keys narrow (so `keyof` yields the exact code union) while validating values.
+ */
+export const DRONE_MODEL_PATHS_BY_TYPE = {
   [VEHICLE_TYPE_QUADROTOR]: "/data/model/quadrotor.gltf",
   [VEHICLE_TYPE_FIXED_WING]: "/data/model/fixedwing.gltf",
   [VEHICLE_TYPE_HYBRID]: "/data/model/hybrid.gltf",
-};
+} as const satisfies Record<number, string>;
+/** The closed set of vehicle type codes the app renders, derived from the model set above. */
+export type VehicleTypeCode = keyof typeof DRONE_MODEL_PATHS_BY_TYPE;
 /** vehicleTypeCode -> human-readable name, used for debug/readout display. */
 export const VEHICLE_TYPE_NAMES_BY_CODE: Readonly<Record<number, string>> = {
   [VEHICLE_TYPE_QUADROTOR]: "quadrotor",
@@ -216,7 +222,15 @@ export const VEHICLE_TYPE_NAMES_BY_CODE: Readonly<Record<number, string>> = {
 export const SUPPORTED_VEHICLE_TYPE_NAMES = Object.keys(DRONE_MODEL_PATHS_BY_TYPE)
   .map((code) => VEHICLE_TYPE_NAMES_BY_CODE[Number(code)] ?? `type ${code}`)
   .join(", ");
-export const DRONE_MODEL_SPAN_METERS = 22;
+/**
+ * vehicleTypeCode -> widest horizontal span (m). Drives geometry normalization and the blob-shadow footprint,
+ * so a drone's shadow matches its body. `satisfies Record<VehicleTypeCode, number>` makes a missing entry a compile error.
+ */
+export const DRONE_MODEL_SPAN_METERS_BY_TYPE: Readonly<Record<number, number>> = {
+  [VEHICLE_TYPE_QUADROTOR]: 22,
+  [VEHICLE_TYPE_FIXED_WING]: 34,
+  [VEHICLE_TYPE_HYBRID]: 28,
+} satisfies Record<VehicleTypeCode, number>;
 export const FALLBACK_UAV_RADIUS_METERS = 7;
 export const FALLBACK_UAV_HEIGHT_METERS = 22;
 export const FALLBACK_UAV_RADIAL_SEGMENTS = 8;

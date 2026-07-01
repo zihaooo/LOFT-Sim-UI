@@ -3,7 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   DRONE_MODEL_PATHS_BY_TYPE,
-  DRONE_MODEL_SPAN_METERS,
+  DRONE_MODEL_SPAN_METERS_BY_TYPE,
   FALLBACK_UAV_HEIGHT_METERS,
   FALLBACK_UAV_RADIAL_SEGMENTS,
   FALLBACK_UAV_RADIUS_METERS,
@@ -25,7 +25,7 @@ export async function loadUavModels(): Promise<Map<number, UavModel>> {
   const loader = new GLTFLoader();
   const entries = await Promise.all(
     Object.entries(DRONE_MODEL_PATHS_BY_TYPE).map(async ([code, path]) => {
-      const model = await loadUavModel(loader, path);
+      const model = await loadUavModel(loader, path, DRONE_MODEL_SPAN_METERS_BY_TYPE[Number(code)]);
       return [Number(code), model] as const;
     }),
   );
@@ -104,15 +104,27 @@ export function setUavAttitudeQuaternion(
   quaternion.multiply(uavAttitudeScratch);
 }
 
-/** Loads one gltf and bakes it into a normalized model, returning null when the asset is unavailable. */
-async function loadUavModel(loader: GLTFLoader, modelPath: string): Promise<UavModel | null> {
+/**
+ * Loads one gltf and bakes it into a normalized model sized to `spanMeters`, returning null when the asset is
+ * unavailable. Owns the normalization step (buildUavModel only merges): scaling to the per-type span lives here
+ * so the merge stays independent of vehicle size.
+ */
+async function loadUavModel(
+  loader: GLTFLoader,
+  modelPath: string,
+  spanMeters: number,
+): Promise<UavModel | null> {
   if (!(await assetExists(modelPath))) {
     return null;
   }
 
   try {
     const gltf = await loader.loadAsync(modelPath);
-    return buildUavModel(gltf.scene);
+    const model = buildUavModel(gltf.scene);
+    if (model) {
+      normalizeDroneGeometry(model.geometry, spanMeters);
+    }
+    return model;
   } catch (error) {
     console.warn(`Failed to load UAV model from ${modelPath}; falling back to cone.`, error);
     return null;
@@ -133,7 +145,8 @@ async function assetExists(path: string): Promise<boolean> {
 /**
  * Walks the gltf scene, baking world transforms into one merged geometry while keeping each source mesh's
  * material. Merging with groups means group i indexes materials[i], so the InstancedMesh renders the model's
- * own colors. Returns null when the scene carries no geometry.
+ * own colors. Returns the raw merged model (not yet size-normalized — loadUavModel does that), or null when
+ * the scene carries no geometry.
  */
 function buildUavModel(root: THREE.Object3D): UavModel | null {
   const geometries: THREE.BufferGeometry[] = [];
@@ -163,7 +176,6 @@ function buildUavModel(root: THREE.Object3D): UavModel | null {
     return null;
   }
 
-  normalizeDroneGeometry(merged);
   return { geometry: merged, materials };
 }
 
@@ -173,8 +185,8 @@ function isMeshWithGeometry(object: THREE.Object3D): object is THREE.Mesh {
   return candidate.isMesh && Boolean(candidate.geometry);
 }
 
-/** Centers the drone geometry on its origin and scales it so its widest horizontal span matches the configured size. */
-function normalizeDroneGeometry(geometry: THREE.BufferGeometry): void {
+/** Centers the drone geometry on its origin and scales it so its widest horizontal span matches `spanMeters`. */
+function normalizeDroneGeometry(geometry: THREE.BufferGeometry, spanMeters: number): void {
   geometry.computeBoundingBox();
   const bounds = geometry.boundingBox;
   if (!bounds) {
@@ -184,7 +196,7 @@ function normalizeDroneGeometry(geometry: THREE.BufferGeometry): void {
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   const footprint = Math.max(size.x, size.z, 0.0001);
-  const scale = DRONE_MODEL_SPAN_METERS / footprint;
+  const scale = spanMeters / footprint;
 
   geometry.translate(-center.x, -center.y, -center.z);
   geometry.scale(scale, scale, scale);

@@ -6,7 +6,7 @@ import {
   BLOB_SHADOW_MIN_OPACITY,
   BLOB_SHADOW_QUAD_HALF_EXTENT,
   BLOB_SHADOW_Y_OFFSET_METERS,
-  DRONE_MODEL_SPAN_METERS,
+  DRONE_MODEL_SPAN_METERS_BY_TYPE,
   SELECTED_UAV_COLOR,
   SHADOW_OFFSET_X_PER_M,
   SHADOW_OFFSET_Z_PER_M,
@@ -87,7 +87,8 @@ export class UavInstanceWriter implements UavFrameWriter {
     }
 
     // Scale the unit quad so its half-extent covers the drone's footprint (× the quad margin), grown with altitude.
-    const footprintHalf = DRONE_MODEL_SPAN_METERS / 2 + BLOB_SHADOW_GROWTH_PER_METER * above;
+    // The type code is already resolved to a known mesh, so it's always a key of the span map.
+    const footprintHalf = DRONE_MODEL_SPAN_METERS_BY_TYPE[typeCode] / 2 + BLOB_SHADOW_GROWTH_PER_METER * above;
     const scale = 2 * BLOB_SHADOW_QUAD_HALF_EXTENT * footprintHalf;
     // Orient the profile to the drone's heading (yaw from its world matrix's forward column) so the shape lines up.
     this.blobQuaternion.setFromAxisAngle(WORLD_UP, Math.atan2(matrix.elements[8], matrix.elements[10]));
