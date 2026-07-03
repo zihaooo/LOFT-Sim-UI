@@ -12,6 +12,7 @@
     "mock:ws": "node scripts/mock_ws_server.mjs --data mock/mock_telemetry.json --hz 60",
     "verify:render": "node scripts/verify-render.mjs",
     "perf": "node scripts/perf/perf-bench.mjs",
+    "perf:diff": "node scripts/perf/perf-diff.mjs",
     "perf:record": "node scripts/perf/perf-bench.mjs --record"
   },
   "dependencies": {

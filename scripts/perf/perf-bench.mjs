@@ -30,6 +30,7 @@
  *
  *   npm run perf                       # measure vs scripts/perf/baseline.json (replay if a fixture exists)
  *   npm run perf -- --update-baseline  # write the baseline from this run (commit it)
+ *   npm run perf:diff                  # A/B this working tree vs HEAD (perf-diff.mjs; never touches baseline.json)
  *   npm run perf:record                # (re)capture the workload fixture from the live mock stack
  *   PERF_HEADLESS=1 npm run perf       # force software WebGL (what CI uses)
  *   PERF_REPEATS=8 PERF_DRONES=1000 npm run perf   # tighter CI + amplified signal for small changes
