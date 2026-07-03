@@ -303,6 +303,9 @@ function createLoadingText(): HTMLDivElement {
 /** Fades the loading overlay out after the scene frame has been scheduled. */
 function hideLoadingOverlay(loadingOverlay: HTMLDivElement): void {
   loadingOverlay.classList.add("loading-overlay--hidden");
+  // Triggers the one-time staggered entrance of the floating overlays (see styles.css).
+  // classList.add is idempotent, so scene reloads (overlay shown → hidden) don't replay it.
+  loadingOverlay.closest(".app-shell")?.classList.add("is-ready");
 }
 
 /** Leaves a failed first load visible instead of spinning forever. */

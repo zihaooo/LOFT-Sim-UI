@@ -5,6 +5,8 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -70,8 +72,11 @@ select {
   overflow-x: hidden;
   background: #142126;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 18px 44px rgba(11, 20, 24, 0.24);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(11, 20, 24, 0.28),
+    0 8px 20px rgba(11, 20, 24, 0.22),
+    0 22px 48px rgba(11, 20, 24, 0.18);
   /* Firefox: slim translucent thumb in the panel's grey family, no track. */
   scrollbar-width: thin;
   scrollbar-color: rgba(187, 188, 196, 0.32) transparent;
@@ -108,8 +113,11 @@ select {
   color: #f6fbff;
   background: rgba(14, 25, 30, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  box-shadow: 0 18px 44px rgba(11, 20, 24, 0.22);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(11, 20, 24, 0.24),
+    0 6px 16px rgba(11, 20, 24, 0.2),
+    0 18px 40px rgba(11, 20, 24, 0.16);
   backdrop-filter: blur(14px);
 }
 
@@ -145,6 +153,10 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+.hud-value {
+  transition: color 180ms cubic-bezier(0.2, 0, 0, 1);
+}
+
 .hud-value--status.is-playing {
   color: #6ee7a8;
 }
@@ -167,9 +179,14 @@ select {
   color: rgba(246, 251, 255, 0.86);
   background: rgba(14, 25, 30, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(11, 20, 24, 0.2),
+    0 6px 16px rgba(11, 20, 24, 0.16),
+    0 16px 36px rgba(11, 20, 24, 0.14);
   font-size: 12px;
   line-height: 1.4;
+  text-wrap: pretty;
   backdrop-filter: blur(14px);
   overflow-wrap: anywhere;
 }
@@ -243,6 +260,7 @@ select {
   translate: -50% -100%;
   white-space: nowrap;
   -webkit-font-smoothing: antialiased;
+  will-change: transform;
 }
 
 .uav-label {
@@ -261,6 +279,7 @@ select {
   transform: translate(-9999px, -9999px);
   translate: -50% -50%;
   white-space: nowrap;
+  will-change: transform;
 }
 
 .label-layer--uav-visible .uav-label {
@@ -306,6 +325,7 @@ select {
   border-radius: 6px;
   font-family: "Roboto Mono", "Source Code Pro", Menlo, Consolas, monospace;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .control-readout--debug {
@@ -389,5 +409,59 @@ select {
   .help-panel {
     top: auto;
     bottom: 126px;
+  }
+}
+
+/* --- Motion polish -------------------------------------------------------- */
+
+/* Staggered entrance for the floating overlays once the scene is ready. The
+   `is-ready` class is added when the loading overlay hides; classList.add is
+   idempotent, so this plays once on first load and not again on scene reloads.
+   Declared as an animation (not a base opacity: 0) so the cards stay visible
+   if the initial load errors and `is-ready` is never set. */
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-shell.is-ready .control-panel {
+  animation: overlay-enter 380ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.app-shell.is-ready .hud {
+  animation: overlay-enter 380ms cubic-bezier(0.2, 0, 0, 1) 80ms both;
+}
+
+.app-shell.is-ready .help-panel {
+  animation: overlay-enter 380ms cubic-bezier(0.2, 0, 0, 1) 160ms both;
+}
+
+/* Tactile press + smooth hover on the Tweakpane action buttons
+   (Reset view, Reset simulation, Reload scene). */
+.control-panel .tp-btnv_b {
+  transition:
+    transform 120ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.control-panel .tp-btnv_b:active {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.is-ready .control-panel,
+  .app-shell.is-ready .hud,
+  .app-shell.is-ready .help-panel {
+    animation: none;
+  }
+
+  .control-panel .tp-btnv_b:active {
+    transform: none;
   }
 }
