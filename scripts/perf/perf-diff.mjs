@@ -31,11 +31,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
-
-const ROOT = new URL("../../", import.meta.url).pathname;
-const BENCH = new URL("./perf-bench.mjs", import.meta.url).pathname;
-const BASELINE = new URL("./baseline.json", import.meta.url).pathname;
-const LAST_RUN = new URL("./last-run.json", import.meta.url).pathname;
+import { BASELINE, BENCH, LAST_RUN, ROOT } from "./lib/paths.mjs";
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 const step = (msg) => console.log(`\n${bold(`[perf:diff] ${msg}`)}`);
