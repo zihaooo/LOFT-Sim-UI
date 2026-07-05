@@ -21,6 +21,15 @@ export function r2(n) { return Math.round(n * 100) / 100; }
 /**
  * Splits one burst's frames at a robust cutoff into `compute` (reproducible CPU work — what your code
  * changes move) and `stalls` (SwiftShader inline-raster / GC hiccups). Headline stats use the compute set.
+ *
+ * CAVEAT — stall rate anticorrelates with compute speed, so compare it only between runs of similar
+ * compute mean. The harness steps frames back-to-back (no vsync idle), so the faster the body, the less
+ * wall-clock the GPU process gets to drain the queued draws/uploads per frame; past a threshold the
+ * renderer blocks inside a GL call and the block lands in the timed body as a "stall". Verified
+ * 2026-07-05: padding the frame body with a pure busy-wait (no app change) from 1.38ms to 2.15ms took
+ * the stall rate from 2.6% to 0.0%. At real vsync pacing (~15ms idle/frame) this backpressure never
+ * happens, so a stall-rate rise on a faster build is a harness-pacing artifact, not an app regression —
+ * which is why stalls are reported but never gated.
  */
 export function computeStats(frames) {
   const cutoff = Math.max(8, pct(frames, 50) * 4);
