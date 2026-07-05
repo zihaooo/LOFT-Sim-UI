@@ -19,7 +19,6 @@ export class DemoFleetSource implements FleetSource {
   private readonly activeUavIndices: number[] = [];
   /** Per-vehicle-type slot -> fleet index (the demo only populates the default type), for resolving picks. */
   private readonly slotToFleetIndexByType = new Map<number, number[]>();
-  private readonly uavStateById = new Map<string, UavState>();
   private readonly matrix = new THREE.Matrix4();
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
@@ -42,32 +41,40 @@ export class DemoFleetSource implements FleetSource {
 
   /** Updates each active UAV's position/orientation and writes its instance matrix and tint color. */
   update(ctx: FleetFrameContext): FleetFrame {
-    const { writer, elapsedSeconds, selectedUavId } = ctx;
+    const { writer, elapsedSeconds } = ctx;
+    // Reconciled below: a selection pointing at a UAV this frame destroys is cleared, never echoed back.
+    let selectedUavId = ctx.selectedUavId;
     writer.begin();
     for (const slots of this.slotToFleetIndexByType.values()) {
       slots.length = 0;
     }
     this.activateDepartedUavs(elapsedSeconds);
-    this.uavStateById.clear();
     let activeCount = 0;
     let selection: FleetSelection | null = null;
+    let selectedUavState: UavState | null = null;
 
     for (let activeIndex = 0; activeIndex < this.activeUavIndices.length;) {
       const index = this.activeUavIndices[activeIndex];
       const uav = this.fleet[index];
       const route = this.routeById.get(uav.routeId);
       if (!route) {
+        if (uav.id === selectedUavId) {
+          selectedUavId = "";
+        }
         this.removeActiveUavAt(activeIndex);
         continue;
       }
 
-      const uavState = getUavRoutePosition(uav, route, elapsedSeconds, 1);
+      const uavState = getUavRoutePosition(uav, route, elapsedSeconds);
       const position = toVector3(uavState.position);
       const tangent = toVector3(uavState.tangent).normalize();
 
       if (uavState.status === "destroyed") {
+        // A demo UAV never comes back after destruction, so a selection pointing at it is cleared here
+        // instead of lingering as a zombie id in the HUD and Follow mode. (Telemetry deliberately keeps
+        // its selection through transient absence — a drone missing from one snapshot may return.)
         if (uav.id === selectedUavId) {
-          selection = { position, tangent };
+          selectedUavId = "";
         }
         this.removeActiveUavAt(activeIndex);
         continue;
@@ -78,7 +85,6 @@ export class DemoFleetSource implements FleetSource {
         continue;
       }
 
-      this.uavStateById.set(uav.id, uavState);
       setUavYawQuaternion(this.quaternion, tangent);
       this.matrix.compose(position, this.quaternion, this.scale);
       const written = writer.write(DEFAULT_VEHICLE_TYPE_CODE, this.matrix, uav.id === selectedUavId);
@@ -89,6 +95,7 @@ export class DemoFleetSource implements FleetSource {
 
       if (uav.id === selectedUavId) {
         selection = { position, tangent };
+        selectedUavState = uavState;
       }
       activeIndex += 1;
     }
@@ -102,7 +109,7 @@ export class DemoFleetSource implements FleetSource {
       selectedUavId,
       selectedRouteId: this.fleetById.get(selectedUavId)?.routeId ?? null,
       selection,
-      uavStateById: this.uavStateById,
+      selectedUavState,
       selectedSummary: this.describeSelection(selectedUavId),
     };
   }
@@ -120,7 +127,6 @@ export class DemoFleetSource implements FleetSource {
     this.nextPendingUavIndex = 0;
     this.activeUavIndices.length = 0;
     this.slotToFleetIndexByType.clear();
-    this.uavStateById.clear();
   }
 
   /** Records which fleet index occupies a per-type instance slot, for resolving raycast hits back to a UAV. */

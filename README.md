@@ -68,7 +68,7 @@ src/
   layer/      scene layer builders (map, environment, corridor, drone)
   fleet/      fleet sources — frontend demo scheduling and telemetry-backed state
   telemetry/  websocket client and binary telemetry protocol
-  scene/      FleetScene orchestration, control panel, labels, HUD readouts
+  scene/      FleetScene orchestration, camera rig, control panel, labels, HUD readouts
   main.ts     entry point: selects data source and mounts FleetScene
   constant.ts shared tunables; types.ts core scene/UAV types
 ```
@@ -94,7 +94,7 @@ The Tweakpane panel has three sections:
 
 - **Config Files** — upload a custom map, air-corridor, or demand file and **Reload scene**.
 - **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (vertiports, corridors, routes, flight envelopes, buildings, roads, trees, ground grid, labels), a **Grid Size** slider (reference-grid line spacing, its initial value sized to the scene), a **Shadows** on/off toggle (building/tree shadows plus drones' altitude-faded ground shadows), a **Reset view** button (animated fly-back to the initial camera framing), and **Reset simulation**.
-- **Demo** — load the frontend-only **Two Corridors** or **Stress Test** preset (toggling off restores the default telemetry-backed scene).
+- **Demo** — a preset dropdown (**None** / **Two Corridors** / **Stress Test**) that loads a frontend-only demo scene; **None** restores the default telemetry-backed scene.
 
 Camera and selection:
 
@@ -104,4 +104,4 @@ Camera and selection:
 
 ## Coordinate system
 
-City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. The scene bounds and initial camera are derived from the airspace network — its node extent padded by 500 m on each side — and any base map is clipped to those bounds. The ground plane extends a further 250 m so the clipped map sits inside a margin of bare ground. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
+City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. The scene bounds and initial camera are derived from the airspace network — its node extent padded by 500 m on each side — and any base map is clipped to those bounds. The ground plane extends a further 150 m (`GROUND_PADDING_METERS`) so the clipped map sits inside a margin of bare ground. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.

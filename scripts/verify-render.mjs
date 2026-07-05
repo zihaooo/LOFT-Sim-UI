@@ -83,7 +83,7 @@ async function capture(chromePath, url) {
     const TYPE = ["quadrotor", "fixed_wing", "hybrid"];
     const isSel = (t) => TYPE.some((k) => t.includes(k));
 
-    const active = (await hud()).match(/UAVs:\s*(\d+)\s*active/)?.[1] ?? "0";
+    const active = (await hud()).match(/Active UAVs:\s*([\d,]+)/)?.[1]?.replace(/,/g, "") ?? "0";
     await page.screenshot({ path: `${OUT}/fleet.png` });
 
     const box = await page.$eval("canvas", (c) => { const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });

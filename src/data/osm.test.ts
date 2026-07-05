@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseOsm, projectGeoPoint } from "./common";
+import { averageOrigin, parseOsm, projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
 import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
@@ -22,7 +22,8 @@ describe("OSM and flow parsing", () => {
     expect(corridors).toHaveLength(2);
     expect(corridors[0].id).toBe("1");
     expect(corridors[0].points.length).toBeGreaterThan(10);
-    expect(corridors[0].points[1].y).toBe(corridors[0].geoPoints[1].altitude);
+    const secondNodeAltitude = parseOsm(corridorOsm).nodes.get(corridors[0].nodeIds[1])?.altitude;
+    expect(corridors[0].points[1].y).toBe(secondNodeAltitude);
     expect(corridors[0].points[1].y).toBeGreaterThan(0);
     expect(corridors[0].length).toBeGreaterThan(900);
     expect(corridors.every((corridor) => corridor.from && corridor.to)).toBe(true);
@@ -64,7 +65,7 @@ describe("OSM and flow parsing", () => {
   it("parses building footprints and resolves heights from the provided map", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
+    const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
     const buildings = parseBuildings(mapOsm, origin);
 
     expect(buildings.length).toBeGreaterThan(100);
@@ -75,7 +76,7 @@ describe("OSM and flow parsing", () => {
   it("parses road ways from the provided map", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
+    const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
     const roads = parseRoads(mapOsm, origin);
 
     expect(roads.length).toBeGreaterThan(100);
@@ -86,7 +87,7 @@ describe("OSM and flow parsing", () => {
   it("parses tree nodes from the provided map", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
-    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
+    const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
     const trees = parseTrees(mapOsm, origin);
 
     expect(trees.length).toBeGreaterThan(10);
@@ -95,7 +96,7 @@ describe("OSM and flow parsing", () => {
 
   it("computes padded scene bounds from the airspace-network nodes", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
-    const origin = parseAirCorridors(corridorOsm)[0].geoPoints[0];
+    const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
     const nodes = Array.from(parseOsm(corridorOsm).nodes.values());
     const projected = nodes.map((node) => projectGeoPoint(node, origin));
     const rawMinX = Math.min(...projected.map((point) => point.x));
@@ -140,7 +141,7 @@ describe("OSM and flow parsing", () => {
 
   it("parses the four vertiports in the provided airspace network", () => {
     const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
-    const vertiports = parseVertiports(corridorOsm, parseAirCorridors(corridorOsm)[0].geoPoints[0]);
+    const vertiports = parseVertiports(corridorOsm, averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values())));
 
     expect(vertiports).toHaveLength(4);
     expect(vertiports.map((vertiport) => vertiport.id)).toContain("michigan_medicine");
@@ -243,7 +244,6 @@ describe("projection and polyline measurement", () => {
       { x: 3, y: 12, z: 4 },
     ]);
 
-    expect(metrics.segmentLengths).toEqual([5, 12]);
     expect(metrics.cumulativeLengths).toEqual([0, 5, 17]);
     expect(metrics.length).toBe(17);
   });

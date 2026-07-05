@@ -3,7 +3,6 @@ import type { ProjectionOrigin, ScenePoint } from "../types";
 
 export const TELEMETRY_HEADER_BYTES = 16;
 export const TELEMETRY_DRONE_RECORD_BYTES = 64;
-export const TELEMETRY_SNAPSHOT_BUFFER_SIZE = 3;
 
 export type SimulatorPoint = {
   x: number;
@@ -178,33 +177,28 @@ export function convertTelemetrySnapshotToScene(
   };
 }
 
+/**
+ * Holds the single most recent snapshot, deduped by sequence: push() rejects (returns false for) a
+ * frame at or behind the held one, which the client counts as a drop. Rendering only ever consumes
+ * the latest state — there is no interpolation — so no history is kept.
+ */
 export class TelemetrySnapshotBuffer {
-  private readonly snapshots: TelemetrySnapshot[] = [];
-
-  constructor(private readonly maxSize = TELEMETRY_SNAPSHOT_BUFFER_SIZE) {}
+  private snapshot: TelemetrySnapshot | undefined;
 
   push(snapshot: TelemetrySnapshot): boolean {
-    const latest = this.latest();
-    if (latest && snapshot.sequence <= latest.sequence) {
+    if (this.snapshot && snapshot.sequence <= this.snapshot.sequence) {
       return false;
     }
 
-    this.snapshots.push(snapshot);
-    while (this.snapshots.length > this.maxSize) {
-      this.snapshots.shift();
-    }
+    this.snapshot = snapshot;
     return true;
   }
 
   latest(): TelemetrySnapshot | undefined {
-    return this.snapshots[this.snapshots.length - 1];
-  }
-
-  size(): number {
-    return this.snapshots.length;
+    return this.snapshot;
   }
 
   clear(): void {
-    this.snapshots.length = 0;
+    this.snapshot = undefined;
   }
 }

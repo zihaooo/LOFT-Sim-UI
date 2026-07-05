@@ -50,8 +50,8 @@ export type FleetFrame = {
   selectedRouteId: string | null;
   /** Follow-camera pose for the selected UAV, or null when nothing selectable is visible. */
   selection: FleetSelection | null;
-  /** Active + selected UAV states keyed by id, for label projection. */
-  uavStateById: Map<string, UavState>;
+  /** State of the selected UAV while it is actively flying (drives its label), or null otherwise. */
+  selectedUavState: UavState | null;
   /** One-line HUD description of the selected UAV ("none" when nothing is selected). */
   selectedSummary: string;
 };

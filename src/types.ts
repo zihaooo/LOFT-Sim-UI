@@ -36,13 +36,11 @@ export type AirPath = {
   /** Index of the connected component this path belongs to; all paths in a component share one color. */
   componentId: number;
   points: ScenePoint[];
-  geoPoints: GeoPoint[];
   /** OSM node id per point (aligned with `points`); used to detect shared junction nodes across paths. */
   nodeIds: string[];
   /** Per-point flag (aligned with `points`): true when the node is a vertiport terminal, which never connects onward. */
   vertiportFlags: boolean[];
   length: number;
-  segmentLengths: number[];
   cumulativeLengths: number[];
 };
 
@@ -90,18 +88,13 @@ export type UavSchedule = {
   id: string;
   type: string;
   routeId: string;
-  platoonId: string;
   speedMetersPerSecond: number;
-  offsetMeters: number;
   departureTimeSeconds: number;
-  cycleSeconds: number;
 };
 
 export type UavState = {
   position: ScenePoint;
   tangent: ScenePoint;
-  distance: number;
-  progress: number;
   status: "pending" | "active" | "destroyed";
 };
 

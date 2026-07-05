@@ -101,11 +101,9 @@ export class TelemetryClient {
   }
 
   getStats(): TelemetryClientStats {
-    const latest = this.buffer.latest();
     return {
       ...this.stats,
       snapshotHz: this.computeSnapshotHz(),
-      lastError: latest ? this.stats.lastError : this.stats.lastError,
     };
   }
 

@@ -10,6 +10,12 @@ if (!root) {
   throw new Error("Missing #root element");
 }
 
+/** Overlay content markup, shared by the initial shell and every later showLoadingOverlay() restore. */
+const LOADING_OVERLAY_CONTENT = `
+  <div class="loading-overlay__spinner" aria-hidden="true"></div>
+  <div class="loading-overlay__text">Loading scene</div>
+`;
+
 root.innerHTML = `
   <main class="app-shell">
     <section class="scene-shell" aria-label="UAM Simulator">
@@ -22,10 +28,7 @@ root.innerHTML = `
       <div class="help-panel">
         Right-drag rotate · Left-drag pan · Scroll zoom · WASD/arrows move · Click UAV to select
       </div>
-      <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
-        <div class="loading-overlay__spinner" aria-hidden="true"></div>
-        <div class="loading-overlay__text">Loading scene</div>
-      </div>
+      <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">${LOADING_OVERLAY_CONTENT}</div>
     </section>
     <aside id="control-panel" class="control-panel" aria-label="Simulation controls"></aside>
   </main>
@@ -199,27 +202,26 @@ async function loadDefaultSources(): Promise<SceneSourceTexts> {
   return { corridorOsm, buildingOsm, flowJson };
 }
 
+/** Bundled corridor/demand fixture paths per frontend-only demo preset (the base map is shared). */
+const DEMO_PRESET_PATHS: Record<DemoPreset, { corridor: string; flow: string }> = {
+  twoCorridors: { corridor: "/data/network/two_air_corridor.osm", flow: "/data/demand/two_flow.json" },
+  stressTest: { corridor: "/data/network/stress_air_corridor.osm", flow: "/data/demand/stress_flow.json" },
+};
+
 /** Reads a built-in demo preset. Demo presets are always frontend-only. */
 async function loadDemoSources(preset: DemoPreset | null): Promise<SceneSourceTexts> {
-  if (preset === "stressTest") {
-    const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
-      loadText("/data/network/stress_air_corridor.osm"),
-      loadOptionalText("/data/network/map.osm"),
-      loadText("/data/demand/stress_flow.json"),
-    ]);
-
-    return { corridorOsm, buildingOsm, flowJson };
-  } else if (preset === "twoCorridors") {
-      const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
-          loadText("/data/network/two_air_corridor.osm"),
-          loadOptionalText("/data/network/map.osm"),
-          loadText("/data/demand/two_flow.json"),
-      ]);
-
-      return { corridorOsm, buildingOsm, flowJson };
+  if (!preset) {
+    return loadDefaultSources();
   }
 
-  return loadDefaultSources();
+  const paths = DEMO_PRESET_PATHS[preset];
+  const [corridorOsm, buildingOsm, flowJson] = await Promise.all([
+    loadText(paths.corridor),
+    loadOptionalText("/data/network/map.osm"),
+    loadText(paths.flow),
+  ]);
+
+  return { corridorOsm, buildingOsm, flowJson };
 }
 
 /** Applies uploaded files over the existing source texts without mutating the current running scene. */
@@ -260,44 +262,12 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
-/** Creates or restores the full-scene loading overlay used during initial load and scene reloads. */
+/** Restores and shows the full-scene loading overlay (its content may have been replaced by an error). */
 function showLoadingOverlay(): HTMLDivElement {
-  const existingOverlay = document.querySelector<HTMLDivElement>("#loading-overlay");
-  const loadingOverlay = existingOverlay ?? createLoadingOverlay();
+  const loadingOverlay = requireElement<HTMLDivElement>("#loading-overlay");
   loadingOverlay.classList.remove("loading-overlay--hidden", "loading-overlay--error");
-  loadingOverlay.replaceChildren(
-    createLoadingSpinner(),
-    createLoadingText(),
-  );
+  loadingOverlay.innerHTML = LOADING_OVERLAY_CONTENT;
   return loadingOverlay;
-}
-
-/** Builds the loading overlay if the static shell markup is unavailable. */
-function createLoadingOverlay(): HTMLDivElement {
-  const sceneShell = requireElement<HTMLElement>(".scene-shell");
-  const loadingOverlay = document.createElement("div");
-  loadingOverlay.id = "loading-overlay";
-  loadingOverlay.className = "loading-overlay";
-  loadingOverlay.setAttribute("role", "status");
-  loadingOverlay.setAttribute("aria-live", "polite");
-  sceneShell.appendChild(loadingOverlay);
-  return loadingOverlay;
-}
-
-/** Creates the loading spinner element with the same markup used by the initial shell. */
-function createLoadingSpinner(): HTMLDivElement {
-  const spinner = document.createElement("div");
-  spinner.className = "loading-overlay__spinner";
-  spinner.setAttribute("aria-hidden", "true");
-  return spinner;
-}
-
-/** Creates the loading text element with the same text used by the initial shell. */
-function createLoadingText(): HTMLDivElement {
-  const text = document.createElement("div");
-  text.className = "loading-overlay__text";
-  text.textContent = "Loading scene";
-  return text;
 }
 
 /** Fades the loading overlay out after the scene frame has been scheduled. */

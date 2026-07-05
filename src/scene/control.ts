@@ -9,8 +9,8 @@ export type SimulationControlState = {
   running: boolean;
   speedLevelIndex: number;
   selectedUavId: string;
-  demoTwoCorridors: boolean;
-  demoStressTest: boolean;
+  /** Active frontend-only demo preset; "" is the default telemetry-backed scene (dev-only control). */
+  demoPreset: DemoPreset | "";
   cameraMode: CameraMode;
   vertiportsVisible: boolean;
   corridorsVisible: boolean;
@@ -75,8 +75,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     running: true,
     speedLevelIndex: 0,
     selectedUavId: "",
-    demoTwoCorridors: activeDemoPreset === "twoCorridors",
-    demoStressTest: activeDemoPreset === "stressTest",
+    demoPreset: activeDemoPreset ?? "",
     cameraMode: CAMERA_MODES.FREE,
     vertiportsVisible: true,
     corridorsVisible: true,
@@ -147,7 +146,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     syncingLayers = false;
     options.onLayerVisibilityChange(state);
   });
-  controlFolder.addBinding(state, "routesVisible", { label: "Selected UVA's Route" }).on("change", () => {
+  controlFolder.addBinding(state, "routesVisible", { label: "Selected UAV's Route" }).on("change", () => {
     if (syncingLayers) {
       return;
     }
@@ -218,7 +217,7 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   // so expose the Demo folder under `vite dev` only. Production is telemetry-backed,
   // and this branch is tree-shaken out of the production bundle.
   if (import.meta.env.DEV) {
-    // The backend simulator is not support reset yet.
+    // The backend simulator does not support reset yet, so this stays dev-only (frontend fleet only).
     controlFolder.addButton({ title: "Reset simulation" }).on("click", () => {
       options.onResetSimulation();
       pane.refresh();
@@ -260,35 +259,17 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
       });
     });
 
-    let syncingDemoControls = false;
     const demoFolder = pane.addFolder({ title: "Demo", expanded: false });
-    demoFolder.addBinding(state, "demoTwoCorridors", { label: "Two Corridors" }).on("change", () => {
-      if (!state.demoTwoCorridors) {
-        if (!syncingDemoControls && !state.demoStressTest) {
-          void options.onLoadDemoPreset(null);
-        }
-        return;
-      }
-
-      syncingDemoControls = true;
-      state.demoStressTest = false;
-      pane.refresh();
-      syncingDemoControls = false;
-      void options.onLoadDemoPreset("twoCorridors");
-    });
-    demoFolder.addBinding(state, "demoStressTest", { label: "Stress Test" }).on("change", () => {
-      if (!state.demoStressTest) {
-        if (!syncingDemoControls && !state.demoTwoCorridors) {
-          void options.onLoadDemoPreset(null);
-        }
-        return;
-      }
-
-      syncingDemoControls = true;
-      state.demoTwoCorridors = false;
-      pane.refresh();
-      syncingDemoControls = false;
-      void options.onLoadDemoPreset("stressTest");
+    demoFolder.addBinding(state, "demoPreset", {
+      label: "Preset",
+      options: {
+        None: "",
+        "Two Corridors": "twoCorridors",
+        "Stress Test": "stressTest",
+      },
+    }).on("change", () => {
+      // "" (None) restores the default telemetry-backed scene.
+      void options.onLoadDemoPreset(state.demoPreset || null);
     });
   }
 

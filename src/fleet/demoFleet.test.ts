@@ -10,7 +10,6 @@ const route: AirRoute = {
   color: "#47c2ff",
   envelopeRadius: 15,
   componentId: 0,
-  geoPoints: [],
   points: [
     { x: 0, y: 10, z: 0 },
     { x: 100, y: 10, z: 0 },
@@ -19,7 +18,6 @@ const route: AirRoute = {
   nodeIds: ["n0", "n1", "n2"],
   vertiportFlags: [true, false, true],
   length: 200,
-  segmentLengths: [100, 100],
   cumulativeLengths: [0, 100, 200],
 };
 
@@ -31,13 +29,10 @@ describe("fleet creation", () => {
     expect(fleet[0]).toMatchObject({
       id: "UAV-1-001",
       routeId: "A",
-      platoonId: "P-1",
       departureTimeSeconds: 0,
-      cycleSeconds: 3600,
     });
     expect(fleet[1].departureTimeSeconds).toBe(300);
     expect(fleet[11].departureTimeSeconds).toBe(3300);
-    expect(fleet.every((uav) => uav.offsetMeters === 0)).toBe(true);
     expect(fleet[0]).not.toHaveProperty("status");
   });
 
@@ -59,7 +54,6 @@ describe("route state computation", () => {
     const beforeDeparture = computeUavState(route, -50);
 
     expect(afterArrival.position).toEqual({ x: 100, y: 10, z: 100 });
-    expect(afterArrival.progress).toBe(1);
     expect(afterArrival.status).toBe("destroyed");
     expect(beforeDeparture.position).toEqual({ x: 0, y: 10, z: 0 });
     expect(beforeDeparture.status).toBe("pending");
@@ -74,7 +68,6 @@ describe("route state computation", () => {
         { x: 200, y: 10, z: 0 },
       ],
       length: 200,
-      segmentLengths: [100, 100],
       cumulativeLengths: [0, 100, 200],
     };
 
@@ -86,21 +79,20 @@ describe("route state computation", () => {
     expect(afterContact.position).toEqual({ x: 50, y: 0, z: 0 });
   });
 
-  it("computes a UAV using elapsed time and speed multiplier", () => {
+  it("computes a UAV's position from elapsed time and its scheduled speed", () => {
     const uav = createFleet([route], [{ flowId: "1", routeId: "A", uavPerHour: 1 }])[0];
-    const uavState = getUavRoutePosition(uav, route, 2, 2);
-    const expectedDistance = 2 * uav.speedMetersPerSecond * 2;
+    const uavState = getUavRoutePosition(uav, route, 4);
+    const expectedDistance = 4 * uav.speedMetersPerSecond;
 
     expect(uavState.position.x).toBe(expectedDistance);
-    expect(uavState.progress).toBeCloseTo(expectedDistance / route.length);
     expect(uavState.status).toBe("active");
   });
 
   it("marks scheduled UAVs pending or destroyed outside their route travel window", () => {
     const uav = createFleet([route], [{ flowId: "1", routeId: "A", uavPerHour: 12 }])[1];
-    const beforeDeparture = getUavRoutePosition(uav, route, 10, 1);
-    const afterDeparture = getUavRoutePosition(uav, route, 302, 1);
-    const afterArrival = getUavRoutePosition(uav, route, 330, 1);
+    const beforeDeparture = getUavRoutePosition(uav, route, 10);
+    const afterDeparture = getUavRoutePosition(uav, route, 302);
+    const afterArrival = getUavRoutePosition(uav, route, 330);
 
     expect(beforeDeparture.status).toBe("pending");
     expect(afterDeparture.status).toBe("active");

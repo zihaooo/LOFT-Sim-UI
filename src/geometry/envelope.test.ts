@@ -27,11 +27,9 @@ function fakeCorridor(
     envelopeRadius: 35,
     componentId,
     points,
-    geoPoints: points.map(() => ({ lat: 0, lon: 0, altitude: 0 })),
     nodeIds,
     vertiportFlags,
     length: 0,
-    segmentLengths: [],
     cumulativeLengths: [],
   };
 }

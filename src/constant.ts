@@ -75,7 +75,6 @@ export const SIMULATION_SPEED_LEVELS = [1, 2, 5, 10, 100] as const;
 
 // Shared vector math
 export const WORLD_UP = new THREE.Vector3(0, 1, 0);
-export const HIDDEN_UAV_SCALE = new THREE.Vector3(0, 0, 0);
 
 // Scene environment
 export const SKY_DOME_COLOR = "#c8dced";

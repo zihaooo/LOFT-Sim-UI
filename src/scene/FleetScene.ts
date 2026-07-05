@@ -2,37 +2,27 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "stats.js";
 import type { Pane } from "tweakpane";
-import type { SceneBounds, SceneData, UavState } from "../types";
+import type { SceneBounds, SceneData } from "../types";
 import {
   AIRSPACE_RENDER_ORDER,
   CAMERA_FAR_METERS,
   CAMERA_FOV_DEGREES,
-  CAMERA_MIN_Y,
-  CAMERA_MODES,
   CAMERA_NEAR_METERS,
   DEFAULT_VEHICLE_TYPE_CODE,
   DRONE_MODEL_PATHS_BY_TYPE,
-  FOLLOW_CAMERA_DISTANCE_METERS,
-  FOLLOW_CAMERA_HEIGHT_METERS,
   FRAME_DELTA_MAX_SECONDS,
-  FREE_CAMERA_PAN_METERS_PER_SECOND,
   GRID_SPACING_TICKS,
   GROUND_PADDING_METERS,
-  INITIAL_CAMERA_HEIGHT_METERS,
-  INITIAL_CAMERA_X_OFFSET_METERS,
   MAX_DEVICE_PIXEL_RATIO,
   ORBIT_DAMPING_FACTOR,
   ORBIT_MAX_DISTANCE_METERS,
   ORBIT_MIN_DISTANCE_METERS,
   ORBIT_MOUSE_BUTTONS,
-  RESET_VIEW_DURATION_SECONDS,
   SCENE_BACKGROUND_COLOR,
   SCENE_FOG_FAR_METERS,
   SCENE_FOG_NEAR_METERS,
   SIMULATION_SPEED_LEVELS,
-  SUPPORTED_VEHICLE_TYPE_NAMES,
   TELEMETRY_UAV_MESH_CAPACITY,
-  WORLD_UP,
 } from "../constant";
 import { toVector3 } from "../geometry/coordinates";
 import { buildGridGeometry, initialGridSpacingIndex, padSceneBounds } from "../geometry/map";
@@ -41,35 +31,33 @@ import { TelemetryClient } from "../telemetry/client";
 import { DemoFleetSource } from "../fleet/demoSource";
 import { TelemetrySource } from "../fleet/telemetrySource";
 import { UavInstanceWriter } from "../fleet/uavInstanceWriter";
-import type { FleetFrame, FleetFrameContext, FleetSource, TelemetryDebugReadout } from "../fleet/source";
+import type { FleetFrame, FleetFrameContext, FleetSource } from "../fleet/source";
 import type { UavModel } from "../geometry/drone";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGrid, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
 import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
+import { CameraRig } from "./cameraRig";
 import {
   createDefaultControlState,
   createSimulationControls,
-  type CameraMode,
   type ConfigFileSelection,
   type DemoPreset,
   type LayerVisibilityState,
   type SimulationControlState,
 } from "./control";
 import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabelNode } from "./labels";
-import { createReadoutPanels, formatSimulationTime, formatVector, mountStatsPanel } from "./readouts";
+import {
+  createReadoutPanels,
+  mountStatsPanel,
+  updateReadoutPanels,
+  writeStaticSceneReadouts,
+  type ReadoutPanels,
+} from "./readouts";
 import { createHud, updateHud, type HudRefs } from "./hud";
 
 export { loadUavModels, cloneUavModels } from "../geometry/drone";
 export type { UavModel } from "../geometry/drone";
-
-/** Shared empty map used for label projection before the first fleet frame is produced. */
-const EMPTY_UAV_STATE: Map<string, UavState> = new Map();
-
-/** Ease-in-out cubic for a smooth accelerate/decelerate camera fly-back; maps [0,1] -> [0,1]. */
-function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
 
 type FleetSceneOptions = {
   host: HTMLDivElement;
@@ -105,7 +93,8 @@ export class FleetScene {
   private readonly clock = new THREE.Clock();
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
-  private readonly keys = new Set<string>();
+  /** Owns all camera behavior: initial framing, keyboard pan, follow mode, reset-view tween, ground clamp. */
+  private readonly cameraRig: CameraRig;
   /** One InstancedMesh per vehicle type code (keys mirror DRONE_MODEL_PATHS_BY_TYPE). */
   private readonly uavMeshes: Map<number, THREE.InstancedMesh>;
   /** One shared decal per drone, drawing its altitude-faded ground shadow (drones don't cast into the shadow map). */
@@ -131,40 +120,17 @@ export class FleetScene {
   private readonly gridBounds: SceneBounds;
   private readonly labelNodes: Map<string, HTMLDivElement>;
   private readonly corridorLabelNodes: CorridorLabelNode[];
-  private readonly simulationClockValue: HTMLElement;
-  private readonly sceneCorridorsValue: HTMLElement;
-  private readonly sceneRoutesValue: HTMLElement;
-  private readonly sceneVertiportsValue: HTMLElement;
-  private readonly sceneBuildingsValue: HTMLElement;
-  private readonly sceneRoadsValue: HTMLElement;
-  private readonly sceneTreesValue: HTMLElement;
-  private readonly sceneUavTypesValue: HTMLElement;
-  private readonly cameraPositionValue: HTMLElement;
-  private readonly cameraLookAtValue: HTMLElement;
-  private readonly telemetryConnectionValue: HTMLElement;
-  private readonly telemetryFrequencyValue: HTMLElement;
-  private readonly telemetrySequenceValue: HTMLElement;
-  private readonly telemetryAgeValue: HTMLElement;
-  private readonly telemetryParseValue: HTMLElement;
-  private readonly telemetrySkippedValue: HTMLElement;
-  private readonly telemetryErrorValue: HTMLElement;
-  private readonly selectedPosition = new THREE.Vector3();
-  private readonly selectedTangent = new THREE.Vector3(1, 0, 0);
-  private readonly initialCameraPosition = new THREE.Vector3();
-  private readonly initialTarget = new THREE.Vector3();
-  /** Camera pose captured when a "Reset view" fly-back begins; end pose is the initial frame above. */
-  private readonly viewResetStartPosition = new THREE.Vector3();
-  private readonly viewResetStartTarget = new THREE.Vector3();
-  private viewResetElapsedSeconds = 0;
-  private isResettingView = false;
-
+  /** Camera pose of the last corridor-label projection; unchanged pose + flags skip the DOM writes. */
+  private readonly lastLabelCameraMatrix = new THREE.Matrix4();
+  private lastCorridorLabelsHidden = false;
+  /** Forces a corridor-label re-projection on the first frame and after a resize. */
+  private corridorLabelsDirty = true;
+  /** Value nodes of the debug readout panels; static rows are filled once, live rows every frame. */
+  private readonly readouts: ReadoutPanels;
   /** Source that produced the most recent frame; the raycast selection is routed back to it. */
   private activeSource: FleetSource;
   private lastFrame: FleetFrame | null = null;
   private elapsedSeconds = 0;
-  private previousCameraMode: CameraMode = CAMERA_MODES.FREE;
-  private previousSelectedUavId = "";
-  private lastFollowPosition = new THREE.Vector3();
   private animationFrame = 0;
   private started = false;
   private disposed = false;
@@ -215,6 +181,7 @@ export class FleetScene {
     this.controls.minDistance = ORBIT_MIN_DISTANCE_METERS;
     this.controls.screenSpacePanning = false;
     this.controls.mouseButtons = ORBIT_MOUSE_BUTTONS;
+    this.cameraRig = new CameraRig(this.camera, this.controls, this.sceneData.sceneBounds, this.params);
 
     this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.sceneBounds);
     this.treeGroup = createTreeGroup(this.sceneData.trees, this.sceneData.sceneBounds);
@@ -237,25 +204,8 @@ export class FleetScene {
     this.uavWriter = new UavInstanceWriter(this.uavMeshes, DEFAULT_VEHICLE_TYPE_CODE, this.blobShadowMesh, this.surfaceHeightAt);
     this.initializeStaticUavBoundingSphere();
     this.controlPane = this.createControlPane(options.panel);
-    const readouts = createReadoutPanels(options.panel);
-    this.simulationClockValue = readouts.simulationClockValue;
-    this.sceneCorridorsValue = readouts.sceneCorridorsValue;
-    this.sceneRoutesValue = readouts.sceneRoutesValue;
-    this.sceneVertiportsValue = readouts.sceneVertiportsValue;
-    this.sceneBuildingsValue = readouts.sceneBuildingsValue;
-    this.sceneRoadsValue = readouts.sceneRoadsValue;
-    this.sceneTreesValue = readouts.sceneTreesValue;
-    this.sceneUavTypesValue = readouts.sceneUavTypesValue;
-    this.sceneUavTypesValue.textContent = SUPPORTED_VEHICLE_TYPE_NAMES;
-    this.cameraPositionValue = readouts.cameraPositionValue;
-    this.cameraLookAtValue = readouts.cameraLookAtValue;
-    this.telemetryConnectionValue = readouts.telemetryConnectionValue;
-    this.telemetryFrequencyValue = readouts.telemetryFrequencyValue;
-    this.telemetrySequenceValue = readouts.telemetrySequenceValue;
-    this.telemetryAgeValue = readouts.telemetryAgeValue;
-    this.telemetryParseValue = readouts.telemetryParseValue;
-    this.telemetrySkippedValue = readouts.telemetrySkippedValue;
-    this.telemetryErrorValue = readouts.telemetryErrorValue;
+    this.readouts = createReadoutPanels(options.panel);
+    writeStaticSceneReadouts(this.readouts, this.sceneData);
     this.corridorLabelNodes = createCorridorLabels(this.sceneData.corridors, this.labelLayer);
     this.labelNodes = createUavLabels();
 
@@ -271,8 +221,8 @@ export class FleetScene {
     }
     this.started = true;
     window.addEventListener("resize", this.resize);
-    window.addEventListener("keydown", this.handleKeyDown);
-    window.addEventListener("keyup", this.handleKeyUp);
+    window.addEventListener("keydown", this.cameraRig.handleKeyDown);
+    window.addEventListener("keyup", this.cameraRig.handleKeyUp);
     this.renderer.domElement.addEventListener("pointerdown", this.handlePointerDown);
     this.renderer.domElement.addEventListener("contextmenu", this.handleContextMenu);
     this.telemetrySource?.start();
@@ -293,8 +243,8 @@ export class FleetScene {
     }
 
     window.removeEventListener("resize", this.resize);
-    window.removeEventListener("keydown", this.handleKeyDown);
-    window.removeEventListener("keyup", this.handleKeyUp);
+    window.removeEventListener("keydown", this.cameraRig.handleKeyDown);
+    window.removeEventListener("keyup", this.cameraRig.handleKeyUp);
     this.renderer.domElement.removeEventListener("pointerdown", this.handlePointerDown);
     this.renderer.domElement.removeEventListener("contextmenu", this.handleContextMenu);
     this.telemetrySource?.stop();
@@ -313,8 +263,6 @@ export class FleetScene {
   private buildScene(): void {
     this.scene.background = new THREE.Color(SCENE_BACKGROUND_COLOR);
     this.scene.fog = new THREE.Fog(SCENE_BACKGROUND_COLOR, SCENE_FOG_NEAR_METERS, SCENE_FOG_FAR_METERS);
-
-    this.setInitialCameraFrame();
 
     // The ground plane (and grid) extend past the scene bounds so the clipped map is not flush with the edge.
     this.scene.add(
@@ -396,7 +344,7 @@ export class FleetScene {
       onRunningChange: (running) => this.telemetrySource?.setRunning(running),
       onSpeedChange: (speedLevelIndex) => this.telemetrySource?.setSpeed(this.getSimulationSpeed(speedLevelIndex)),
       onLayerVisibilityChange: (visibility) => this.applyLayerVisibility(visibility),
-      onResetView: () => this.resetView(),
+      onResetView: () => this.cameraRig.resetView(),
       onResetSimulation: () => this.resetSimulation(),
       onReloadScene: this.onReloadScene,
       onLoadDemoPreset: this.onLoadDemoPreset,
@@ -455,37 +403,7 @@ export class FleetScene {
     });
     this.params.selectedUavId = "";
     this.clearUavLabels();
-    this.params.cameraMode = CAMERA_MODES.FREE;
-    this.camera.position.copy(this.initialCameraPosition);
-    this.controls.target.copy(this.initialTarget);
-  }
-
-  /** Starts a smooth fly-back from the current camera pose to the initial framing (position + look-at target). */
-  private resetView(): void {
-    // Follow mode drives the camera every frame, so drop to Free or the tween would be fought and snap back.
-    this.params.cameraMode = CAMERA_MODES.FREE;
-    this.viewResetStartPosition.copy(this.camera.position);
-    this.viewResetStartTarget.copy(this.controls.target);
-    this.viewResetElapsedSeconds = 0;
-    this.isResettingView = true;
-  }
-
-  /** Advances an in-flight "Reset view" tween, easing camera position and orbit target toward the initial frame. */
-  private updateViewReset(delta: number): void {
-    if (!this.isResettingView) {
-      return;
-    }
-    // Suspend orbit input for the flight so a stray drag can't fight the tween; restored when it lands.
-    this.controls.enabled = false;
-    this.viewResetElapsedSeconds += delta;
-    const progress = Math.min(this.viewResetElapsedSeconds / RESET_VIEW_DURATION_SECONDS, 1);
-    const eased = easeInOutCubic(progress);
-    this.camera.position.lerpVectors(this.viewResetStartPosition, this.initialCameraPosition, eased);
-    this.controls.target.lerpVectors(this.viewResetStartTarget, this.initialTarget, eased);
-    if (progress >= 1) {
-      this.isResettingView = false;
-      this.controls.enabled = true;
-    }
+    this.cameraRig.resetToInitialFrame();
   }
 
   /** Returns the simulation-speed multiplier for the given speed-level slider index. */
@@ -511,18 +429,19 @@ export class FleetScene {
       this.elapsedSeconds += delta * this.getSimulationSpeed();
     }
 
-    this.applyKeyboardNavigation(delta);
     this.updateFleet();
     this.updateRouteVisibility();
-    this.updateCameraMode();
-    this.updateViewReset(delta);
-    this.controls.update();
-    this.constrainCameraAboveHorizon();
+    this.cameraRig.update(delta, this.lastFrame?.selection ?? null);
     updateVertiportBillboards(this.vertiportGroup, this.camera);
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateHudStats();
-    this.updateReadoutPanels();
+    updateReadoutPanels(this.readouts, {
+      simTimeSeconds: this.lastFrame?.simTimeSeconds ?? this.elapsedSeconds,
+      cameraPosition: this.camera.position,
+      cameraTarget: this.controls.target,
+      telemetry: this.telemetrySource?.debugReadout() ?? null,
+    });
     this.performanceStats.end();
   };
 
@@ -538,10 +457,6 @@ export class FleetScene {
     this.activeSource = telemetryFrame ? (this.telemetrySource as FleetSource) : this.demoSource;
     this.lastFrame = frame;
     this.params.selectedUavId = frame.selectedUavId;
-    if (frame.selection) {
-      this.selectedPosition.copy(frame.selection.position);
-      this.selectedTangent.copy(frame.selection.tangent);
-    }
   }
 
   /**
@@ -577,46 +492,33 @@ export class FleetScene {
     this.labelNodes.clear();
   }
 
-  /** Switches between Free orbit and Follow modes; in Follow, snaps behind/above the UAV on entry then trails it. */
-  private updateCameraMode(): void {
-    const followEnabled = this.params.cameraMode === CAMERA_MODES.FOLLOW_SELECTED_UAV && Boolean(this.params.selectedUavId);
-    const justEnteredFollow = followEnabled && this.previousCameraMode !== CAMERA_MODES.FOLLOW_SELECTED_UAV;
-    const selectionChanged = this.params.selectedUavId !== this.previousSelectedUavId;
-    this.controls.enabled = true;
-
-    if (!followEnabled) {
-      this.previousCameraMode = this.params.cameraMode;
-      this.previousSelectedUavId = this.params.selectedUavId;
-      return;
-    }
-
-    if (justEnteredFollow || selectionChanged) {
-      const behind = this.selectedTangent.clone().multiplyScalar(-FOLLOW_CAMERA_DISTANCE_METERS);
-      this.camera.position.copy(this.selectedPosition).add(behind).add(new THREE.Vector3(0, FOLLOW_CAMERA_HEIGHT_METERS, 0));
-      this.controls.target.copy(this.selectedPosition);
-    } else {
-      const movement = this.selectedPosition.clone().sub(this.lastFollowPosition);
-      this.camera.position.add(movement);
-      this.controls.target.add(movement);
-    }
-
-    this.lastFollowPosition.copy(this.selectedPosition);
-    this.previousCameraMode = this.params.cameraMode;
-    this.previousSelectedUavId = this.params.selectedUavId;
-  }
-
   /** Projects 3D anchors to screen pixels and updates each corridor/UAV label's CSS transform. */
   private updateLabels(): void {
+    const corridorLabelsHidden =
+      !this.params.uavLabelsVisible || (!this.params.corridorsVisible && !this.params.envelopesVisible);
+    // Corridor anchors are static, so re-projecting them while the camera is idle is pure DOM-write
+    // waste (the profiled setStyle hot spot). The camera matrix compared here is the same state the
+    // projection consumes, so skipping equal frames is output-identical.
+    const reprojectCorridorLabels =
+      this.corridorLabelsDirty ||
+      corridorLabelsHidden !== this.lastCorridorLabelsHidden ||
+      !this.lastLabelCameraMatrix.equals(this.camera.matrixWorld);
+    if (reprojectCorridorLabels) {
+      this.corridorLabelsDirty = false;
+      this.lastCorridorLabelsHidden = corridorLabelsHidden;
+      this.lastLabelCameraMatrix.copy(this.camera.matrixWorld);
+    }
+
     updateLabels({
       labelLayer: this.labelLayer,
       corridorLabelNodes: this.corridorLabelNodes,
       uavLabelNodes: this.labelNodes,
-      uavStateById: this.lastFrame?.uavStateById ?? EMPTY_UAV_STATE,
+      selectedUavState: this.lastFrame?.selectedUavState ?? null,
       camera: this.camera,
       host: this.host,
       selectedUavId: this.params.selectedUavId,
-      corridorsVisible: this.params.corridorsVisible,
-      envelopesVisible: this.params.envelopesVisible,
+      reprojectCorridorLabels,
+      corridorLabelsHidden,
       uavLabelsVisible: this.params.uavLabelsVisible,
     });
   }
@@ -630,40 +532,6 @@ export class FleetScene {
       activeCount: frame?.activeCount ?? 0,
       selectedSummary: frame?.selectedSummary ?? null,
     });
-  }
-
-  /** WASD/arrow keys pan the camera (and orbit target) along the ground plane while in Free mode. */
-  private applyKeyboardNavigation(delta: number): void {
-    if (this.params.cameraMode !== CAMERA_MODES.FREE || this.keys.size === 0) {
-      return;
-    }
-
-    const direction = new THREE.Vector3();
-    const forward = new THREE.Vector3();
-    this.camera.getWorldDirection(forward);
-    forward.y = 0;
-    forward.normalize();
-    const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
-
-    if (this.keys.has("w") || this.keys.has("arrowup")) direction.add(forward);
-    if (this.keys.has("s") || this.keys.has("arrowdown")) direction.sub(forward);
-    if (this.keys.has("d") || this.keys.has("arrowright")) direction.add(right);
-    if (this.keys.has("a") || this.keys.has("arrowleft")) direction.sub(right);
-
-    if (direction.lengthSq() === 0) {
-      return;
-    }
-
-    direction.normalize().multiplyScalar(FREE_CAMERA_PAN_METERS_PER_SECOND * delta);
-    this.camera.position.add(direction);
-    this.controls.target.add(direction);
-  }
-
-  /** Clamps the camera's height to CAMERA_MIN_Y so it can't drop below the ground plane. */
-  private constrainCameraAboveHorizon(): void {
-    if (this.camera.position.y < CAMERA_MIN_Y) {
-      this.camera.position.y = CAMERA_MIN_Y;
-    }
   }
 
   /**
@@ -701,16 +569,6 @@ export class FleetScene {
     event.preventDefault();
   };
 
-  /** Tracks held keys (lowercased) for keyboard navigation in the animate loop. */
-  private handleKeyDown = (event: KeyboardEvent): void => {
-    this.keys.add(event.key.toLowerCase());
-  };
-
-  /** Releases held-key state when a key is lifted. */
-  private handleKeyUp = (event: KeyboardEvent): void => {
-    this.keys.delete(event.key.toLowerCase());
-  };
-
   /** Disposes geometries and materials owned by the scene graph. */
   private disposeSceneResources(): void {
     const geometries = new Set<THREE.BufferGeometry>();
@@ -743,6 +601,8 @@ export class FleetScene {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    // Label projection depends on the viewport size, which the camera matrix can't detect.
+    this.corridorLabelsDirty = true;
     // Fat centerlines (LineMaterial) need the viewport resolution to compute screen-space stroke width.
     const applyLineResolution = (object: THREE.Object3D): void => {
       const material = (object as Partial<{ material: { isLineMaterial?: boolean; resolution: THREE.Vector2 } }>).material;
@@ -782,42 +642,4 @@ export class FleetScene {
     });
   }
 
-  /** Starts at the middle of the ground plane's south edge, looking at the ground center. */
-  private setInitialCameraFrame(): void {
-    const bounds = this.sceneData.sceneBounds;
-    const centerX = (bounds.min.x + bounds.max.x) / 2;
-    const centerZ = (bounds.min.z + bounds.max.z) / 2;
-
-    this.initialTarget.set(centerX, 0, centerZ);
-    // this.initialCameraPosition.set(bounds.min.x, 700, centerZ);
-    this.initialCameraPosition.set(centerX + INITIAL_CAMERA_X_OFFSET_METERS, INITIAL_CAMERA_HEIGHT_METERS, centerZ);
-
-    this.camera.position.copy(this.initialCameraPosition);
-    this.controls.target.copy(this.initialTarget);
-  }
-
-  /** Refreshes simulation, scene, camera, and telemetry debug readouts each frame. */
-  private updateReadoutPanels(): void {
-    this.simulationClockValue.textContent = formatSimulationTime(this.lastFrame?.simTimeSeconds ?? this.elapsedSeconds);
-    this.sceneCorridorsValue.textContent = this.sceneData.corridors.length.toLocaleString();
-    this.sceneRoutesValue.textContent = this.sceneData.routes.length.toLocaleString();
-    this.sceneVertiportsValue.textContent = this.sceneData.vertiports.length.toLocaleString();
-    this.sceneBuildingsValue.textContent = this.sceneData.buildings.length.toLocaleString();
-    this.sceneRoadsValue.textContent = this.sceneData.roads.length.toLocaleString();
-    this.sceneTreesValue.textContent = this.sceneData.trees.length.toLocaleString();
-    this.cameraPositionValue.textContent = formatVector(this.camera.position);
-    this.cameraLookAtValue.textContent = formatVector(this.controls.target);
-    this.applyTelemetryReadout(this.telemetrySource?.debugReadout() ?? null);
-  }
-
-  /** Writes the telemetry debug block, falling back to "disabled"/"-" when no telemetry source is configured. */
-  private applyTelemetryReadout(readout: TelemetryDebugReadout | null): void {
-    this.telemetryConnectionValue.textContent = readout?.connection ?? "disabled";
-    this.telemetryFrequencyValue.textContent = readout?.frequency ?? "-";
-    this.telemetrySequenceValue.textContent = readout?.sequence ?? "-";
-    this.telemetryAgeValue.textContent = readout?.age ?? "-";
-    this.telemetryParseValue.textContent = readout?.parse ?? "-";
-    this.telemetrySkippedValue.textContent = readout?.skipped ?? "-";
-    this.telemetryErrorValue.textContent = readout?.error ?? "-";
-  }
 }

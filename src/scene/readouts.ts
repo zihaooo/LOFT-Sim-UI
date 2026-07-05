@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import Stats from "stats.js";
-import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX } from "../constant";
+import type { SceneData } from "../types";
+import type { TelemetryDebugReadout } from "../fleet/source";
+import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX, SUPPORTED_VEHICLE_TYPE_NAMES } from "../constant";
 
 export type ReadoutPanels = {
   simulationClockValue: HTMLElement;
@@ -149,8 +151,42 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   };
 }
 
+/** Fills the Scene Debug rows that are fixed for the scene's lifetime; called once at construction. */
+export function writeStaticSceneReadouts(panels: ReadoutPanels, sceneData: SceneData): void {
+  panels.sceneCorridorsValue.textContent = sceneData.corridors.length.toLocaleString();
+  panels.sceneRoutesValue.textContent = sceneData.routes.length.toLocaleString();
+  panels.sceneVertiportsValue.textContent = sceneData.vertiports.length.toLocaleString();
+  panels.sceneBuildingsValue.textContent = sceneData.buildings.length.toLocaleString();
+  panels.sceneRoadsValue.textContent = sceneData.roads.length.toLocaleString();
+  panels.sceneTreesValue.textContent = sceneData.trees.length.toLocaleString();
+  panels.sceneUavTypesValue.textContent = SUPPORTED_VEHICLE_TYPE_NAMES;
+}
+
+/** Live state the per-frame readout refresh consumes. */
+export type ReadoutUpdate = {
+  simTimeSeconds: number;
+  cameraPosition: THREE.Vector3;
+  cameraTarget: THREE.Vector3;
+  /** Transport stats from the telemetry source, or null when no telemetry is configured. */
+  telemetry: TelemetryDebugReadout | null;
+};
+
+/** Refreshes the live readouts — simulation clock, camera pose, telemetry transport — each frame. */
+export function updateReadoutPanels(panels: ReadoutPanels, update: ReadoutUpdate): void {
+  panels.simulationClockValue.textContent = formatSimulationTime(update.simTimeSeconds);
+  panels.cameraPositionValue.textContent = formatVector(update.cameraPosition);
+  panels.cameraLookAtValue.textContent = formatVector(update.cameraTarget);
+  panels.telemetryConnectionValue.textContent = update.telemetry?.connection ?? "disabled";
+  panels.telemetryFrequencyValue.textContent = update.telemetry?.frequency ?? "-";
+  panels.telemetrySequenceValue.textContent = update.telemetry?.sequence ?? "-";
+  panels.telemetryAgeValue.textContent = update.telemetry?.age ?? "-";
+  panels.telemetryParseValue.textContent = update.telemetry?.parse ?? "-";
+  panels.telemetrySkippedValue.textContent = update.telemetry?.skipped ?? "-";
+  panels.telemetryErrorValue.textContent = update.telemetry?.error ?? "-";
+}
+
 /** Formats elapsed seconds as HH:MM:SS.t for the simulation clock readout. */
-export function formatSimulationTime(seconds: number): string {
+function formatSimulationTime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const wholeSeconds = Math.floor(seconds % 60);
@@ -160,7 +196,7 @@ export function formatSimulationTime(seconds: number): string {
 }
 
 /** Pretty-prints a Vector3 as `(x ##, y ##, z ##)` for the camera debug readouts. */
-export function formatVector(vector: THREE.Vector3): string {
+function formatVector(vector: THREE.Vector3): string {
   return `(${vector.x.toFixed(1)}, ${vector.y.toFixed(1)}, ${vector.z.toFixed(1)})`;
 }
 

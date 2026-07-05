@@ -11,12 +11,18 @@ type UpdateLabelOptions = {
   labelLayer: HTMLDivElement;
   corridorLabelNodes: CorridorLabelNode[];
   uavLabelNodes: Map<string, HTMLDivElement>;
-  uavStateById: Map<string, UavState>;
+  /** State of the selected UAV while actively flying, or null — the only UAV that ever gets a label. */
+  selectedUavState: UavState | null;
   camera: THREE.Camera;
   host: HTMLElement;
   selectedUavId: string;
-  corridorsVisible: boolean;
-  envelopesVisible: boolean;
+  /**
+   * Corridor anchors are static, so their projection only changes with the camera, viewport, or
+   * visibility flags; the caller passes false to skip the per-label DOM writes on unchanged frames.
+   */
+  reprojectCorridorLabels: boolean;
+  /** Precomputed by the caller: labels off, or both the corridor and envelope layers hidden. */
+  corridorLabelsHidden: boolean;
   uavLabelsVisible: boolean;
 };
 
@@ -41,17 +47,19 @@ export function createUavLabels(): Map<string, HTMLDivElement> {
   return new Map<string, HTMLDivElement>();
 }
 
-/** Per-frame: re-projects corridor labels, prunes stale UAV labels, and refreshes the selected UAV's label. */
+/** Per-frame: re-projects corridor labels when needed, prunes stale UAV labels, and refreshes the selected UAV's label. */
 export function updateLabels(options: UpdateLabelOptions): void {
   options.labelLayer.classList.toggle("label-layer--uav-visible", options.uavLabelsVisible);
 
-  options.corridorLabelNodes.forEach(({ element, position }) => {
-    const screenPoint = toScreenPosition(position, options.camera, options.host);
-    element.style.transform = `translate3d(${screenPoint.x}px, ${screenPoint.y}px, 0)`;
-    element.hidden = !options.uavLabelsVisible || (!options.corridorsVisible && !options.envelopesVisible);
-  });
+  if (options.reprojectCorridorLabels) {
+    options.corridorLabelNodes.forEach(({ element, position }) => {
+      const screenPoint = toScreenPosition(position, options.camera, options.host);
+      element.style.transform = `translate3d(${screenPoint.x}px, ${screenPoint.y}px, 0)`;
+      element.hidden = options.corridorLabelsHidden;
+    });
+  }
 
-  const selectedUavState = options.uavStateById.get(options.selectedUavId);
+  const selectedUavState = options.selectedUavState;
 
   options.uavLabelNodes.forEach((label, uavId) => {
     if (uavId !== options.selectedUavId || !selectedUavState) {

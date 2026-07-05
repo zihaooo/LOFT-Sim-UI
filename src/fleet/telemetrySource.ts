@@ -19,7 +19,6 @@ import {
 export class TelemetrySource implements FleetSource {
   /** Per-vehicle-type slot -> drone handle, so a picked (type code, instanceId) resolves back to a drone. */
   private readonly slotToHandleByType = new Map<number, number[]>();
-  private readonly uavStateById = new Map<string, UavState>();
   private readonly matrix = new THREE.Matrix4();
   private readonly quaternion = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
@@ -70,7 +69,7 @@ export class TelemetrySource implements FleetSource {
     let selectedUavId = this.selectedHandle === -1 ? ctx.selectedUavId : this.getDroneId(this.selectedHandle);
     let selectedRouteId: string | null = null;
     let selection: FleetSelection | null = null;
-    this.uavStateById.clear();
+    let selectedUavState: UavState | null = null;
     let activeCount = 0;
 
     for (const drone of snapshot.drones) {
@@ -104,13 +103,11 @@ export class TelemetrySource implements FleetSource {
           position: this.selectedPosition.copy(this.position),
           tangent: this.selectedTangent.copy(this.tangent),
         };
-        this.uavStateById.set(this.getDroneId(drone.handle), {
+        selectedUavState = {
           position: drone.position,
           tangent: { x: this.tangent.x, y: this.tangent.y, z: this.tangent.z },
-          distance: 0,
-          progress: 0,
           status: "active",
-        });
+        };
       }
     }
 
@@ -123,7 +120,7 @@ export class TelemetrySource implements FleetSource {
       selectedUavId,
       selectedRouteId,
       selection,
-      uavStateById: this.uavStateById,
+      selectedUavState,
       selectedSummary: this.describeSelection(snapshot, selectedUavId),
     };
   }
@@ -166,7 +163,6 @@ export class TelemetrySource implements FleetSource {
 
   reset(): void {
     this.slotToHandleByType.clear();
-    this.uavStateById.clear();
     this.selectedHandle = -1;
   }
 
@@ -208,6 +204,11 @@ export class TelemetrySource implements FleetSource {
   }
 
   private describeSelection(snapshot: TelemetrySnapshot, selectedUavId: string): string {
+    // No selection: skip the per-drone scan below, which would do a registry lookup per drone per frame.
+    if (selectedUavId === "" && this.selectedHandle === -1) {
+      return "none";
+    }
+
     const drone = snapshot.drones.find((candidate) => (
       candidate.handle === this.selectedHandle || this.getDroneId(candidate.handle) === selectedUavId
     ));

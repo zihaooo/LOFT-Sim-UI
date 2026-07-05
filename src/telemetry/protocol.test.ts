@@ -120,26 +120,25 @@ describe("telemetry coordinate conversion", () => {
 });
 
 describe("telemetry snapshot buffer", () => {
-  it("keeps only the newest snapshots up to its fixed capacity", () => {
-    const buffer = new TelemetrySnapshotBuffer(2);
+  it("holds the newest snapshot", () => {
+    const buffer = new TelemetrySnapshotBuffer();
     const base = convertTelemetrySnapshotToScene(parseTelemetrySnapshotFrame(makeFrame(0)), { lat: 0, lon: 0 });
 
-    buffer.push({ ...base, sequence: 1 });
-    buffer.push({ ...base, sequence: 2 });
-    buffer.push({ ...base, sequence: 3 });
+    expect(buffer.push({ ...base, sequence: 1 })).toBe(true);
+    expect(buffer.push({ ...base, sequence: 2 })).toBe(true);
+    expect(buffer.push({ ...base, sequence: 3 })).toBe(true);
 
-    expect(buffer.size()).toBe(2);
     expect(buffer.latest()?.sequence).toBe(3);
   });
 
-  it("ignores stale snapshots", () => {
-    const buffer = new TelemetrySnapshotBuffer(3);
+  it("rejects stale snapshots so the client can count them as drops", () => {
+    const buffer = new TelemetrySnapshotBuffer();
     const base = convertTelemetrySnapshotToScene(parseTelemetrySnapshotFrame(makeFrame(0)), { lat: 0, lon: 0 });
 
-    buffer.push({ ...base, sequence: 5 });
-    buffer.push({ ...base, sequence: 4 });
+    expect(buffer.push({ ...base, sequence: 5 })).toBe(true);
+    expect(buffer.push({ ...base, sequence: 4 })).toBe(false);
+    expect(buffer.push({ ...base, sequence: 5 })).toBe(false);
 
-    expect(buffer.size()).toBe(1);
     expect(buffer.latest()?.sequence).toBe(5);
   });
 });

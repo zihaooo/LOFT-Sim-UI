@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { describe, it, expect } from "vitest";
+import type { AirRoute } from "../types";
 import { createBlobShadowMesh, createUavMesh } from "../layer/drone";
+import { DemoFleetSource } from "./demoSource";
 import { UavInstanceWriter } from "./uavInstanceWriter";
 import {
   BLOB_SHADOW_FADE_HEIGHT_METERS,
@@ -104,5 +106,62 @@ describe("blob shadow writer", () => {
 
     expect(uav.count).toBe(2); // both drones still rendered
     expect(blob.count).toBe(1); // only the low one gets a shadow
+  });
+});
+
+/** A straight 120 m airborne route (10 m altitude), flown end-to-end in 10 s at the demo's 12 m/s. */
+function fakeRoute(id: string): AirRoute {
+  const points = [
+    { x: 0, y: 10, z: 0 },
+    { x: 120, y: 10, z: 0 },
+  ];
+  return {
+    id,
+    name: id,
+    from: "A",
+    to: "B",
+    color: "#ffffff",
+    envelopeRadius: 35,
+    componentId: 0,
+    points,
+    nodeIds: ["a", "b"],
+    vertiportFlags: [false, false],
+    length: 120,
+    cumulativeLengths: [0, 120],
+  };
+}
+
+/** Locks the demo source's selection lifecycle: a live selection resolves; a destroyed one is cleared. */
+describe("demo source selection lifecycle", () => {
+  const makeSource = () => {
+    const route = fakeRoute("r1");
+    const source = new DemoFleetSource(
+      [route],
+      [{ flowId: "f1", routeId: "r1", uavPerHour: 1 }],
+      new Map([[route.id, route]]),
+    );
+    const writer = new UavInstanceWriter(new Map([[1, createUavMesh(4, null, null)]]), 1, createBlobShadowMesh(4), flatGround);
+    return { source, writer };
+  };
+
+  it("keeps a live selection and reports its state", () => {
+    const { source, writer } = makeSource();
+    const frame = source.update({ writer, elapsedSeconds: 1, selectedUavId: "UAV-f1-001" });
+    expect(frame.selectedUavId).toBe("UAV-f1-001");
+    expect(frame.selection).not.toBeNull();
+    expect(frame.selectedUavState?.status).toBe("active");
+    expect(frame.selectedRouteId).toBe("r1");
+  });
+
+  it("clears a selection pointing at a UAV destroyed this frame (no zombie id)", () => {
+    const { source, writer } = makeSource();
+    expect(source.update({ writer, elapsedSeconds: 1, selectedUavId: "UAV-f1-001" }).selectedUavId).toBe("UAV-f1-001");
+
+    // Well past route completion, the UAV is destroyed on this update; the selection must not echo back.
+    const frame = source.update({ writer, elapsedSeconds: 1_000, selectedUavId: "UAV-f1-001" });
+    expect(frame.selectedUavId).toBe("");
+    expect(frame.selection).toBeNull();
+    expect(frame.selectedUavState).toBeNull();
+    expect(frame.selectedSummary).toBe("none");
   });
 });

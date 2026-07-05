@@ -32,8 +32,7 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
         return null;
       }
 
-      const geoPoints = wayNodes.map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
-      const points = geoPoints.map((point) => projectGeoPoint(point, routeOrigin));
+      const points = wayNodes.map((node) => projectGeoPoint(node, routeOrigin));
 
       // Prefer the simulator's stable `object_id` (e.g. "route1") over the OSM-native relation id so the
       // route id matches the ids telemetry and the demand flows reference; fall back when the tag is absent.
@@ -49,7 +48,6 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
         // Each route is its own component so its envelope never fuses with another route's or a corridor's.
         componentId: routeIndex,
         points,
-        geoPoints,
         nodeIds: wayNodes.map((node) => node.id),
         vertiportFlags: wayNodes.map((node) => isVertiportNode(node)),
         ...measurePolyline(points),

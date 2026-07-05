@@ -15,18 +15,14 @@ export function createFleet(routes: AirRoute[], flows: FlowDefinition[]): UavSch
     const speedMetersPerSecond = DEFAULT_UAV_SPEED_METERS_PER_SECOND + flowIndex * 3;
     const departureIntervalSeconds = 3600 / flow.uavPerHour;
     const count = Math.max(1, Math.ceil(flow.uavPerHour));
-    const cycleSeconds = count * departureIntervalSeconds;
 
     for (let index = 0; index < count; index += 1) {
       fleet.push({
         id: `UAV-${flow.flowId}-${String(index + 1).padStart(3, "0")}`,
         type: index % 5 === 0 ? "cargo" : "inspection",
         routeId: route.id,
-        platoonId: `P-${flow.flowId}`,
         speedMetersPerSecond,
-        offsetMeters: 0,
         departureTimeSeconds: index * departureIntervalSeconds,
-        cycleSeconds,
       });
     }
   });
@@ -40,8 +36,6 @@ export function computeUavState(route: AirRoute, distance: number): UavState {
     return {
       position: { x: 0, y: 0, z: 0 },
       tangent: { x: 1, y: 0, z: 0 },
-      distance: 0,
-      progress: 0,
       status: "destroyed",
     };
   }
@@ -92,9 +86,8 @@ export function getUavRoutePosition(
   uavSchedule: UavSchedule,
   route: AirRoute,
   elapsedSeconds: number,
-  speedMultiplier: number,
 ): UavState {
-  const flightSeconds = elapsedSeconds * speedMultiplier - uavSchedule.departureTimeSeconds;
+  const flightSeconds = elapsedSeconds - uavSchedule.departureTimeSeconds;
 
   if (flightSeconds < 0) {
     return createNonActiveUavState(route, 0, "pending");
@@ -127,13 +120,10 @@ function interpolateUavState(
   const segmentEndDistance = route.cumulativeLengths[segmentIndex] ?? segmentStartDistance;
   const segmentLength = Math.max(segmentEndDistance - segmentStartDistance, 0.0001);
   const t = Math.min(Math.max((distance - segmentStartDistance) / segmentLength, 0), 1);
-  const tangent = normalize(subtractPoints(end, start));
 
   return {
     position: lerpPoint(start, end, t),
-    tangent,
-    distance,
-    progress: route.length > 0 ? distance / route.length : 0,
+    tangent: normalize(subtractPoints(end, start)),
   };
 }
 

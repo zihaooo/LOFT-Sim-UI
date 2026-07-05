@@ -74,6 +74,10 @@ export class UavInstanceWriter implements UavFrameWriter {
    * by the type index written into `instanceColor.g`.
    */
   private writeBlobShadow(matrix: THREE.Matrix4, typeCode: number): void {
+    // The Shadows toggle hides the blob layer; skip the per-drone decal math too (commit() zeroes count).
+    if (!this.blobShadowMesh.visible) {
+      return;
+    }
     // The drone's world position is the matrix's translation column (column-major elements 12/13/14).
     const x = matrix.elements[12];
     const y = matrix.elements[13];

@@ -23,8 +23,7 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
   const componentIds = assignCorridorComponents(survivingWays.map(({ wayNodes }) => wayNodes));
 
   return survivingWays.map(({ way, wayNodes }, corridorIndex) => {
-    const geoPoints = wayNodes.map(({ lat, lon, altitude }) => ({ lat, lon, altitude }));
-    const points = geoPoints.map((point) => projectGeoPoint(point, corridorOrigin));
+    const points = wayNodes.map((node) => projectGeoPoint(node, corridorOrigin));
     const corridorMetrics = measurePolyline(points);
     const from = way.tags.get("from") ?? "";
     const to = way.tags.get("to") ?? "";
@@ -43,7 +42,6 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
       envelopeRadius: ENVELOPE_RADIUS_METERS,
       componentId,
       points,
-      geoPoints,
       nodeIds: wayNodes.map((node) => node.id),
       vertiportFlags: wayNodes.map((node) => isVertiportNode(node)),
       ...corridorMetrics,
@@ -125,26 +123,21 @@ export function isVertiportNode(node: OsmNode): boolean {
   return node.tags.get("node_type") === "vertiport";
 }
 
-/** Pre-computes per-segment and cumulative arc-length so corridor sampling can binary-walk to a distance. */
+/** Pre-computes cumulative arc-length so corridor sampling can walk to a distance along the polyline. */
 export function measurePolyline(points: ScenePoint[]): {
   length: number;
-  segmentLengths: number[];
   cumulativeLengths: number[];
 } {
-  const segmentLengths: number[] = [];
   const cumulativeLengths = [0];
 
   for (let index = 1; index < points.length; index += 1) {
     const previous = points[index - 1];
     const current = points[index];
-    const length = distanceBetween(previous, current);
-    segmentLengths.push(length);
-    cumulativeLengths.push(cumulativeLengths[index - 1] + length);
+    cumulativeLengths.push(cumulativeLengths[index - 1] + distanceBetween(previous, current));
   }
 
   return {
     length: cumulativeLengths[cumulativeLengths.length - 1] ?? 0,
-    segmentLengths,
     cumulativeLengths,
   };
 }
