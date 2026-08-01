@@ -3,10 +3,8 @@ import { ROUTE_COLORS, ENVELOPE_RADIUS_METERS } from "../constant";
 import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode, type OsmWay } from "./common";
 import { isVertiportNode, measurePolyline } from "./corridors";
 
-const ROUTE_OBJECT_TYPE = "route";
-
 /**
- * Extracts routes: relations tagged `object_type=route`, whose member ways are stitched (in member
+ * Extracts routes: relations carrying a `route_id`, whose member ways are stitched (in member
  * order) into one continuous polyline and returned as a corridor-shaped path. Each route is its own
  * component, so its envelope is built and colored independently of every other route and corridor.
  */
@@ -15,7 +13,7 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
   const wayById = new Map(ways.map((way) => [way.id, way]));
   const routeOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
 
-  const routeRelations = relations.filter((relation) => relation.tags.get("object_type") === ROUTE_OBJECT_TYPE);
+  const routeRelations = relations.filter((relation) => relation.tags.has("route_id"));
 
   return routeRelations
     .map((relation, routeIndex): AirRoute | null => {
@@ -34,13 +32,13 @@ export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRout
 
       const points = wayNodes.map((node) => projectGeoPoint(node, routeOrigin));
 
-      // Prefer the simulator's stable `object_id` (e.g. "route1") over the OSM-native relation id so the
-      // route id matches the ids telemetry and the demand flows reference; fall back when the tag is absent.
-      const objectId = relation.tags.get("object_id");
+      // `route_id` is the schema's stable relation id — the id telemetry and the demand flows
+      // reference. The filter above guarantees it; the relation-id fallback only keeps TypeScript happy.
+      const routeId = relation.tags.get("route_id") ?? relation.id;
 
       return {
-        id: objectId ?? relation.id,
-        name: relation.tags.get("name") ?? objectId ?? `Route ${relation.id}`,
+        id: routeId,
+        name: routeId,
         from: relation.tags.get("from") ?? "",
         to: relation.tags.get("to") ?? "",
         color: ROUTE_COLORS[routeIndex % ROUTE_COLORS.length],

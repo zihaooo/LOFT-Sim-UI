@@ -2,13 +2,13 @@
 """Generate simulator-style mock telemetry data from the frontend airspace-network OSM.
 
 Mirrors the frontend's route extraction (`src/data/routes.ts`): routes are OSM relations
-tagged `object_type=route` whose member ways are stitched, in member order, into one
-polyline. The route `id` is taken from the `object_id` tag so it matches the ids the
-frontend derives in `parseRoutes` -- that match is what lets the telemetry source resolve
-each drone's route color and label.
+carrying a `route_id` tag, whose member ways are stitched, in member order, into one
+polyline. The route `id` is that `route_id` so it matches the ids the frontend derives in
+`parseRoutes` -- that match is what lets the telemetry source resolve each drone's route
+color and label.
 
-Corridors (the `airspace=yes` ways the routes are stitched from) are emitted alongside,
-their id taken from the `object_id` tag -- matching how the frontend ids corridors in
+Corridors (the `corridor_id` ways the routes are stitched from) are emitted alongside,
+their id taken from the `corridor_id` tag -- matching how the frontend ids corridors in
 `parseAirCorridors`. Each route also records, per segment, the handle of the corridor that
 segment came from, so the websocket server can report the corridor a drone is currently on
 as it advances along its route.
@@ -27,7 +27,6 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 METERS_PER_DEGREE_LAT = 111_320.0
-ROUTE_OBJECT_TYPE = "route"
 
 
 def parse_args() -> argparse.Namespace:
@@ -187,24 +186,24 @@ def main() -> int:
             "z": parse_float(node_tags.get("altitude")),
         }
 
-    # Corridors are the airspace=yes ways routes are built from; the frontend ids them by way.id
-    # (parseAirCorridors), so the registry handle->id map must use way.id too.
+    # Corridors are the `corridor_id` ways routes are built from (the schema's gate tag, mirroring
+    # parseAirCorridors); the registry handle->id map keys off the OSM way id internally.
     corridors = []
     corridor_handle_by_way = {}
     for way in root.findall("way"):
         tags = osm_tags(way)
         way_id = way.get("id")
-        if tags.get("airspace") != "yes" or not way_id:
+        if "corridor_id" not in tags or not way_id:
             continue
         if sum(1 for ref in way_node_refs.get(way_id, []) if ref in node_elems) < 2:
             continue
         handle = len(corridors) + 1
         corridor_handle_by_way[way_id] = handle
-        # Id from the `object_id` tag so it matches parseAirCorridors; fall back to way.id when absent.
+        # Id from the `corridor_id` tag so it matches parseAirCorridors.
         corridors.append(
             {
                 "handle": handle,
-                "id": tags.get("object_id") or way_id,
+                "id": tags["corridor_id"],
                 "from": tags.get("from", ""),
                 "to": tags.get("to", ""),
             }
@@ -213,7 +212,7 @@ def main() -> int:
     routes = []
     for relation in root.findall("relation"):
         tags = osm_tags(relation)
-        if tags.get("object_type") != ROUTE_OBJECT_TYPE:
+        if "route_id" not in tags:
             continue
 
         members = [
@@ -238,8 +237,8 @@ def main() -> int:
             continue
 
         length_m, cumulative_lengths = polyline_length(points)
-        # Id from the `object_id` tag so it matches parseRoutes; fall back to the relation id when absent.
-        route_id = tags.get("object_id") or relation.get("id", str(len(routes) + 1))
+        # Id from the `route_id` tag so it matches parseRoutes.
+        route_id = tags["route_id"]
         routes.append(
             {
                 "handle": len(routes) + 1,
@@ -256,10 +255,10 @@ def main() -> int:
         )
 
     if not corridors:
-        print("no airspace=yes corridor ways found", file=sys.stderr)
+        print("no corridor_id ways found", file=sys.stderr)
         return 2
     if not routes:
-        print("no object_type=route relations found", file=sys.stderr)
+        print("no route_id relations found", file=sys.stderr)
         return 2
 
     # Every route that shares a corridor with another runs the same vehicle type, so drones on a

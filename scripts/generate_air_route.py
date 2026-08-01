@@ -7,9 +7,10 @@ Output format mirrors public/data/network/airspace_network.osm:
   - Each waypoint is a <node> with a negative id (-1, -2, ...).
   - Start and end nodes get tag altitude="0".
   - Middle nodes get tag altitude="<-z>".
-  - All nodes are joined by one <way> with tag corridor="air".
-  - Each way is wrapped in its own <relation> tagged object_type="route" (one
-    way per relation) so the app parses it as a route. This 1:1 mapping is a
+  - All nodes are joined by one <way> tagged with a corridor_id (the schema's
+    airspace-way gate tag) so the app parses it as a corridor.
+  - Each way is wrapped in its own <relation> tagged with a route_id (one way
+    per relation) so the app parses it as a route. This 1:1 mapping is a
     deliberate simplification for stress testing.
 
 Example:
@@ -98,20 +99,17 @@ def append_corridor(root, start, end, middle, altitude, first_node_id, way_id, r
     way = ET.SubElement(root, "way", {"id": str(way_id), "version": "1"})
     for nid in node_ids:
         ET.SubElement(way, "nd", {"ref": str(nid)})
-    ET.SubElement(way, "tag", {"k": "corridor", "v": "air"})
+    ET.SubElement(way, "tag", {"k": "corridor_id", "v": str(way_id)})
 
     # One relation per way so the app parses this way as a standalone route. The
-    # parser keys on object_type="route" and stitches the member ways' nodes; the
-    # other tags mirror public/data/network/airspace_network.osm for fidelity.
+    # parser keys on the route_id tag and stitches the member ways' nodes.
     relation = ET.SubElement(root, "relation", {
         "id": str(relation_id),
         "action": "modify",
         "visible": "true",
     })
     ET.SubElement(relation, "member", {"type": "way", "ref": str(way_id), "role": ""})
-    ET.SubElement(relation, "tag", {"k": "airspace", "v": "yes"})
-    ET.SubElement(relation, "tag", {"k": "object_id", "v": f"{relation_id}"})
-    ET.SubElement(relation, "tag", {"k": "object_type", "v": "route"})
+    ET.SubElement(relation, "tag", {"k": "route_id", "v": f"{relation_id}"})
     ET.SubElement(relation, "tag", {"k": "type", "v": "route"})
 
 

@@ -29,7 +29,7 @@ describe("OSM and flow parsing", () => {
     expect(corridors.every((corridor) => corridor.from && corridor.to)).toBe(true);
   });
 
-  it("selects every airspace=yes polyline way as a corridor", () => {
+  it("selects every polyline way carrying a corridor_id as a corridor", () => {
     const corridorOsm = `
       <osm version="0.6">
         <node id="-1" lat="42.2900" lon="-83.7100">
@@ -44,12 +44,12 @@ describe("OSM and flow parsing", () => {
         <way id="-10">
           <nd ref="-1" />
           <nd ref="-2" />
-          <tag k="airspace" v="yes" />
+          <tag k="corridor_id" v="-10" />
         </way>
         <way id="-11">
           <nd ref="-2" />
           <nd ref="-3" />
-          <tag k="airspace" v="yes" />
+          <tag k="corridor_id" v="-11" />
         </way>
       </osm>
     `;
@@ -117,7 +117,7 @@ describe("OSM and flow parsing", () => {
         <node id="-1" lat="42.2900" lon="-83.7100">
           <tag k="altitude" v="0" />
           <tag k="node_type" v="vertiport" />
-          <tag k="object_id" v="vertiport1" />
+          <tag k="node_id" v="vertiport1" />
         </node>
         <node id="-2" lat="42.2910" lon="-83.7100">
           <tag k="altitude" v="30" />
@@ -133,7 +133,7 @@ describe("OSM and flow parsing", () => {
     const vertiports = parseVertiports(corridorOsm, origin);
 
     expect(vertiports).toHaveLength(2);
-    // object_id wins as both id and name; absent tags fall back to the OSM node id.
+    // node_id wins as both id and name; absent tags fall back to the OSM node id.
     expect(vertiports[0]).toMatchObject({ id: "vertiport1", name: "vertiport1" });
     expect(vertiports[1]).toMatchObject({ id: "-3", name: "-3" });
     expect(vertiports[0].position).toEqual(projectGeoPoint({ lat: 42.29, lon: -83.71, altitude: 0 }, origin));

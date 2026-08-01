@@ -15,7 +15,7 @@
  *
  * WHY this shape (and not a Vitest `perf.test.ts`):
  *   - Vitest runs in jsdom: no WebGL, no GPU, no real rAF loop — it cannot measure the frame body.
- *   - This app is CPU-bound (context/PERFORMANCE.md: ~94% scripting, GPU idle); the number your changes
+ *   - This app is CPU-bound (profiled at ~94% scripting, GPU idle); the number your changes
  *     move is per-frame CPU work, which is what this measures.
  *
  * HEADED vs HEADLESS: headed uses a REAL GPU — no software-raster stalls, no renderer crashes, tight CI,

@@ -2,11 +2,11 @@ import type { AirCorridor, ProjectionOrigin, ScenePoint } from "../types";
 import { CORRIDOR_COLORS, ENVELOPE_RADIUS_METERS } from "../constant";
 import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode } from "./common";
 
-/** Extracts air-corridor ways: every airspace=yes polyline way in the network is a corridor. */
+/** Extracts air-corridor ways: every polyline way carrying a `corridor_id` (the schema's required gate tag). */
 export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): AirCorridor[] {
   const { nodes, ways } = parseOsm(osmText);
   const corridorOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
-  const corridorWays = ways.filter((way) => way.tags.get("airspace") === "yes" && way.nodeRefs.length >= 2);
+  const corridorWays = ways.filter((way) => way.tags.has("corridor_id") && way.nodeRefs.length >= 2);
 
   // Resolve each way to the OSM nodes that actually exist, dropping ways too short to draw. The
   // surviving node list is the single source of truth for points, ids, and vertiport flags below,
@@ -29,13 +29,13 @@ export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): A
     const to = way.tags.get("to") ?? "";
     const componentId = componentIds[corridorIndex];
 
-    // Prefer the simulator's stable `object_id` (e.g. "way:-18967") over the OSM-native way id so the
-    // corridor id matches what telemetry reports; fall back to the way id when the tag is absent.
-    const objectId = way.tags.get("object_id");
+    // `corridor_id` is the schema's stable way id — the same id telemetry reports. The filter above
+    // guarantees it; the way-id fallback only keeps TypeScript happy.
+    const corridorId = way.tags.get("corridor_id") ?? way.id;
 
     return {
-      id: objectId ?? way.id,
-      name: way.tags.get("name") ?? objectId ?? `Corridor ${way.id}`,
+      id: corridorId,
+      name: corridorId,
       from,
       to,
       color: CORRIDOR_COLORS[componentId % CORRIDOR_COLORS.length],

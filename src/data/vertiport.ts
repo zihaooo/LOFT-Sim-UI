@@ -14,11 +14,12 @@ export function parseVertiports(osmText: string, origin: ProjectionOrigin): Vert
   return Array.from(nodes.values())
     .filter(isVertiportNode)
     .map((node) => {
-      const objectId = node.tags.get("object_id");
+      // `node_id` is the schema's stable node id (e.g. "mair"); fall back to the OSM id when absent.
+      const nodeId = node.tags.get("node_id") ?? node.id;
 
       return {
-        id: objectId ?? node.id,
-        name: node.tags.get("name") ?? objectId ?? node.id,
+        id: nodeId,
+        name: nodeId,
         position: projectGeoPoint(node, origin),
       };
     });

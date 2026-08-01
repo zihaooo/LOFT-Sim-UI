@@ -61,4 +61,5 @@ __pycache__/
 profile
 mock
 
-context
+# Generated doc pages (sources docs/*.md are tracked; regenerate with `npm run docs`)
+docs/*.html

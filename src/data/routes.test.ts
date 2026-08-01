@@ -10,20 +10,19 @@ const origin = { lat: 42.0, lon: -83.0 };
 const root = resolve(__dirname, "../..");
 const airCorridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
 
-// Two airspace ways that meet at node 3; a relation chains them into one route in member order.
+// Two corridor ways that meet at node 3; a relation chains them into one route in member order.
 const routeOsm = `
 <osm>
   <node id="1" lat="42.0000" lon="-83.0000"/>
   <node id="2" lat="42.0010" lon="-83.0000"/>
   <node id="3" lat="42.0020" lon="-83.0000"/>
   <node id="4" lat="42.0020" lon="-83.0010"/>
-  <way id="100"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="airspace" v="yes"/></way>
-  <way id="101"><nd ref="3"/><nd ref="4"/><tag k="airspace" v="yes"/></way>
+  <way id="100"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="corridor_id" v="100"/></way>
+  <way id="101"><nd ref="3"/><nd ref="4"/><tag k="corridor_id" v="101"/></way>
   <relation id="900">
     <member type="way" ref="100" role=""/>
     <member type="way" ref="101" role=""/>
-    <tag k="object_type" v="route"/>
-    <tag k="name" v="Test Route"/>
+    <tag k="route_id" v="test_route"/>
   </relation>
 </osm>
 `;
@@ -34,16 +33,16 @@ describe("parseRoutes", () => {
 
     expect(routes).toHaveLength(1);
     const [route] = routes;
-    expect(route.id).toBe("900");
-    expect(route.name).toBe("Test Route");
+    expect(route.id).toBe("test_route");
+    expect(route.name).toBe("test_route");
     // Node 3 is shared by both ways but appears once: 1, 2, 3, 4.
     expect(route.nodeIds).toEqual(["1", "2", "3", "4"]);
     expect(route.points).toHaveLength(4);
     expect(route.length).toBeGreaterThan(0);
   });
 
-  it("ignores relations that are not tagged object_type=route", () => {
-    const withoutRoute = routeOsm.replace('<tag k="object_type" v="route"/>', '<tag k="object_type" v="zone"/>');
+  it("ignores relations that carry no route_id", () => {
+    const withoutRoute = routeOsm.replace('<tag k="route_id" v="test_route"/>', '<tag k="type" v="route"/>');
     expect(parseRoutes(withoutRoute, origin)).toEqual([]);
   });
 
@@ -52,7 +51,7 @@ describe("parseRoutes", () => {
       "</osm>",
       `<relation id="901">
         <member type="way" ref="101" role=""/>
-        <tag k="object_type" v="route"/>
+        <tag k="route_id" v="test_route_2"/>
       </relation>
     </osm>`,
     );
@@ -65,9 +64,9 @@ describe("parseRoutes", () => {
     const routes = parseRoutes(airCorridorOsm, origin);
 
     expect(routes).toHaveLength(6);
-    // Route ids come from each relation's `object_id` tag, not the OSM-native relation id.
+    // Route ids come from each relation's `route_id` tag, not the OSM-native relation id.
     expect(routes.map((route) => route.id)).toEqual(
-      expect.arrayContaining(["route1", "route2", "route3", "route4", "route_priority_1", "route_priority_2"]),
+      expect.arrayContaining(["r0", "r1", "r2", "r3", "r4", "r5"]),
     );
     routes.forEach((route) => {
       expect(route.points.length).toBeGreaterThanOrEqual(2);
@@ -84,14 +83,14 @@ describe("parseRoutes", () => {
   it("builds every route from contiguous head-to-tail member ways", () => {
     const { ways, relations } = parseOsm(airCorridorOsm);
     const wayById = new Map(ways.map((way) => [way.id, way]));
-    const routeRelations = relations.filter((relation) => relation.tags.get("object_type") === "route");
+    const routeRelations = relations.filter((relation) => relation.tags.has("route_id"));
 
     const discontinuities = routeRelations.flatMap((relation) => {
       const memberWays = relation.members
         .filter((member) => member.type === "way")
         .map((member) => wayById.get(member.ref))
         .filter((way): way is NonNullable<typeof way> => Boolean(way));
-      const objectId = relation.tags.get("object_id") ?? relation.id;
+      const routeId = relation.tags.get("route_id") ?? relation.id;
 
       const problems: string[] = [];
       for (let index = 1; index < memberWays.length; index += 1) {
@@ -100,7 +99,7 @@ describe("parseRoutes", () => {
         const previousTail = previous[previous.length - 1];
         if (current[0] !== previousTail) {
           const reversed = current[current.length - 1] === previousTail;
-          problems.push(`${objectId} seam #${index}: ${reversed ? "member way is reversed" : "ways share no endpoint"}`);
+          problems.push(`${routeId} seam #${index}: ${reversed ? "member way is reversed" : "ways share no endpoint"}`);
         }
       }
       return problems;

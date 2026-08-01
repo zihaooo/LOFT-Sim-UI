@@ -11,6 +11,7 @@
     "mock:data": "python3 scripts/gen_mock_data.py --network public/data/network/airspace_network.osm --output mock/mock_telemetry.json --drones 1000",
     "mock:ws": "node scripts/mock_ws_server.mjs --data mock/mock_telemetry.json --hz 60",
     "verify:render": "node scripts/verify-render.mjs",
+    "docs": "node scripts/gen-docs.mjs",
     "perf": "node scripts/perf/perf-bench.mjs",
     "perf:diff": "node scripts/perf/perf-diff.mjs",
     "perf:record": "node scripts/perf/perf-bench.mjs --record"
@@ -27,6 +28,7 @@
     "@types/node": "^24.7.2",
     "@types/stats.js": "^0.17.4",
     "@types/three": "^0.184.0",
+    "marked": "^18.0.5",
     "puppeteer-core": "^25.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.1.12",
