@@ -13,11 +13,19 @@ import { toVector3 } from "./coordinates";
 //
 //   - Degree-2 nodes (a bend inside one air path, OR an end-to-end joint of two air paths) have a single
 //     well-defined bisector plane, so a parallel-transport miter welds them gap-free. We therefore stitch
-//     the component's edges into maximal "chains" that run through every degree-2 node — crossing air path
-//     boundaries when two air paths simply join — and build each chain with createSimpleTubeGeometry.
+//     the component's edges into maximal "chains" that run through every miterable degree-2 node — crossing
+//     air path boundaries when two air paths simply join — and build each chain with createSimpleTubeGeometry.
 //
 //   - Junction nodes (degree > 2 and NOT a vertiport: a T, an X, a diverging point) have no single
 //     bisector plane, so there we fall back to CSG: a sphere at the node fuses every incident chain end.
+//
+// Each chain's polyline is simplified (Douglas-Peucker) before tubing: smoothed networks sample corridors
+// every ~10 m, so a chain is mostly collinear runs that would otherwise cost hundreds of rings — and,
+// worse, leave sharp corners flanked by segments far shorter than their miter shift. The miter shifts a
+// ring by up to radius*tan(turn/2) along each tangent; when the two shifts on a segment overshoot its
+// length, the tube folds inside-out into large fins. Simplification restores long segments around real
+// corners, and any corner still too sharp to miter splits its chain there and is CSG-fused with a sphere,
+// exactly like a junction node.
 //
 // A component with no junctions needs no CSG at all — its miter tubes already read as one solid and are
 // merged directly. A component with junctions is CSG-unioned (chain tubes + junction spheres) into one
@@ -95,11 +103,19 @@ export function buildComponentEnvelopeGeometries(airPaths: AirPath[]): Component
 function buildComponentEnvelope(airPaths: AirPath[], evaluator: Evaluator): THREE.BufferGeometry | null {
   const graph = buildAirPathGraph(airPaths);
 
-  const chainGeometries = extractChains(graph)
-    .map((chain) => createSimpleTubeGeometry(groundTerminalPoints(graph, chain), chain.radius, ENVELOPE_RADIAL_SEGMENTS))
-    .filter((geometry): geometry is THREE.BufferGeometry => geometry !== null);
-
   const junctions = collectJunctionNodes(graph);
+  const chainGeometries: THREE.BufferGeometry[] = [];
+  extractChains(graph).forEach((chain) => {
+    const simplified = simplifyPolyline(groundTerminalPoints(graph, chain), ENVELOPE_SIMPLIFY_TOLERANCE_METERS);
+    const { runs, elbows } = splitUnmiterableChain(simplified, chain.radius);
+    runs.forEach((points) => {
+      const geometry = createSimpleTubeGeometry(points, chain.radius, ENVELOPE_RADIAL_SEGMENTS);
+      if (geometry) {
+        chainGeometries.push(geometry);
+      }
+    });
+    elbows.forEach((position) => junctions.push({ position, radius: chain.radius }));
+  });
 
   // No junction → the miter tubes already read as one solid, so merge them without paying for CSG.
   if (junctions.length === 0) {
@@ -269,6 +285,85 @@ function isGroundTerminal(graph: AirPathGraph, nodeId: string): boolean {
   }
   const degree = graph.adjacency.get(nodeId)?.length ?? 0;
   return degree === 1 || graph.vertiport.get(nodeId) === true;
+}
+
+/**
+ * Chain polylines are simplified to this tolerance before tubing. Half a meter is invisible under a
+ * ~35 m radius envelope, yet collapses a smoothed corridor's ~10 m sample steps into long segments —
+ * cutting ring count ~20x and restoring enough segment length around corners for the miter to fit.
+ */
+const ENVELOPE_SIMPLIFY_TOLERANCE_METERS = 0.5;
+
+/**
+ * A segment's tube folds inside-out when its two endpoint miter shifts (up to radius*tan(turn/2) each)
+ * sum past its length, so a vertex may claim at most this fraction of either adjacent segment; a vertex
+ * over the limit splits its chain and is CSG-fused with a sphere instead.
+ */
+const MAX_MITER_SHIFT_SEGMENT_FRACTION = 0.5;
+
+/** Iterative Douglas-Peucker; keeps endpoints and every vertex farther than `tolerance` from its run's chord. */
+function simplifyPolyline(points: THREE.Vector3[], tolerance: number): THREE.Vector3[] {
+  if (points.length <= 2) {
+    return points;
+  }
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+
+  const chord = new THREE.Line3();
+  const closest = new THREE.Vector3();
+  const spans: Array<[number, number]> = [[0, points.length - 1]];
+  while (spans.length > 0) {
+    const [first, last] = spans.pop() as [number, number];
+    chord.set(points[first], points[last]);
+    let farthestIndex = -1;
+    let farthestDistanceSq = tolerance * tolerance;
+    for (let index = first + 1; index < last; index += 1) {
+      chord.closestPointToPoint(points[index], true, closest);
+      const distanceSq = closest.distanceToSquared(points[index]);
+      if (distanceSq > farthestDistanceSq) {
+        farthestDistanceSq = distanceSq;
+        farthestIndex = index;
+      }
+    }
+    if (farthestIndex !== -1) {
+      keep[farthestIndex] = true;
+      spans.push([first, farthestIndex], [farthestIndex, last]);
+    }
+  }
+  return points.filter((_, index) => keep[index]);
+}
+
+/**
+ * Splits a chain polyline at every interior vertex too sharp to miter, returning the fold-free runs plus
+ * the split points (each needs a junction sphere to fuse the abutting flat caps into one solid elbow).
+ */
+function splitUnmiterableChain(
+  points: THREE.Vector3[],
+  radius: number,
+): { runs: THREE.Vector3[][]; elbows: THREE.Vector3[] } {
+  const runs: THREE.Vector3[][] = [];
+  const elbows: THREE.Vector3[] = [];
+
+  let runStart = 0;
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const incoming = points[index].clone().sub(points[index - 1]);
+    const outgoing = points[index + 1].clone().sub(points[index]);
+    const shorterSegment = Math.min(incoming.length(), outgoing.length());
+    incoming.normalize();
+    outgoing.normalize();
+
+    // tan(turn/2) = sin/(1+cos); a U-turn (cos -> -1) has no miter plane and always splits.
+    const cosTurn = incoming.dot(outgoing);
+    const miterShift =
+      cosTurn < -0.999999 ? Infinity : radius * (incoming.cross(outgoing).length() / (1 + cosTurn));
+    if (miterShift > shorterSegment * MAX_MITER_SHIFT_SEGMENT_FRACTION) {
+      runs.push(points.slice(runStart, index + 1));
+      elbows.push(points[index]);
+      runStart = index;
+    }
+  }
+  runs.push(points.slice(runStart));
+  return { runs, elbows };
 }
 
 /**

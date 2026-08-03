@@ -177,12 +177,35 @@ describe("corridor envelope decomposition (verification)", () => {
 
     expect(envelopes).toHaveLength(1);
     const geometry = envelopes[0].geometry;
-    // One stitched chain of 5 distinct points, plus an underground stub point at each end (a0 and b2 are
-    // vertiports resting on the ground) → 7 rings + 2 cap hubs; two unstitched tubes would not match.
-    expect(geometry.getAttribute("position").count).toBe(7 * ENVELOPE_RADIAL_SEGMENTS + 2);
+    // One stitched chain: a1 and b1 are collinear mid-run vertices, so simplification drops them, leaving
+    // a0/J/b2 plus an underground stub point at each end (a0 and b2 are vertiports resting on the ground)
+    // → 5 rings + 2 cap hubs; two unstitched tubes would not match.
+    expect(geometry.getAttribute("position").count).toBe(5 * ENVELOPE_RADIAL_SEGMENTS + 2);
     expect(boundaryEdgeCount(geometry)).toBe(0); // watertight across the joint
     expect(signedVolume(geometry)).toBeGreaterThan(0);
     expect(warn).not.toHaveBeenCalled(); // never touched CSG
+    warn.mockRestore();
+  });
+
+  it("fuses a degree-2 joint too sharp to miter with a sphere instead of folding the tube", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    // The smoothed-network corridor joint shape: a long leg meets an 86-deg corner followed by ~10 m
+    // sampled steps, radius 35. The bisector miter would shift the corner ring 35*tan(43deg) = 33 m
+    // along each tangent — past the 10 m neighbor rings — folding the tube inside-out into fins.
+    const turn = (86 * Math.PI) / 180;
+    const step = (n: number): [number, number, number] => [10 * n * Math.cos(turn), 50, 10 * n * Math.sin(turn)];
+    const envelopes = buildComponentEnvelopeGeometries([
+      fakeCorridor(0, ["a0", "J"], [[-275, 50, 0], [0, 50, 0]], [false, false]),
+      fakeCorridor(0, ["J", "b1", "b2", "b3"], [[0, 50, 0], step(1), step(2), step(3)], [false, false, false, false]),
+    ]);
+
+    expect(envelopes).toHaveLength(1);
+    const geometry = envelopes[0].geometry;
+    // A stitched miter chain (after b1/b2 simplify away) would be exactly 3 rings + 2 cap hubs; splitting
+    // at J and CSG-fusing with a sphere produces a different (welded) vertex population.
+    expect(geometry.getAttribute("position").count).not.toBe(3 * ENVELOPE_RADIAL_SEGMENTS + 2);
+    expect(allFinite(geometry)).toBe(true);
+    expect(warn).not.toHaveBeenCalled(); // fused via CSG, no fallback
     warn.mockRestore();
   });
 
