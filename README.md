@@ -62,10 +62,11 @@ public/
     network/  air-corridor + map OSM files (default and demo presets)
     demand/   demand-flow JSON
     model/    drone glTF (falls back to a low-poly cone if absent)
+  icons/      ground-marker SVG artwork (vertiport and site badges)
 src/
   data/       OSM/flow parsing, corridors, routes, projection
-  geometry/   coordinate, corridor centerline/envelope, drone, map geometry
-  layer/      scene layer builders (map, environment, corridor, drone)
+  geometry/   coordinate, corridor centerline/envelope, drone, ground icon, map geometry
+  layer/      scene layer builders (map, environment, corridor, drone, ground icon)
   fleet/      fleet sources — frontend demo scheduling and telemetry-backed state
   telemetry/  websocket client and binary telemetry protocol
   scene/      FleetScene orchestration, camera rig, control panel, labels, HUD readouts
@@ -85,6 +86,8 @@ Files under `public/data/` are served by Vite at `/data/...` and copied into `di
 - `data/model/hybrid.gltf` — hybrid tilt-rotor VTOL cargo UAV model
 
 Telemetry renders each drone as its vehicle type's model at that type's own physical size; unknown types and the demo fleet fall back to the quadrotor.
+
+Ground markers are drawn from SVG artwork under `public/icons/`, rasterized once at startup into a shared texture and laid flat on the map as camera-oriented decals. `vertiport.svg` is placed today; `nav_site.svg`, `comm_site.svg`, and `surv_site.svg` are authored and registered but not yet placed. Because the artwork is mapped onto a disc whose rim is the viewBox's inscribed circle, **each icon must be a circular badge that fills its viewBox** — and since an SVG stroke straddles its path, the outer circle's radius is `half-viewBox − stroke-width / 2`.
 
 Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and `stress_air_corridor.osm` / `stress_flow.json`. In telemetry-backed mode the network comes from the simulator's `/configs` and UAVs come from the websocket, so the bundled demand file is unused.
 

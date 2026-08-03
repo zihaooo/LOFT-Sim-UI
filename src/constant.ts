@@ -178,25 +178,33 @@ export const ENVELOPE_ROUGHNESS = 0.45;
 /** Tube radius of a flight envelope, in meters. */
 export const ENVELOPE_RADIUS_METERS = 35;
 
-// Vertiport ground markers (helipad-style camera-oriented decals)
-export const VERTIPORT_RADIUS_METERS = 35;
-export const VERTIPORT_CIRCLE_SEGMENTS = 48;
-/** Lifts vertiport markers above the ground plane (above the road) to resolve z-fighting. */
-export const VERTIPORT_Y_OFFSET_METERS = 0.04;
-export const VERTIPORT_FILL_COLOR = "#ffffff";
-export const VERTIPORT_OUTLINE_COLOR = "#1f6fff";
-/** Marking texture resolution (power-of-two for mipmapping). */
-export const VERTIPORT_TEXTURE_SIZE = 256;
-/** Blue outline ring thickness as a fraction of the texture size. */
-export const VERTIPORT_OUTLINE_WIDTH_RATIO = 0.07;
-export const VERTIPORT_LETTER = "V";
-export const VERTIPORT_LETTER_FONT = "bold 180px sans-serif";
+// Ground icon markers (SVG artwork laid flat on the map, spun to stay readable)
+/** Icon SVG assets under public/icons. Adding an icon type starts with an entry here. */
+export const GROUND_ICON_ASSETS = {
+  vertiport: "/icons/vertiport.svg",
+  navSite: "/icons/nav_site.svg",
+  commSite: "/icons/comm_site.svg",
+  survSite: "/icons/surv_site.svg",
+} as const;
+/**
+ * Raster resolution of an icon texture (power-of-two for mipmapping). The assets are authored at 32px, so
+ * the loader stamps this size into the markup before rasterizing rather than upscaling a 32px bitmap.
+ */
+export const GROUND_ICON_TEXTURE_SIZE = 512;
+/** Tessellation of the icon disc. The rim is a polygon edge, so this is what MSAA antialiases. */
+export const GROUND_ICON_CIRCLE_SEGMENTS = 48;
+/** Requested anisotropy; three clamps it to the hardware max. Ground decals are read at grazing angles. */
+export const GROUND_ICON_ANISOTROPY = 16;
+/** Lifts icon markers above the ground plane (above the road) to resolve z-fighting. */
+export const GROUND_ICON_Y_OFFSET_METERS = 0.04;
+/** Diameter of the vertiport icon disc, in meters. */
+export const VERTIPORT_ICON_SIZE_METERS = 70;
 /**
  * Scene layering by render order. Map geometry (ground, buildings, roads, trees) stays at the default
- * 0; the vertiport marker renders just above it so buildings can't hide it; the airspace layer (drones,
- * corridors, routes, envelopes) renders above the marker so it occludes the marker when in front.
+ * 0; ground icons render just above it so buildings can't hide them; the airspace layer (drones,
+ * corridors, routes, envelopes) renders above the icons so it occludes them when in front.
  */
-export const VERTIPORT_RENDER_ORDER = 1;
+export const GROUND_ICON_RENDER_ORDER = 1;
 export const AIRSPACE_RENDER_ORDER = 2;
 
 // UAV rendering

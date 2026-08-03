@@ -1,8 +1,12 @@
 import "./styles.css";
 import { createSceneData } from "./data/osm";
 import type { ConfigFileSelection, DemoPreset } from "./scene/control";
-import { FleetScene, loadUavModels, cloneUavModels } from "./scene/FleetScene";
+import { FleetScene, loadUavModels, cloneUavModels, loadGroundIconTextures } from "./scene/FleetScene";
 import type { UavModel } from "./geometry/drone";
+import type { GroundIconKey, GroundIconTextures } from "./geometry/groundIcon";
+
+/** Icon assets to rasterize at startup. An icon costs texture memory only once something places it. */
+const ACTIVE_GROUND_ICONS: readonly GroundIconKey[] = ["vertiport"];
 
 const root = document.querySelector<HTMLDivElement>("#root");
 
@@ -43,6 +47,8 @@ type SceneSourceTexts = {
 let currentSources: SceneSourceTexts | null = null;
 let activeScene: FleetScene | null = null;
 let uavModels: Map<number, UavModel> | null = null;
+/** Shared across every scene rebuild: textures are not owned (or disposed) by the FleetScene. */
+let groundIconTextures: GroundIconTextures | null = null;
 let reloadInProgress = false;
 let activeDemoPreset: DemoPreset | null = null;
 
@@ -54,7 +60,10 @@ async function start(): Promise<void> {
 
   try {
     currentSources = await loadInitialSources();
-    uavModels = await loadUavModels();
+    [uavModels, groundIconTextures] = await Promise.all([
+      loadUavModels(),
+      loadGroundIconTextures(ACTIVE_GROUND_ICONS),
+    ]);
     activeScene = mountScene(createSceneData(
       currentSources.corridorOsm,
       currentSources.buildingOsm,
@@ -156,6 +165,7 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
     stats,
     sceneData,
     uavModels: uavModels ? cloneUavModels(uavModels) : null,
+    groundIconTextures,
     onReloadScene: handleReloadScene,
     onLoadDemoPreset: handleLoadDemoPreset,
     activeDemoPreset,

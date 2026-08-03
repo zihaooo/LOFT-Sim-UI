@@ -87,7 +87,7 @@ const uavAttitudeScratch = new THREE.Quaternion();
 /**
  * Writes the UAV's body attitude from the backend's aerospace Euler angles (radians). The simulator integrates
  * velocity as speed*(cos yaw, sin yaw) in its East/North plane and the sim->scene map sends East->z, North->x,
- * so the scene heading atan2(x, z) equals `yaw` exactly: a rotation about world up that matches the legacy
+ * so the scene heading atan2(x, z) equals `yaw` exactly: a rotation about world up that agrees with the
  * velocity-derived heading while moving but stays stable at hover, where velocity collapses to numerical noise.
  * Pitch and roll also come straight from telemetry, so they are stable too. Composed yaw -> pitch -> roll.
  */

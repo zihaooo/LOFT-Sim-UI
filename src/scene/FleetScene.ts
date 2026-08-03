@@ -36,7 +36,9 @@ import type { UavModel } from "../geometry/drone";
 import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGrid, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
-import { createVertiportGroup, updateVertiportBillboards } from "../layer/vertiport";
+import { createVertiportGroup } from "../layer/vertiport";
+import { updateGroundIconBillboards } from "../layer/groundIcon";
+import type { GroundIconTextures } from "../geometry/groundIcon";
 import { CameraRig } from "./cameraRig";
 import {
   createDefaultControlState,
@@ -58,6 +60,7 @@ import { createHud, updateHud, type HudRefs } from "./hud";
 
 export { loadUavModels, cloneUavModels } from "../geometry/drone";
 export type { UavModel } from "../geometry/drone";
+export { loadGroundIconTextures } from "../geometry/groundIcon";
 
 type FleetSceneOptions = {
   host: HTMLDivElement;
@@ -66,6 +69,8 @@ type FleetSceneOptions = {
   stats: HTMLDivElement;
   sceneData: SceneData;
   uavModels?: Map<number, UavModel> | null;
+  /** Preloaded icon textures, shared across scene rebuilds (never disposed — see loadGroundIconTextures). */
+  groundIconTextures?: GroundIconTextures | null;
   onReloadScene: (files: ConfigFileSelection) => Promise<void>;
   onLoadDemoPreset: (preset: DemoPreset | null) => Promise<void>;
   activeDemoPreset?: DemoPreset | null;
@@ -186,7 +191,10 @@ export class FleetScene {
     this.roadGroup = createRoadGroup(this.sceneData.roads, this.sceneData.sceneBounds);
     this.treeGroup = createTreeGroup(this.sceneData.trees, this.sceneData.sceneBounds);
     this.buildingGroup = createBuildingGroup(this.sceneData.buildings, this.sceneData.sceneBounds);
-    this.vertiportGroup = createVertiportGroup(this.sceneData.vertiports);
+    this.vertiportGroup = createVertiportGroup(
+      this.sceneData.vertiports,
+      options.groundIconTextures?.get("vertiport") ?? null,
+    );
     this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
@@ -432,7 +440,7 @@ export class FleetScene {
     this.updateFleet();
     this.updateRouteVisibility();
     this.cameraRig.update(delta, this.lastFrame?.selection ?? null);
-    updateVertiportBillboards(this.vertiportGroup, this.camera);
+    updateGroundIconBillboards(this.vertiportGroup, this.camera);
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateHudStats();
@@ -496,9 +504,9 @@ export class FleetScene {
   private updateLabels(): void {
     const corridorLabelsHidden =
       !this.params.uavLabelsVisible || (!this.params.corridorsVisible && !this.params.envelopesVisible);
-    // Corridor anchors are static, so re-projecting them while the camera is idle is pure DOM-write
-    // waste (the profiled setStyle hot spot). The camera matrix compared here is the same state the
-    // projection consumes, so skipping equal frames is output-identical.
+    // Corridor anchors are static, so re-projecting them while the camera is idle is pure DOM-write waste,
+    // and the per-label setStyle calls dominate this path. The camera matrix compared here is the same state
+    // the projection consumes, so skipping equal frames is output-identical.
     const reprojectCorridorLabels =
       this.corridorLabelsDirty ||
       corridorLabelsHidden !== this.lastCorridorLabelsHidden ||
