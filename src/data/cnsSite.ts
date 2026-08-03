@@ -1,6 +1,6 @@
 import type { CnsSite, ProjectionOrigin } from "../types";
 import { CNS_SITE_TYPES, type CnsSiteType } from "../constant";
-import { parseOsm, projectGeoPoint } from "./common";
+import { projectGeoPoint, type ParsedOsm } from "./common";
 
 /**
  * Extracts every CNS ground station (navigation / communication / surveillance site) from the corridor
@@ -9,8 +9,8 @@ import { parseOsm, projectGeoPoint } from "./common";
  * `coverage_radius` tag (meters) sizes the coverage dome; a site whose radius is missing or not a
  * positive number still yields its ground marker, just without a dome.
  */
-export function parseCnsSites(osmText: string, origin: ProjectionOrigin): CnsSite[] {
-  const { nodes } = parseOsm(osmText);
+export function parseCnsSites(osm: ParsedOsm, origin: ProjectionOrigin): CnsSite[] {
+  const { nodes } = osm;
 
   return Array.from(nodes.values())
     .filter((node) => isCnsSiteType(node.tags.get("node_type")))

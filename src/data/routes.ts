@@ -1,6 +1,6 @@
 import type { AirRoute, ProjectionOrigin } from "../types";
 import { ROUTE_COLORS, ENVELOPE_RADIUS_METERS } from "../constant";
-import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode, type OsmWay } from "./common";
+import { averageOrigin, projectGeoPoint, type OsmNode, type OsmWay, type ParsedOsm } from "./common";
 import { isVertiportNode, measurePolyline } from "./corridors";
 
 /**
@@ -8,8 +8,8 @@ import { isVertiportNode, measurePolyline } from "./corridors";
  * order) into one continuous polyline and returned as a corridor-shaped path. Each route is its own
  * component, so its envelope is built and colored independently of every other route and corridor.
  */
-export function parseRoutes(osmText: string, origin?: ProjectionOrigin): AirRoute[] {
-  const { nodes, ways, relations } = parseOsm(osmText);
+export function parseRoutes(osm: ParsedOsm, origin?: ProjectionOrigin): AirRoute[] {
+  const { nodes, ways, relations } = osm;
   const wayById = new Map(ways.map((way) => [way.id, way]));
   const routeOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
 

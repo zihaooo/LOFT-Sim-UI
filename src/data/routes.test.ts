@@ -29,7 +29,7 @@ const routeOsm = `
 
 describe("parseRoutes", () => {
   it("merges a relation's member ways into one route, deduping the shared seam node", () => {
-    const routes = parseRoutes(routeOsm, origin);
+    const routes = parseRoutes(parseOsm(routeOsm), origin);
 
     expect(routes).toHaveLength(1);
     const [route] = routes;
@@ -43,7 +43,7 @@ describe("parseRoutes", () => {
 
   it("ignores relations that carry no route_id", () => {
     const withoutRoute = routeOsm.replace('<tag k="route_id" v="test_route"/>', '<tag k="type" v="route"/>');
-    expect(parseRoutes(withoutRoute, origin)).toEqual([]);
+    expect(parseRoutes(parseOsm(withoutRoute), origin)).toEqual([]);
   });
 
   it("assigns each route its own component id", () => {
@@ -56,12 +56,12 @@ describe("parseRoutes", () => {
     </osm>`,
     );
 
-    const componentIds = parseRoutes(twoRoutes, origin).map((route) => route.componentId);
+    const componentIds = parseRoutes(parseOsm(twoRoutes), origin).map((route) => route.componentId);
     expect(new Set(componentIds).size).toBe(componentIds.length);
   });
 
   it("parses every route relation in the provided air corridor file", () => {
-    const routes = parseRoutes(airCorridorOsm, origin);
+    const routes = parseRoutes(parseOsm(airCorridorOsm), origin);
 
     expect(routes).toHaveLength(6);
     // Route ids come from each relation's `route_id` tag, not the OSM-native relation id.
@@ -114,7 +114,7 @@ describe("parseRoutes", () => {
     // buildAirPathLines reads window.innerWidth to size fat-line strokes; stub it for this headless build.
     vi.stubGlobal("window", { innerWidth: 1280, innerHeight: 720 });
     try {
-      const routes = parseRoutes(airCorridorOsm, origin);
+      const routes = parseRoutes(parseOsm(airCorridorOsm), origin);
       const group = createRouteGroup(routes);
 
       expect(group.children).toHaveLength(routes.length);

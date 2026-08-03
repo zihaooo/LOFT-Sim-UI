@@ -1,5 +1,5 @@
 import type { ProjectionOrigin, VertiportPoint } from "../types";
-import { parseOsm, projectGeoPoint } from "./common";
+import { projectGeoPoint, type ParsedOsm } from "./common";
 import { isVertiportNode } from "./corridors";
 
 /**
@@ -8,8 +8,8 @@ import { isVertiportNode } from "./corridors";
  * yields one ground marker positioned at its projected coordinate. Nodes are deduped by the parser,
  * so a vertiport referenced by several corridor ways still produces a single marker.
  */
-export function parseVertiports(osmText: string, origin: ProjectionOrigin): VertiportPoint[] {
-  const { nodes } = parseOsm(osmText);
+export function parseVertiports(osm: ParsedOsm, origin: ProjectionOrigin): VertiportPoint[] {
+  const { nodes } = osm;
 
   return Array.from(nodes.values())
     .filter(isVertiportNode)

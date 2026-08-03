@@ -1,10 +1,10 @@
 import type { AirCorridor, ProjectionOrigin, ScenePoint } from "../types";
 import { CORRIDOR_COLORS, ENVELOPE_RADIUS_METERS } from "../constant";
-import { averageOrigin, parseOsm, projectGeoPoint, type OsmNode } from "./common";
+import { averageOrigin, projectGeoPoint, type OsmNode, type ParsedOsm } from "./common";
 
 /** Extracts air-corridor ways: every polyline way carrying a `corridor_id` (the schema's required gate tag). */
-export function parseAirCorridors(osmText: string, origin?: ProjectionOrigin): AirCorridor[] {
-  const { nodes, ways } = parseOsm(osmText);
+export function parseAirCorridors(osm: ParsedOsm, origin?: ProjectionOrigin): AirCorridor[] {
+  const { nodes, ways } = osm;
   const corridorOrigin = origin ?? averageOrigin(Array.from(nodes.values()));
   const corridorWays = ways.filter((way) => way.tags.has("corridor_id") && way.nodeRefs.length >= 2);
 

@@ -4,11 +4,12 @@ import { resolve } from "node:path";
 import * as THREE from "three";
 import type { AirCorridor, ScenePoint } from "../types";
 import { ENVELOPE_RADIAL_SEGMENTS } from "../constant";
+import { parseOsm } from "../data/common";
 import { parseAirCorridors } from "../data/corridors";
 import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./envelope";
 
 const root = resolve(__dirname, "../..");
-const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
+const corridorOsm = parseOsm(readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8"));
 
 /** Builds a minimal AirCorridor; only componentId/color/points/envelopeRadius/nodeIds/vertiportFlags are read. */
 function fakeCorridor(

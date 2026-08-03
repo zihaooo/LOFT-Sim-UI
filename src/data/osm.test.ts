@@ -18,7 +18,7 @@ const twoFlowJsonPath = "public/data/demand/two_flow.json";
 describe("OSM and flow parsing", () => {
   it("parses the provided air corridors with projected 3D points", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
-    const corridors = parseAirCorridors(corridorOsm);
+    const corridors = parseAirCorridors(parseOsm(corridorOsm));
 
     expect(corridors).toHaveLength(2);
     expect(corridors[0].id).toBe("1");
@@ -55,7 +55,7 @@ describe("OSM and flow parsing", () => {
       </osm>
     `;
 
-    const corridors = parseAirCorridors(corridorOsm);
+    const corridors = parseAirCorridors(parseOsm(corridorOsm));
 
     expect(corridors).toHaveLength(2);
     expect(corridors.map((corridor) => corridor.id)).toEqual(["-10", "-11"]);
@@ -67,7 +67,7 @@ describe("OSM and flow parsing", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
-    const buildings = parseBuildings(mapOsm, origin);
+    const buildings = parseBuildings(parseOsm(mapOsm), origin);
 
     expect(buildings.length).toBeGreaterThan(100);
     expect(buildings[0].points.length).toBeGreaterThanOrEqual(3);
@@ -78,7 +78,7 @@ describe("OSM and flow parsing", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
-    const roads = parseRoads(mapOsm, origin);
+    const roads = parseRoads(parseOsm(mapOsm), origin);
 
     expect(roads.length).toBeGreaterThan(100);
     expect(roads.every((road) => road.kind && road.points.length >= 2)).toBe(true);
@@ -89,7 +89,7 @@ describe("OSM and flow parsing", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const mapOsm = readFileSync(resolve(root, defaultMapOsmPath), "utf8");
     const origin = averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values()));
-    const trees = parseTrees(mapOsm, origin);
+    const trees = parseTrees(parseOsm(mapOsm), origin);
 
     expect(trees.length).toBeGreaterThan(10);
     expect(trees.every((tree) => tree.height > 0 && tree.radius > 0)).toBe(true);
@@ -131,7 +131,7 @@ describe("OSM and flow parsing", () => {
     `;
 
     const origin = { lat: 42.291, lon: -83.71 };
-    const vertiports = parseVertiports(corridorOsm, origin);
+    const vertiports = parseVertiports(parseOsm(corridorOsm), origin);
 
     expect(vertiports).toHaveLength(2);
     // node_id wins as both id and name; absent tags fall back to the OSM node id.
@@ -142,7 +142,8 @@ describe("OSM and flow parsing", () => {
 
   it("parses the four vertiports in the provided airspace network", () => {
     const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
-    const vertiports = parseVertiports(corridorOsm, averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values())));
+    const corridor = parseOsm(corridorOsm);
+    const vertiports = parseVertiports(corridor, averageOrigin(Array.from(corridor.nodes.values())));
 
     expect(vertiports).toHaveLength(4);
     expect(vertiports.map((vertiport) => vertiport.id)).toContain("michigan_medicine");
@@ -169,7 +170,7 @@ describe("OSM and flow parsing", () => {
     `;
 
     const origin = { lat: 42.291, lon: -83.71 };
-    const sites = parseCnsSites(corridorOsm, origin);
+    const sites = parseCnsSites(parseOsm(corridorOsm), origin);
 
     expect(sites).toHaveLength(2);
     expect(sites[0]).toMatchObject({ id: "site_comm", type: "communication_site", coverageRadius: 2600 });
@@ -180,7 +181,8 @@ describe("OSM and flow parsing", () => {
 
   it("parses the three CNS sites in the provided airspace network", () => {
     const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
-    const sites = parseCnsSites(corridorOsm, averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values())));
+    const corridor = parseOsm(corridorOsm);
+    const sites = parseCnsSites(corridor, averageOrigin(Array.from(corridor.nodes.values())));
 
     expect(sites).toHaveLength(3);
     // The radii themselves are scenario data the network file is free to retune; assert one site of
@@ -204,7 +206,7 @@ describe("OSM and flow parsing", () => {
   it("resolves every demo flow's routeId to a parsed route so the fleet is non-empty", () => {
     const corridorOsm = readFileSync(resolve(root, twoCorridorOsmPath), "utf8");
     const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
-    const routeIds = new Set(parseRoutes(corridorOsm).map((route) => route.id));
+    const routeIds = new Set(parseRoutes(parseOsm(corridorOsm)).map((route) => route.id));
     const flows = parseFlowDefinitions(flowJson);
 
     expect(flows.length).toBeGreaterThan(0);

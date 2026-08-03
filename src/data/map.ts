@@ -8,11 +8,11 @@ import type {
 } from "../types";
 import { BBOX_PADDING_METERS, ROAD_STYLES } from "../constant";
 import { padSceneBounds } from "../geometry/map";
-import { parseOsm, projectGeoPoint, type OsmNode } from "./common";
+import { projectGeoPoint, type OsmNode, type ParsedOsm } from "./common";
 
 /** Extracts building (or building:part) ways as planar footprints, dropping any with fewer than 3 vertices. */
-export function parseBuildings(osmText: string, origin: ProjectionOrigin): BuildingFootprint[] {
-  const { nodes, ways } = parseOsm(osmText);
+export function parseBuildings(osm: ParsedOsm, origin: ProjectionOrigin): BuildingFootprint[] {
+  const { nodes, ways } = osm;
 
   return ways
     .filter((way) => way.tags.has("building") || way.tags.has("building:part"))
@@ -33,8 +33,8 @@ export function parseBuildings(osmText: string, origin: ProjectionOrigin): Build
 }
 
 /** Extracts highway ways whose class is in ROAD_STYLES, projecting their points and resolving width/color. */
-export function parseRoads(osmText: string, origin: ProjectionOrigin): RoadPath[] {
-  const { nodes, ways } = parseOsm(osmText);
+export function parseRoads(osm: ParsedOsm, origin: ProjectionOrigin): RoadPath[] {
+  const { nodes, ways } = osm;
 
   return ways
     .map((way) => {
@@ -65,8 +65,8 @@ export function parseRoads(osmText: string, origin: ProjectionOrigin): RoadPath[
 }
 
 /** Extracts nodes tagged natural=tree, deriving canopy radius and trunk height from tags or a stable hash. */
-export function parseTrees(osmText: string, origin: ProjectionOrigin): TreePoint[] {
-  const { nodes } = parseOsm(osmText);
+export function parseTrees(osm: ParsedOsm, origin: ProjectionOrigin): TreePoint[] {
+  const { nodes } = osm;
 
   return Array.from(nodes.values())
     .filter((node) => node.tags.get("natural") === "tree")

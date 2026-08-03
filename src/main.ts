@@ -59,8 +59,10 @@ async function start(): Promise<void> {
   const loadingOverlay = showLoadingOverlay();
 
   try {
-    currentSources = await loadInitialSources();
-    [uavModels, groundIconTextures] = await Promise.all([
+    // The scene sources, UAV models, and icon textures are independent fetches; loading them
+    // concurrently keeps the model/icon requests entirely inside the (much larger) source fetch.
+    [currentSources, uavModels, groundIconTextures] = await Promise.all([
+      loadInitialSources(),
       loadUavModels(),
       loadGroundIconTextures(ACTIVE_GROUND_ICONS),
     ]);

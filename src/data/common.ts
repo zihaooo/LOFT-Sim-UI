@@ -36,12 +36,15 @@ export function projectGeoPoint(point: GeoPoint, origin: ProjectionOrigin): Scen
   };
 }
 
-/** Lightweight regex-based scraper that pulls nodes, ways, and relations out of OSM XML without a full DOM parse. */
-export function parseOsm(osmText: string): {
+/** Every entity scraped from one OSM XML document; parse once and share — parsing is the load-time hot spot. */
+export type ParsedOsm = {
   nodes: Map<string, OsmNode>;
   ways: OsmWay[];
   relations: OsmRelation[];
-} {
+};
+
+/** Lightweight regex-based scraper that pulls nodes, ways, and relations out of OSM XML without a full DOM parse. */
+export function parseOsm(osmText: string): ParsedOsm {
   const nodes = new Map<string, OsmNode>();
 
   for (const nodeMatch of osmText.matchAll(/<node\b([^>]*?)(?:\/>|>([\s\S]*?)<\/node>)/g)) {
