@@ -6,7 +6,7 @@ import type { UavModel } from "./geometry/drone";
 import type { GroundIconKey, GroundIconTextures } from "./geometry/groundIcon";
 
 /** Icon assets to rasterize at startup. An icon costs texture memory only once something places it. */
-const ACTIVE_GROUND_ICONS: readonly GroundIconKey[] = ["vertiport"];
+const ACTIVE_GROUND_ICONS: readonly GroundIconKey[] = ["vertiport", "navSite", "commSite", "survSite"];
 
 const root = document.querySelector<HTMLDivElement>("#root");
 

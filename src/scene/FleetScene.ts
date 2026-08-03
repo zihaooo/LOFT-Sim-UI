@@ -37,6 +37,7 @@ import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGrid, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
 import { createVertiportGroup } from "../layer/vertiport";
+import { createCnsSiteLayer, type CnsSiteLayer } from "../layer/cnsSite";
 import { updateGroundIconBillboards } from "../layer/groundIcon";
 import type { GroundIconTextures } from "../geometry/groundIcon";
 import { CameraRig } from "./cameraRig";
@@ -119,6 +120,8 @@ export class FleetScene {
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
   private readonly vertiportGroup: THREE.Group;
+  /** CNS site markers plus their coverage domes and extent rings; toggled as one unit. */
+  private readonly cnsSiteLayer: CnsSiteLayer;
   /** Standalone reference-grid layer; its geometry is swapped in place when the "Grid Size" slider changes. */
   private readonly grid: THREE.LineSegments;
   /** Padded ground bounds shared by the ground plane and the grid; reused when rebuilding the grid geometry. */
@@ -177,6 +180,9 @@ export class FleetScene {
     // plane (y=0) and its coplanar grid stay safely on the kept side instead of straddling the clip
     // boundary and flickering. Global clipping needs no localClippingEnabled flag.
     this.renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.1)];
+    // Per-material clipping is opt-in; the CNS site layer uses it to cut coverage rings at the
+    // ground rectangle's edge (the domes make the same cut inside their shader instead).
+    this.renderer.localClippingEnabled = true;
     this.host.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -195,12 +201,13 @@ export class FleetScene {
       this.sceneData.vertiports,
       options.groundIconTextures?.get("vertiport") ?? null,
     );
+    // The ground plane, grid, and CNS coverage clipping share this once-computed padded box.
+    this.gridBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
+    this.cnsSiteLayer = createCnsSiteLayer(this.sceneData.sites, options.groundIconTextures ?? null, this.gridBounds);
     this.corridorGroup = createCorridorGroup(this.sceneData.corridors);
     this.envelopeGroup = createFlightEnvelopeGroup(this.sceneData.corridors);
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
-    // The grid shares the ground plane's padded bounds; both are built from this once-computed box.
-    this.gridBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
     this.grid = createGrid(this.gridBounds, GRID_SPACING_TICKS[this.params.gridSpacingIndex]);
     this.uavMeshes = this.createUavMeshes(options.uavModels ?? null);
     // One blob slot per possible drone across every type, so no written drone can ever lack a shadow.
@@ -281,6 +288,7 @@ export class FleetScene {
       this.roadGroup,
       this.treeGroup,
       this.vertiportGroup,
+      this.cnsSiteLayer.root,
       this.corridorGroup,
       this.envelopeGroup,
       this.routeGroup,
@@ -289,7 +297,7 @@ export class FleetScene {
     this.uavMeshes.forEach((mesh) => this.scene.add(mesh));
     this.scene.add(this.blobShadowMesh);
 
-    this.layerAirspaceAboveVertiports();
+    this.layerAirspaceAboveGroundIcons();
   }
 
   /** Builds one InstancedMesh per vehicle type, using each type's loaded model (or a cone fallback). */
@@ -320,13 +328,14 @@ export class FleetScene {
   }
 
   /**
-   * Lifts the airspace layer (drones, corridors, routes, envelopes) above the vertiport markers in
-   * render order. The markers draw with depthTest off so buildings can't hide them; pushing the airspace
-   * meshes to a later renderOrder makes them draw after — and depth-test against — the markers, so a
-   * drone or corridor in front of a marker still occludes it. Group nodes don't inherit renderOrder, so
-   * this is applied per object. Map geometry stays at the default 0, leaving it below the markers.
+   * Lifts the airspace layer (drones, corridors, routes, envelopes) above the ground icon markers
+   * (vertiports and CNS sites) in render order. The markers draw with depthTest off so buildings can't
+   * hide them; pushing the airspace meshes to a later renderOrder makes them draw after — and depth-test
+   * against — the markers, so a drone or corridor in front of a marker still occludes it. Group nodes
+   * don't inherit renderOrder, so this is applied per object. Map geometry stays at the default 0,
+   * leaving it below the markers.
    */
-  private layerAirspaceAboveVertiports(): void {
+  private layerAirspaceAboveGroundIcons(): void {
     this.uavMeshes.forEach((mesh) => {
       mesh.renderOrder = AIRSPACE_RENDER_ORDER;
     });
@@ -343,6 +352,7 @@ export class FleetScene {
       container: panel,
       state: this.params,
       availableLayers: {
+        cnsSites: this.cnsSiteLayer.root.children.length > 0,
         buildings: this.buildingGroup.children.length > 0,
         roads: this.roadGroup.children.length > 0,
         trees: this.treeGroup.children.length > 0,
@@ -383,6 +393,7 @@ export class FleetScene {
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
     this.vertiportGroup.visible = visibility.vertiportsVisible;
+    this.cnsSiteLayer.root.visible = visibility.cnsSitesVisible;
     this.corridorGroup.visible = visibility.corridorsVisible;
     // Corridor envelope follows its own toggle but hides while routes are shown (the two are exclusive).
     this.envelopeGroup.visible = visibility.envelopesVisible && !visibility.routesVisible;
@@ -441,6 +452,9 @@ export class FleetScene {
     this.updateRouteVisibility();
     this.cameraRig.update(delta, this.lastFrame?.selection ?? null);
     updateGroundIconBillboards(this.vertiportGroup, this.camera);
+    for (const iconGroup of this.cnsSiteLayer.iconGroups) {
+      updateGroundIconBillboards(iconGroup, this.camera);
+    }
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateHudStats();

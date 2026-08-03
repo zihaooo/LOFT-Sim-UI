@@ -1,3 +1,5 @@
+import type { CnsSiteType } from "./constant";
+
 export type GeoPoint = {
   lat: number;
   lon: number;
@@ -78,6 +80,15 @@ export type VertiportPoint = {
   position: ScenePoint;
 };
 
+/** A CNS ground station: a flat ground marker plus, when it has a coverage radius, a coverage dome. */
+export type CnsSite = {
+  id: string;
+  type: CnsSiteType;
+  position: ScenePoint;
+  /** Coverage radius in meters; 0 when the node has no usable `coverage_radius` tag (marker only, no dome). */
+  coverageRadius: number;
+};
+
 export type FlowDefinition = {
   flowId: string;
   routeId: string;
@@ -107,5 +118,6 @@ export type SceneData = {
   roads: RoadPath[];
   trees: TreePoint[];
   vertiports: VertiportPoint[];
+  sites: CnsSite[];
   flows: FlowDefinition[];
 };

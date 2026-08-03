@@ -13,6 +13,7 @@ export type SimulationControlState = {
   demoPreset: DemoPreset | "";
   cameraMode: CameraMode;
   vertiportsVisible: boolean;
+  cnsSitesVisible: boolean;
   corridorsVisible: boolean;
   routesVisible: boolean;
   envelopesVisible: boolean;
@@ -28,7 +29,7 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "vertiportsVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
+  "vertiportsVisible" | "cnsSitesVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -37,8 +38,9 @@ export type ConfigFileSelection = {
   demandFile: File | null;
 };
 
-/** Which map-derived layers have rendered geometry; empty ones get their toggle disabled. */
+/** Which optional layers have rendered geometry; empty ones get their toggle disabled. */
 type LayerAvailability = {
+  cnsSites: boolean;
   buildings: boolean;
   roads: boolean;
   trees: boolean;
@@ -78,6 +80,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     demoPreset: activeDemoPreset ?? "",
     cameraMode: CAMERA_MODES.FREE,
     vertiportsVisible: true,
+    cnsSitesVisible: true,
     corridorsVisible: true,
     routesVisible: false,
     envelopesVisible: true,
@@ -125,6 +128,14 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   });
 
   controlFolder.addBinding(state, "vertiportsVisible", { label: "Vertiports" }).on("change", () => {
+    options.onLayerVisibilityChange(state);
+  });
+
+  // One switch governs all three site categories — markers, coverage domes, and extent rings together.
+  controlFolder.addBinding(state, "cnsSitesVisible", {
+    label: "CNS Sites",
+    disabled: !options.availableLayers.cnsSites,
+  }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
 

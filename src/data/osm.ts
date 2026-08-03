@@ -4,6 +4,7 @@ import { parseAirCorridors } from "./corridors";
 import { parseRoutes } from "./routes";
 import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
+import { parseCnsSites } from "./cnsSite";
 import { parseFlowDefinitions } from "./flows";
 
 /** Loads every dataset under one shared projection origin so all geometry aligns in scene space. */
@@ -26,6 +27,7 @@ export function createSceneData(corridorOsm: string, buildingOsm: string, flowJs
     roads: parseRoads(buildingOsm, origin),
     trees: parseTrees(buildingOsm, origin),
     vertiports: parseVertiports(corridorOsm, origin),
+    sites: parseCnsSites(corridorOsm, origin),
     flows: parseFlowDefinitions(flowJson),
   };
 }

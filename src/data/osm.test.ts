@@ -5,6 +5,7 @@ import { averageOrigin, parseOsm, projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
 import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
+import { parseCnsSites } from "./cnsSite";
 import { parseFlowDefinitions } from "./flows";
 import { parseRoutes } from "./routes";
 import { createSceneData } from "./osm";
@@ -148,6 +149,49 @@ describe("OSM and flow parsing", () => {
     expect(vertiports.every((vertiport) => vertiport.id && vertiport.name)).toBe(true);
   });
 
+  it("extracts CNS site nodes with type, radius, and id, tolerating a missing radius", () => {
+    const corridorOsm = `
+      <osm version="0.6">
+        <node id="-1" lat="42.2900" lon="-83.7100">
+          <tag k="node_type" v="communication_site" />
+          <tag k="node_id" v="site_comm" />
+          <tag k="coverage_radius" v="2600" />
+        </node>
+        <node id="-2" lat="42.2910" lon="-83.7100">
+          <tag k="node_type" v="navigation_site" />
+        </node>
+        <node id="-3" lat="42.2920" lon="-83.7090">
+          <tag k="node_type" v="vertiport" />
+          <tag k="node_id" v="vertiport1" />
+        </node>
+        <node id="-4" lat="42.2930" lon="-83.7080" />
+      </osm>
+    `;
+
+    const origin = { lat: 42.291, lon: -83.71 };
+    const sites = parseCnsSites(corridorOsm, origin);
+
+    expect(sites).toHaveLength(2);
+    expect(sites[0]).toMatchObject({ id: "site_comm", type: "communication_site", coverageRadius: 2600 });
+    expect(sites[0].position).toEqual(projectGeoPoint({ lat: 42.29, lon: -83.71, altitude: 0 }, origin));
+    // A site without a usable coverage_radius keeps its ground marker but reports no coverage.
+    expect(sites[1]).toMatchObject({ id: "-2", type: "navigation_site", coverageRadius: 0 });
+  });
+
+  it("parses the three CNS sites in the provided airspace network", () => {
+    const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
+    const sites = parseCnsSites(corridorOsm, averageOrigin(Array.from(parseOsm(corridorOsm).nodes.values())));
+
+    expect(sites).toHaveLength(3);
+    // The radii themselves are scenario data the network file is free to retune; assert one site of
+    // each category with a usable radius rather than exact values.
+    expect(new Set(sites.map((site) => site.type))).toEqual(
+      new Set(["communication_site", "navigation_site", "surveillance_site"]),
+    );
+    expect(sites.every((site) => site.coverageRadius > 0)).toBe(true);
+    expect(sites.map((site) => site.id)).toContain("site_comm_ncrc");
+  });
+
   it("parses the provided flow definitions", () => {
     const flowJson = readFileSync(resolve(root, twoFlowJsonPath), "utf8");
     const flows = parseFlowDefinitions(flowJson);
@@ -207,6 +251,8 @@ describe("OSM and flow parsing", () => {
     expect(sceneData.buildings).toEqual([]);
     expect(sceneData.roads).toEqual([]);
     expect(sceneData.trees).toEqual([]);
+    // The demo networks carry no CNS site nodes; the layer must degrade to empty rather than fail.
+    expect(sceneData.sites).toEqual([]);
     expect(sceneData.sceneBounds.width).toBeGreaterThan(1_000);
     expect(sceneData.sceneBounds.depth).toBeGreaterThan(1_000);
   });

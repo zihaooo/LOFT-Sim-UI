@@ -202,10 +202,45 @@ export const VERTIPORT_ICON_SIZE_METERS = 70;
 /**
  * Scene layering by render order. Map geometry (ground, buildings, roads, trees) stays at the default
  * 0; ground icons render just above it so buildings can't hide them; the airspace layer (drones,
- * corridors, routes, envelopes) renders above the icons so it occludes them when in front.
+ * corridors, routes, envelopes) renders above the icons so it occludes them when in front. The CNS
+ * coverage domes composite last: they draw without a depth test, so paint order alone decides what
+ * their fog veils — and everything, including the airspace layer's translucent parts (rotor discs,
+ * envelopes), must be painted before the fog to sit inside it.
  */
 export const GROUND_ICON_RENDER_ORDER = 1;
 export const AIRSPACE_RENDER_ORDER = 2;
+export const COVERAGE_DOME_RENDER_ORDER = 3;
+
+// CNS sites (navigation / communication / surveillance ground stations)
+/**
+ * node_type tag value -> coverage tint. Each color matches its icon's accent (see public/icons) so a
+ * site's marker, dome, and ring read as one object. The keys are the single source of truth for the
+ * closed set of site categories (see {@link CnsSiteType}).
+ */
+export const CNS_SITE_COLORS = {
+  navigation_site: "#16a34a",
+  communication_site: "#2563eb",
+  surveillance_site: "#7c3aed",
+} as const;
+/** The closed set of CNS site categories (`node_type` values), derived from the color table above. */
+export type CnsSiteType = keyof typeof CNS_SITE_COLORS;
+export const CNS_SITE_TYPES = Object.keys(CNS_SITE_COLORS) as readonly CnsSiteType[];
+/** Diameter of a CNS site icon disc, in meters (the same footprint as the vertiport disc). */
+export const CNS_SITE_ICON_SIZE_METERS = 70;
+/**
+ * Coverage-dome alpha of the densest possible view ray (a ground-grazing ray through the site). The
+ * dB-linear density concentrates alpha near the site, so most of the dome reads at a small fraction of
+ * this. Kept moderate because coverage radii are scene-sized and the domes overlap — the camera usually
+ * sits inside them, so their tint lies over everything.
+ */
+export const COVERAGE_DOME_PEAK_ALPHA = 0.5;
+/** Proxy-sphere tessellation. The rim is the dome's silhouette at km scale, so it gets fine segments. */
+export const COVERAGE_DOME_WIDTH_SEGMENTS = 96;
+export const COVERAGE_DOME_HEIGHT_SEGMENTS = 48;
+/** Segments of the ground ring marking a site's exact coverage extent. */
+export const COVERAGE_RING_SEGMENTS = 128;
+/** Lifts the coverage ring above the ground plane (same clearance as the grid) to resolve z-fighting. */
+export const COVERAGE_RING_Y_OFFSET_METERS = 0.04;
 
 // UAV rendering
 // Vehicle type codes mirror the simulator wire protocol (LOFT-Sim loft/telemetry/protocol.py):
