@@ -154,12 +154,12 @@ describe("OSM and flow parsing", () => {
     const corridorOsm = `
       <osm version="0.6">
         <node id="-1" lat="42.2900" lon="-83.7100">
-          <tag k="node_type" v="communication_site" />
+          <tag k="node_type" v="comm_site" />
           <tag k="node_id" v="site_comm" />
           <tag k="coverage_radius" v="2600" />
         </node>
         <node id="-2" lat="42.2910" lon="-83.7100">
-          <tag k="node_type" v="navigation_site" />
+          <tag k="node_type" v="nav_site" />
         </node>
         <node id="-3" lat="42.2920" lon="-83.7090">
           <tag k="node_type" v="vertiport" />
@@ -173,10 +173,10 @@ describe("OSM and flow parsing", () => {
     const sites = parseCnsSites(parseOsm(corridorOsm), origin);
 
     expect(sites).toHaveLength(2);
-    expect(sites[0]).toMatchObject({ id: "site_comm", type: "communication_site", coverageRadius: 2600 });
+    expect(sites[0]).toMatchObject({ id: "site_comm", type: "comm_site", coverageRadius: 2600 });
     expect(sites[0].position).toEqual(projectGeoPoint({ lat: 42.29, lon: -83.71, altitude: 0 }, origin));
     // A site without a usable coverage_radius keeps its ground marker but reports no coverage.
-    expect(sites[1]).toMatchObject({ id: "-2", type: "navigation_site", coverageRadius: 0 });
+    expect(sites[1]).toMatchObject({ id: "-2", type: "nav_site", coverageRadius: 0 });
   });
 
   it("parses the three CNS sites in the provided airspace network", () => {
@@ -188,7 +188,7 @@ describe("OSM and flow parsing", () => {
     // The radii themselves are scenario data the network file is free to retune; assert one site of
     // each category with a usable radius rather than exact values.
     expect(new Set(sites.map((site) => site.type))).toEqual(
-      new Set(["communication_site", "navigation_site", "surveillance_site"]),
+      new Set(["comm_site", "nav_site", "surv_site"]),
     );
     expect(sites.every((site) => site.coverageRadius > 0)).toBe(true);
     expect(sites.map((site) => site.id)).toContain("site_comm_ncrc");

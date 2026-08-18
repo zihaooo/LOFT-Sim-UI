@@ -75,7 +75,7 @@ Core shared types are in `src/types.ts`. Telemetry DTOs are in `src/telemetry/pr
   - **Routes** are relations carrying a `route_id`, whose member ways are stitched (in member order) into one polyline. **Each route is its own component**, so its envelope is built and colored independently of every other route and corridor.
   - Ids come from the simulator schema's stable tags — `corridor_id` for ways, `route_id` for relations, `node_id` for vertiports (e.g. `c3`, `r1`, `mair`) — never from the OSM-native element id, so they match what telemetry and demand flows reference. (Schema source of truth: `../LOFT-Sim-Airspace-Editor/schema/airspace_schema.json`; the pre-v1 `airspace=yes` / `object_type` / `object_id` vocabulary is no longer supported.)
 - `BuildingFootprint`, `RoadPath`, `TreePoint`, `VertiportPoint` — static map geometry.
-- `CnsSite` — an optional CNS ground station (`node_type` = `navigation_site` / `communication_site` / `surveillance_site`) with a `coverageRadius` in meters (0 = the node carried no usable `coverage_radius` tag, so it renders as a marker without a coverage dome).
+- `CnsSite` — an optional CNS ground station (`node_type` = `nav_site` / `comm_site` / `surv_site`; the simulator authors these in a separate infrastructure `.osm` layer whose site nodes the telemetry backend merges into the served network document) with a `coverageRadius` in meters (0 = the node carried no usable `coverage_radius` tag, so it renders as a marker without a coverage dome).
 - `FlowDefinition` — `flowId`, `routeId`, `uavPerHour`.
 - `UavSchedule` vs `UavState` are intentionally separate:
   - `UavSchedule` is stable planned data (one planned departure).

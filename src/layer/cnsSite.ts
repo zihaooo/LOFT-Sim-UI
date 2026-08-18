@@ -20,9 +20,9 @@ import { createGroundIconGroup } from "./groundIcon";
 
 /** Site category -> its badge artwork key in GROUND_ICON_ASSETS. */
 const ICON_KEY_BY_SITE_TYPE: Record<CnsSiteType, GroundIconKey> = {
-  navigation_site: "navSite",
-  communication_site: "commSite",
-  surveillance_site: "survSite",
+  nav_site: "navSite",
+  comm_site: "commSite",
+  surv_site: "survSite",
 };
 
 /**

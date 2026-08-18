@@ -55,7 +55,7 @@ export function createGroundGroup(bounds: SceneBounds): THREE.Group {
     metalness: 0,
     // Bias the ground backward in depth-buffer space so the coplanar grid lines win the depth test at every
     // distance. Lines can't use POLYGON_OFFSET_FILL, and the grid's fixed 0.04 m lift falls below depth
-    // precision far from the camera (near=1/far=20000), so the grid z-fights the ground toward the horizon.
+    // precision far from the camera (near=1/far=65000), so the grid z-fights the ground toward the horizon.
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 1,

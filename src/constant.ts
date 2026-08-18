@@ -47,7 +47,7 @@ export const CAMERA_MODES = {
 } as const;
 export const CAMERA_FOV_DEGREES = 52;
 export const CAMERA_NEAR_METERS = 1;
-export const CAMERA_FAR_METERS = 20_000;
+export const CAMERA_FAR_METERS = 65_000;
 export const CAMERA_MIN_Y = 0;
 export const FREE_CAMERA_PAN_METERS_PER_SECOND = 360;
 export const FOLLOW_CAMERA_DISTANCE_METERS = 95;
@@ -63,7 +63,7 @@ export const GROUND_PADDING_METERS = 150;
 // Renderer and orbit controls
 export const MAX_DEVICE_PIXEL_RATIO = 2;
 export const ORBIT_DAMPING_FACTOR = 0.08;
-export const ORBIT_MAX_DISTANCE_METERS = 4_500;
+export const ORBIT_MAX_DISTANCE_METERS = 40_000;
 export const ORBIT_MIN_DISTANCE_METERS = 45;
 export const ORBIT_MOUSE_BUTTONS = {
   LEFT: THREE.MOUSE.PAN,
@@ -78,12 +78,12 @@ export const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 // Scene environment
 export const SKY_DOME_COLOR = "#c8dced";
-export const SKY_DOME_RADIUS_METERS = 8_000;
+export const SKY_DOME_RADIUS_METERS = 40_000;
 // Matches the sky dome: the below-ground clipping plane removes the dome's lower hemisphere, so the
 // background shows through below the horizon — keeping the two equal hides that seam.
 export const SCENE_BACKGROUND_COLOR = SKY_DOME_COLOR;
 export const SCENE_FOG_NEAR_METERS = 1_500;
-export const SCENE_FOG_FAR_METERS = 7_500;
+export const SCENE_FOG_FAR_METERS = 60_000;
 export const HEMISPHERE_SKY_COLOR = "#f2f8ff";
 export const HEMISPHERE_GROUND_COLOR = "#879281";
 export const HEMISPHERE_LIGHT_INTENSITY = 2.6;
@@ -219,9 +219,9 @@ export const CNS_DOME_RENDER_ORDER = 3;
  * closed set of site categories (see {@link CnsSiteType}).
  */
 export const CNS_SITE_COLORS = {
-  navigation_site: "#16a34a",
-  communication_site: "#2563eb",
-  surveillance_site: "#7c3aed",
+  nav_site: "#16a34a",
+  comm_site: "#2563eb",
+  surv_site: "#7c3aed",
 } as const;
 /** The closed set of CNS site categories (`node_type` values), derived from the color table above. */
 export type CnsSiteType = keyof typeof CNS_SITE_COLORS;
