@@ -4,6 +4,7 @@ import { parseAirCorridors } from "./corridors";
 import { parseRoutes } from "./routes";
 import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
+import { parseContingencySites } from "./contingencySite";
 import { parseCnsSites } from "./cnsSite";
 import { parseFlowDefinitions } from "./flows";
 
@@ -33,6 +34,7 @@ export function createSceneData(corridorOsm: string, buildingOsm: string, flowJs
     roads: parseRoads(building, origin),
     trees: parseTrees(building, origin),
     vertiports: parseVertiports(corridor, origin),
+    contingencySites: parseContingencySites(corridor, origin),
     sites: parseCnsSites(corridor, origin),
     flows: parseFlowDefinitions(flowJson),
   };

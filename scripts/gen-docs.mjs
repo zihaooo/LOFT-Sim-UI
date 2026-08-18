@@ -212,6 +212,7 @@ const TERM_DEFS = [
   ["UAV", /\bUAVs?\b/, "Unmanned Aerial Vehicle — a drone.", `${W}Unmanned_aerial_vehicle`],
   ["UAM", /\bUAM\b/, "Urban Air Mobility — passenger/cargo aviation over cities, typically electric VTOL aircraft.", `${W}Urban_air_mobility`],
   ["vertiport", /\bvertiports?\b/, "A take-off/landing site for VTOL aircraft — the heliport of urban air mobility.", `${W}Vertiport`],
+  ["contingency landing site", /\bcontingency (?:landing )?sites?\b/, "A pre-surveyed spot a UAV can divert to and land at when it cannot continue to its destination.", `${W}Emergency_landing`],
   ["flat-earth projection", /\bflat-earth projection\b/, "Treating a city-sized patch of the globe as a flat plane — accurate enough at this scale, and far simpler than geodesy.", `${W}Local_tangent_plane_coordinates`],
   ["texel", /\btexels?\b/, "One pixel of a texture — here, one cell of the shadow map.", `${W}Texel_(graphics)`],
   ["CSM", /\bCSM\b|\bcascade(?:s|d)?\b/, "Cascaded Shadow Maps — several shadow maps covering increasing distance bands, so near shadows get more resolution.", "https://learn.microsoft.com/en-us/windows/win32/dxtecharts/cascaded-shadow-maps"],

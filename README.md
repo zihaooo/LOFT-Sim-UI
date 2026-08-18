@@ -62,7 +62,7 @@ public/
     network/  air-corridor + map OSM files (default and demo presets)
     demand/   demand-flow JSON
     model/    drone glTF (falls back to a low-poly cone if absent)
-  icons/      ground-marker SVG artwork (vertiport and site badges)
+  icons/      ground-marker SVG artwork (vertiport, contingency site, and CNS site badges)
 src/
   data/       OSM/flow parsing, corridors, routes, projection
   geometry/   coordinate, corridor centerline/envelope, drone, ground icon, map geometry
@@ -87,7 +87,7 @@ Files under `public/data/` are served by Vite at `/data/...` and copied into `di
 
 Telemetry renders each drone as its vehicle type's model at that type's own physical size; unknown types and the demo fleet fall back to the quadrotor.
 
-Ground markers are drawn from SVG artwork under `public/icons/`, rasterized once at startup into a shared texture and laid flat on the map as camera-oriented decals. `vertiport.svg` marks vertiport terminals; `nav_site.svg`, `comm_site.svg`, and `surv_site.svg` mark CNS sites — optional navigation / communication / surveillance ground stations tagged `node_type=nav_site|comm_site|surv_site` in the airspace network, whose `coverage_radius` tag (meters) additionally draws a translucent coverage dome and a ground ring at the exact extent. Because the artwork is mapped onto a disc whose rim is the viewBox's inscribed circle, **each icon must be a circular badge that fills its viewBox** — and since an SVG stroke straddles its path, the outer circle's radius is `half-viewBox − stroke-width / 2`.
+Ground markers are drawn from SVG artwork under `public/icons/`, rasterized once at startup into a shared texture and laid flat on the map as camera-oriented decals. `vertiport.svg` marks vertiport terminals; `cont_site.svg` marks contingency landing sites — optional standalone emergency-landing nodes tagged `node_type=cont_site`, rendered like vertiports (sim-side tags such as `max_landing_rate_per_hour` and `vehicle_access` are ignored by the UI); `nav_site.svg`, `comm_site.svg`, and `surv_site.svg` mark CNS sites — optional navigation / communication / surveillance ground stations tagged `node_type=nav_site|comm_site|surv_site` in the airspace network, whose `coverage_radius` tag (meters) additionally draws a translucent coverage dome and a ground ring at the exact extent. Because the artwork is mapped onto a disc whose rim is the viewBox's inscribed circle, **each icon must be a circular badge that fills its viewBox** — and since an SVG stroke straddles its path, the outer circle's radius is `half-viewBox − stroke-width / 2`.
 
 Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and `stress_air_corridor.osm` / `stress_flow.json`. In telemetry-backed mode the network comes from the simulator's `/configs` and UAVs come from the websocket, so the bundled demand file is unused.
 
@@ -96,7 +96,7 @@ Demo presets live alongside these: `two_air_corridor.osm` / `two_flow.json` and 
 The Tweakpane panel has three sections:
 
 - **Config Files** — upload a custom map, air-corridor, or demand file and **Reload scene**.
-- **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (vertiports, CNS sites, corridors, routes, flight envelopes, buildings, roads, trees, ground grid, labels), a **Grid Size** slider (reference-grid line spacing, its initial value sized to the scene), a **Shadows** on/off toggle (building/tree shadows plus drones' altitude-faded ground shadows), a **Reset view** button (animated fly-back to the initial camera framing), and **Reset simulation**.
+- **Controls** — Play/Pause, a discrete speed-multiplier slider, Camera mode (`Free` / `Follow selected UAV`), visibility toggles (vertiports, contingency sites, CNS sites, corridors, routes, flight envelopes, buildings, roads, trees, ground grid, labels), a **Grid Size** slider (reference-grid line spacing, its initial value sized to the scene), a **Shadows** on/off toggle (building/tree shadows plus drones' altitude-faded ground shadows), a **Reset view** button (animated fly-back to the initial camera framing), and **Reset simulation**.
 - **Demo** — a preset dropdown (**None** / **Two Corridors** / **Stress Test**) that loads a frontend-only demo scene; **None** restores the default telemetry-backed scene.
 
 Camera and selection:

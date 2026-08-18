@@ -2,13 +2,15 @@ import * as THREE from "three";
 import Stats from "stats.js";
 import type { SceneData } from "../types";
 import type { TelemetryDebugReadout } from "../fleet/source";
-import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX, SUPPORTED_VEHICLE_TYPE_NAMES } from "../constant";
+import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX, SUPPORTED_VEHICLE_TYPE_NAMES, type CnsSiteType } from "../constant";
 
 export type ReadoutPanels = {
   simulationClockValue: HTMLElement;
   sceneCorridorsValue: HTMLElement;
   sceneRoutesValue: HTMLElement;
   sceneVertiportsValue: HTMLElement;
+  sceneContingencySitesValue: HTMLElement;
+  sceneCnsSitesValue: HTMLElement;
   sceneBuildingsValue: HTMLElement;
   sceneRoadsValue: HTMLElement;
   sceneTreesValue: HTMLElement;
@@ -53,6 +55,14 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
       <div class="control-readout__row">
         <span>Vertiports</span>
         <code data-readout="scene-vertiports">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>CLS</span>
+        <code data-readout="scene-contingency-landing-sites">0</code>
+      </div>
+      <div class="control-readout__row">
+        <span>C/N/S Sites</span>
+        <code data-readout="scene-cns-sites">0/0/0</code>
       </div>
       <div class="control-readout__row">
         <span>Corridors</span>
@@ -135,6 +145,8 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
     sceneCorridorsValue: requireReadout(sceneDebugPanel, "scene-corridors"),
     sceneRoutesValue: requireReadout(sceneDebugPanel, "scene-routes"),
     sceneVertiportsValue: requireReadout(sceneDebugPanel, "scene-vertiports"),
+    sceneContingencySitesValue: requireReadout(sceneDebugPanel, "scene-contingency-landing-sites"),
+    sceneCnsSitesValue: requireReadout(sceneDebugPanel, "scene-cns-sites"),
     sceneBuildingsValue: requireReadout(sceneDebugPanel, "scene-buildings"),
     sceneRoadsValue: requireReadout(sceneDebugPanel, "scene-roads"),
     sceneTreesValue: requireReadout(sceneDebugPanel, "scene-trees"),
@@ -156,10 +168,18 @@ export function writeStaticSceneReadouts(panels: ReadoutPanels, sceneData: Scene
   panels.sceneCorridorsValue.textContent = sceneData.corridors.length.toLocaleString();
   panels.sceneRoutesValue.textContent = sceneData.routes.length.toLocaleString();
   panels.sceneVertiportsValue.textContent = sceneData.vertiports.length.toLocaleString();
+  panels.sceneContingencySitesValue.textContent = sceneData.contingencySites.length.toLocaleString();
+  panels.sceneCnsSitesValue.textContent = formatCnsSiteCounts(sceneData.sites);
   panels.sceneBuildingsValue.textContent = sceneData.buildings.length.toLocaleString();
   panels.sceneRoadsValue.textContent = sceneData.roads.length.toLocaleString();
   panels.sceneTreesValue.textContent = sceneData.trees.length.toLocaleString();
   panels.sceneUavTypesValue.textContent = SUPPORTED_VEHICLE_TYPE_NAMES;
+}
+
+/** Formats CNS site counts as `comm/nav/surv`, matching the row's C/N/S label order. */
+function formatCnsSiteCounts(sites: SceneData["sites"]): string {
+  const countOf = (type: CnsSiteType): number => sites.filter((site) => site.type === type).length;
+  return `${countOf("comm_site")}/${countOf("nav_site")}/${countOf("surv_site")}`;
 }
 
 /** Live state the per-frame readout refresh consumes. */

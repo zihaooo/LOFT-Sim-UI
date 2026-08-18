@@ -37,6 +37,7 @@ import { createLightingGroup, createSkyDome } from "../layer/environment";
 import { createBuildingGroup, createGrid, createGroundGroup, createRoadGroup, createTreeGroup } from "../layer/map";
 import { createFlightEnvelopeGroup, createCorridorGroup, createRouteGroup, ROUTE_ENVELOPE_CHILD_NAME } from "../layer/airPath";
 import { createVertiportGroup } from "../layer/vertiport";
+import { createContingencySiteGroup } from "../layer/contingencySite";
 import { createCnsSiteLayer, type CnsSiteLayer } from "../layer/cnsSite";
 import { updateGroundIconBillboards } from "../layer/groundIcon";
 import type { GroundIconTextures } from "../geometry/groundIcon";
@@ -120,6 +121,7 @@ export class FleetScene {
   private readonly treeGroup: THREE.Group;
   private readonly buildingGroup: THREE.Group;
   private readonly vertiportGroup: THREE.Group;
+  private readonly contingencySiteGroup: THREE.Group;
   /** CNS site markers plus their coverage domes and extent rings; toggled as one unit. */
   private readonly cnsSiteLayer: CnsSiteLayer;
   /** Standalone reference-grid layer; its geometry is swapped in place when the "Grid Size" slider changes. */
@@ -200,6 +202,10 @@ export class FleetScene {
     this.vertiportGroup = createVertiportGroup(
       this.sceneData.vertiports,
       options.groundIconTextures?.get("vertiport") ?? null,
+    );
+    this.contingencySiteGroup = createContingencySiteGroup(
+      this.sceneData.contingencySites,
+      options.groundIconTextures?.get("contSite") ?? null,
     );
     // The ground plane, grid, and CNS coverage clipping share this once-computed padded box.
     this.gridBounds = padSceneBounds(this.sceneData.sceneBounds, GROUND_PADDING_METERS);
@@ -291,6 +297,7 @@ export class FleetScene {
       this.roadGroup,
       this.treeGroup,
       this.vertiportGroup,
+      this.contingencySiteGroup,
       this.cnsSiteLayer.root,
       this.corridorGroup,
       this.envelopeGroup,
@@ -355,6 +362,7 @@ export class FleetScene {
       container: panel,
       state: this.params,
       availableLayers: {
+        contingencySites: this.contingencySiteGroup.children.length > 0,
         cnsSites: this.cnsSiteLayer.iconGroups.length > 0,
         buildings: this.buildingGroup.children.length > 0,
         roads: this.roadGroup.children.length > 0,
@@ -396,6 +404,7 @@ export class FleetScene {
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
     this.vertiportGroup.visible = visibility.vertiportsVisible;
+    this.contingencySiteGroup.visible = visibility.contingencySitesVisible;
     // The CNS mode picks one dome treatment; markers and rings (directly on the root) serve both.
     this.cnsSiteLayer.root.visible = visibility.cnsSitesMode !== "off";
     this.cnsSiteLayer.intensityGroup.visible = visibility.cnsSitesMode === "intensity";
@@ -458,6 +467,7 @@ export class FleetScene {
     this.updateRouteVisibility();
     this.cameraRig.update(delta, this.lastFrame?.selection ?? null);
     updateGroundIconBillboards(this.vertiportGroup, this.camera);
+    updateGroundIconBillboards(this.contingencySiteGroup, this.camera);
     for (const iconGroup of this.cnsSiteLayer.iconGroups) {
       updateGroundIconBillboards(iconGroup, this.camera);
     }

@@ -5,6 +5,7 @@ import { averageOrigin, parseOsm, projectGeoPoint } from "./common";
 import { measurePolyline, parseAirCorridors } from "./corridors";
 import { computeSceneBounds, parseBuildings, parseRoads, parseTrees } from "./map";
 import { parseVertiports } from "./vertiport";
+import { parseContingencySites } from "./contingencySite";
 import { parseCnsSites } from "./cnsSite";
 import { parseFlowDefinitions } from "./flows";
 import { parseRoutes } from "./routes";
@@ -150,6 +151,48 @@ describe("OSM and flow parsing", () => {
     expect(vertiports.every((vertiport) => vertiport.id && vertiport.name)).toBe(true);
   });
 
+  it("extracts only contingency site nodes, pinning markers to the ground plane", () => {
+    const corridorOsm = `
+      <osm version="0.6">
+        <node id="-1" lat="42.2900" lon="-83.7100">
+          <tag k="altitude" v="20" />
+          <tag k="node_type" v="cont_site" />
+          <tag k="node_id" v="n0" />
+          <tag k="max_landing_rate_per_hour" v="10" />
+        </node>
+        <node id="-2" lat="42.2910" lon="-83.7100">
+          <tag k="altitude" v="30" />
+          <tag k="node_type" v="waypoint" />
+        </node>
+        <node id="-3" lat="42.2920" lon="-83.7090">
+          <tag k="altitude" v="0" />
+          <tag k="node_type" v="cont_site" />
+        </node>
+      </osm>
+    `;
+
+    const origin = { lat: 42.291, lon: -83.71 };
+    const sites = parseContingencySites(parseOsm(corridorOsm), origin);
+
+    expect(sites).toHaveLength(2);
+    // node_id wins as both id and name; absent tags fall back to the OSM node id.
+    expect(sites[0]).toMatchObject({ id: "n0", name: "n0" });
+    expect(sites[1]).toMatchObject({ id: "-3", name: "-3" });
+    // The altitude tag is the site's ground elevation, not a marker height: markers stay on the ground plane.
+    const projected = projectGeoPoint({ lat: 42.29, lon: -83.71, altitude: 20 }, origin);
+    expect(sites[0].position).toEqual({ x: projected.x, y: 0, z: projected.z });
+  });
+
+  it("parses the four contingency sites in the provided airspace network", () => {
+    const corridorOsm = readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8");
+    const corridor = parseOsm(corridorOsm);
+    const sites = parseContingencySites(corridor, averageOrigin(Array.from(corridor.nodes.values())));
+
+    expect(sites).toHaveLength(4);
+    expect(sites.every((site) => site.id && site.name)).toBe(true);
+    expect(sites.every((site) => site.position.y === 0)).toBe(true);
+  });
+
   it("extracts CNS site nodes with type, radius, and id, tolerating a missing radius", () => {
     const corridorOsm = `
       <osm version="0.6">
@@ -253,7 +296,8 @@ describe("OSM and flow parsing", () => {
     expect(sceneData.buildings).toEqual([]);
     expect(sceneData.roads).toEqual([]);
     expect(sceneData.trees).toEqual([]);
-    // The demo networks carry no CNS site nodes; the layer must degrade to empty rather than fail.
+    // The demo networks carry no contingency or CNS site nodes; both layers must degrade to empty rather than fail.
+    expect(sceneData.contingencySites).toEqual([]);
     expect(sceneData.sites).toEqual([]);
     expect(sceneData.sceneBounds.width).toBeGreaterThan(1_000);
     expect(sceneData.sceneBounds.depth).toBeGreaterThan(1_000);

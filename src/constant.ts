@@ -182,6 +182,7 @@ export const ENVELOPE_RADIUS_METERS = 35;
 /** Icon SVG assets under public/icons. Adding an icon type starts with an entry here. */
 export const GROUND_ICON_ASSETS = {
   vertiport: "/icons/vertiport.svg",
+  contSite: "/icons/cont_site.svg",
   navSite: "/icons/nav_site.svg",
   commSite: "/icons/comm_site.svg",
   survSite: "/icons/surv_site.svg",
@@ -199,6 +200,8 @@ export const GROUND_ICON_ANISOTROPY = 16;
 export const GROUND_ICON_Y_OFFSET_METERS = 0.04;
 /** Diameter of the vertiport icon disc, in meters. */
 export const VERTIPORT_ICON_SIZE_METERS = 70;
+/** Diameter of a contingency landing site icon disc, in meters (the same footprint as the vertiport disc). */
+export const CONT_SITE_ICON_SIZE_METERS = 70;
 /**
  * Scene layering by render order. Map geometry (ground, buildings, roads, trees) stays at the default
  * 0; ground icons render just above it so buildings can't hide them; the airspace layer (drones,

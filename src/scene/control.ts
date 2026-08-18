@@ -19,6 +19,7 @@ export type SimulationControlState = {
   demoPreset: DemoPreset | "";
   cameraMode: CameraMode;
   vertiportsVisible: boolean;
+  contingencySitesVisible: boolean;
   cnsSitesMode: CnsSiteMode;
   corridorsVisible: boolean;
   routesVisible: boolean;
@@ -35,7 +36,7 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "vertiportsVisible" | "cnsSitesMode" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
+  "vertiportsVisible" | "contingencySitesVisible" | "cnsSitesMode" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -46,6 +47,7 @@ export type ConfigFileSelection = {
 
 /** Which optional layers have rendered geometry; empty ones get their toggle disabled. */
 type LayerAvailability = {
+  contingencySites: boolean;
   cnsSites: boolean;
   buildings: boolean;
   roads: boolean;
@@ -86,6 +88,7 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     demoPreset: activeDemoPreset ?? "",
     cameraMode: CAMERA_MODES.FREE,
     vertiportsVisible: true,
+    contingencySitesVisible: true,
     // Coverage is the default read: "is the corridor covered?" is the question planners bring to the
     // CNS layer, so the effective-range shells greet them before the more analytic intensity fog.
     cnsSitesMode: "coverage",
@@ -136,6 +139,13 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
   });
 
   controlFolder.addBinding(state, "vertiportsVisible", { label: "Vertiports" }).on("change", () => {
+    options.onLayerVisibilityChange(state);
+  });
+
+  controlFolder.addBinding(state, "contingencySitesVisible", {
+    label: "Contingency Sites",
+    disabled: !options.availableLayers.contingencySites,
+  }).on("change", () => {
     options.onLayerVisibilityChange(state);
   });
 

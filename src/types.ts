@@ -80,6 +80,16 @@ export type VertiportPoint = {
   position: ScenePoint;
 };
 
+/**
+ * A contingency landing site: a standalone emergency-landing spot rendered as a flat, camera-oriented
+ * ground marker, exactly like a vertiport. Never referenced by corridors, so it carries no connectivity.
+ */
+export type ContingencySite = {
+  id: string;
+  name: string;
+  position: ScenePoint;
+};
+
 /** A CNS ground station: a flat ground marker plus, when it has a coverage radius, a coverage dome. */
 export type CnsSite = {
   id: string;
@@ -118,6 +128,7 @@ export type SceneData = {
   roads: RoadPath[];
   trees: TreePoint[];
   vertiports: VertiportPoint[];
+  contingencySites: ContingencySite[];
   sites: CnsSite[];
   flows: FlowDefinition[];
 };
