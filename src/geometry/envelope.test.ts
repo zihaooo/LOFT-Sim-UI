@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as THREE from "three";
@@ -7,6 +7,12 @@ import { ENVELOPE_RADIAL_SEGMENTS } from "../constant";
 import { parseOsm } from "../data/common";
 import { parseAirCorridors } from "../data/corridors";
 import { buildComponentEnvelopeGeometries, createSimpleTubeGeometry } from "./envelope";
+import { initCsg } from "./csg";
+
+// Junction fusion runs through the Manifold WASM module; load it once before any envelope is built.
+beforeAll(async () => {
+  await initCsg();
+});
 
 const root = resolve(__dirname, "../..");
 const corridorOsm = parseOsm(readFileSync(resolve(root, "public/data/network/airspace_network.osm"), "utf8"));
@@ -141,8 +147,9 @@ describe("corridor envelope decomposition (verification)", () => {
     const corridors = parseAirCorridors(corridorOsm);
     const envelopes = buildComponentEnvelopeGeometries(corridors);
 
-    // The sample file resolves to four connected components (two with a junction, two without).
-    expect(envelopes).toHaveLength(4);
+    // One envelope per connected component, however many the bundled network resolves to.
+    const componentCount = new Set(corridors.map((corridor) => corridor.componentId)).size;
+    expect(envelopes).toHaveLength(componentCount);
     expect(warn).not.toHaveBeenCalled(); // CSG union never fell back to overlapping merge
 
     envelopes.forEach((envelope) => {
@@ -154,17 +161,16 @@ describe("corridor envelope decomposition (verification)", () => {
     warn.mockRestore();
   });
 
-  it("the two junction-free components come out watertight", () => {
+  it("every component envelope comes out watertight", () => {
     const corridors = parseAirCorridors(corridorOsm);
     const envelopes = buildComponentEnvelopeGeometries(corridors);
 
-    // Two of the four components have no junction, so their geometry is pure merged miter tubes and must
-    // be a closed, outward-wound solid. (The CSG-unioned junction components weld duplicate vertices, so
-    // they are not edge-manifold by index and are excluded by this very property.)
+    // Junction-free components are merged closed miter tubes; fused components come from Manifold, which
+    // guarantees a closed, outward-oriented manifold surface. Either way: no open edges, positive volume.
     const watertight = envelopes.filter(
       (envelope) => boundaryEdgeCount(envelope.geometry) === 0 && signedVolume(envelope.geometry) > 0,
     );
-    expect(watertight.length).toBe(2);
+    expect(watertight.length).toBe(envelopes.length);
   });
 
   it("stitches two corridors joined at a degree-2 node into one mitered tube (no CSG)", () => {

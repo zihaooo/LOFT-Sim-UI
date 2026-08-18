@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as THREE from "three";
 import { parseRoutes } from "./routes";
 import { parseOsm } from "./common";
 import { createRouteGroup } from "../layer/airPath";
+import { initCsg } from "../geometry/csg";
+
+// createRouteGroup builds each route's envelope, whose junction fusion runs through the Manifold WASM module.
+beforeAll(async () => {
+  await initCsg();
+});
 
 const origin = { lat: 42.0, lon: -83.0 };
 const root = resolve(__dirname, "../..");

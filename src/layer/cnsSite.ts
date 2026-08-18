@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Brush, Evaluator, INTERSECTION } from "three-bvh-csg";
+import { csgIntersect } from "../geometry/csg";
 import type { CnsSite, SceneBounds } from "../types";
 import {
   CNS_DOME_HEIGHT_SEGMENTS,
@@ -164,11 +164,6 @@ export function createCnsSiteLayer(
   // intensity dome by clamping each ray's integration segment in its shader, and the coverage shell
   // by baking the cut into its geometry as real walls (see createCoverageShellGeometry).
   const ringClippingPlanes = createGroundRectangleClippingPlanes(groundBounds);
-  // One evaluator serves every shell cut. useGroups off merges sphere and box faces into a
-  // single-material geometry; only positions survive, since the unlit shell has no use for normals.
-  const evaluator = new Evaluator();
-  evaluator.useGroups = false;
-  evaluator.attributes = ["position"];
 
   for (const type of CNS_SITE_TYPES) {
     const sitesOfType = sites.filter((site) => site.type === type);
@@ -211,7 +206,7 @@ export function createCnsSiteLayer(
       dome.renderOrder = CNS_DOME_RENDER_ORDER;
       intensityGroup.add(dome);
       // World position is baked into the shell's CSG geometry, so the mesh stays at the origin.
-      const shell = new THREE.Mesh(createCoverageShellGeometry(site, domeGeometry, groundBounds, evaluator), shellMaterial);
+      const shell = new THREE.Mesh(createCoverageShellGeometry(site, domeGeometry, groundBounds), shellMaterial);
       // Shares the fog's last-composited transparent slot; at this opacity the blend-order error
       // against other translucent objects is imperceptible from either side of the shell wall.
       shell.renderOrder = CNS_DOME_RENDER_ORDER;
@@ -293,15 +288,15 @@ function createCoverageShellMaterial(color: string): THREE.MeshBasicMaterial {
  * instead of an open rim exposing the interior. The box floor sits below the global ground clip
  * (see SHELL_BOX_MARGIN_METERS), which trims the walls flush with the ground at render time and
  * leaves no floor cap to z-fight the map. World position and radius are baked into the geometry —
- * the evaluator expects world-space brushes — so the caller's mesh stays at the origin. Falls back
- * to the uncut sphere (overhanging the map edge) if the boolean throws on degenerate input, so a bad
- * site never blanks the layer.
+ * the boolean runs on world-space solids — so the caller's mesh stays at the origin. The CSG result
+ * carries positions only, which suits the unlit shell material. Falls back to the uncut sphere
+ * (overhanging the map edge) if the boolean rejects degenerate input, so a bad site never blanks
+ * the layer.
  */
 function createCoverageShellGeometry(
   site: CnsSite,
   unitSphere: THREE.SphereGeometry,
   groundBounds: SceneBounds,
-  evaluator: Evaluator,
 ): THREE.BufferGeometry {
   const sphere = unitSphere.clone();
   sphere.scale(site.coverageRadius, site.coverageRadius, site.coverageRadius);
@@ -321,11 +316,7 @@ function createCoverageShellGeometry(
   );
 
   try {
-    const sphereBrush = new Brush(sphere);
-    sphereBrush.updateMatrixWorld();
-    const boxBrush = new Brush(box);
-    boxBrush.updateMatrixWorld();
-    const geometry = evaluator.evaluate(sphereBrush, boxBrush, INTERSECTION).geometry;
+    const geometry = csgIntersect(sphere, box);
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
     return geometry;

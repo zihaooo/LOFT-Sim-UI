@@ -155,15 +155,12 @@ const CODE_LINKS = {
   clippingPlanes: `${T}renderers/WebGLRenderer.clippingPlanes`,
   shadowMap: `${T}renderers/WebGLRenderer.shadowMap`,
   requestAnimationFrame: "https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame",
-  Brush: "https://github.com/gkjohnson/three-bvh-csg#brush",
-  Evaluator: "https://github.com/gkjohnson/three-bvh-csg#evaluator",
-  ADDITION: "https://github.com/gkjohnson/three-bvh-csg#constants",
+  Manifold: "https://manifoldcad.org/docs/jsapi/",
   Tweakpane: "https://tweakpane.github.io/docs/",
 };
 // npm package names in code spans -> their homes
 const PKG_LINKS = {
-  "three-mesh-bvh": "https://github.com/gkjohnson/three-mesh-bvh",
-  "three-bvh-csg": "https://github.com/gkjohnson/three-bvh-csg",
+  "manifold-3d": "https://github.com/elalish/manifold",
   "stats.js": "https://github.com/mrdoob/stats.js",
   tweakpane: "https://tweakpane.github.io/docs/",
   "tweakpane-plugin-file-import": "https://github.com/LuchoTurtle/tweakpane-plugin-file-import",

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { ADDITION, Brush, Evaluator } from "three-bvh-csg";
+import { csgUnion } from "./csg";
 import type { AirPath } from "../types";
 import { ENVELOPE_RADIAL_SEGMENTS, WORLD_UP } from "../constant";
 import { toVector3 } from "./coordinates";
@@ -29,8 +29,8 @@ import { toVector3 } from "./coordinates";
 //
 // A component with no junctions needs no CSG at all — its miter tubes already read as one solid and are
 // merged directly. A component with junctions is CSG-unioned (chain tubes + junction spheres) into one
-// watertight blob. Stitching edges into maximal chains keeps the brush count low — one brush per chain
-// rather than one per edge. Vertiport nodes never get a sphere and always end a chain, so the
+// watertight blob, in a single n-ary Manifold union. Stitching edges into maximal chains keeps the union
+// input count low — one tube per chain rather than one per edge. Vertiport nodes never get a sphere and always end a chain, so the
 // chain's flat end cap becomes a clean terminal. A chain end resting on the ground is extended straight down
 // into a buried stub (groundTerminalPoints), so the tube bends to vertical and plunges into the ground with
 // its flat cap hidden below the surface, instead of an open disk straddling y=0. Everything here runs once
@@ -79,15 +79,9 @@ export function buildComponentEnvelopeGeometries(airPaths: AirPath[]): Component
     }
   });
 
-  const evaluator = new Evaluator();
-  evaluator.useGroups = false;
-  // Chain tubes carry position+normal; sphere brushes also carry uv. Restricting the evaluator to
-  // position+normal keeps it from touching the uv attribute the tubes lack.
-  evaluator.attributes = ["position", "normal"];
-
   const envelopes: ComponentEnvelope[] = [];
   componentsById.forEach((componentAirPaths, componentId) => {
-    const geometry = buildComponentEnvelope(componentAirPaths, evaluator);
+    const geometry = buildComponentEnvelope(componentAirPaths);
     if (geometry) {
       envelopes.push({ componentId, color: componentAirPaths[0].color, geometry });
     }
@@ -100,7 +94,7 @@ export function buildComponentEnvelopeGeometries(airPaths: AirPath[]): Component
  * Builds one watertight envelope geometry for a single connected component: bisector-miter tubes for the
  * degree-2 chains, plus a CSG sphere union at each junction node. Returns null if nothing was built.
  */
-function buildComponentEnvelope(airPaths: AirPath[], evaluator: Evaluator): THREE.BufferGeometry | null {
+function buildComponentEnvelope(airPaths: AirPath[]): THREE.BufferGeometry | null {
   const graph = buildAirPathGraph(airPaths);
 
   const junctions = collectJunctionNodes(graph);
@@ -130,14 +124,14 @@ function buildComponentEnvelope(airPaths: AirPath[], evaluator: Evaluator): THRE
     return merged ?? null;
   }
 
-  const brushes: Brush[] = chainGeometries.map((geometry) => makeBrush(geometry));
+  const solids = chainGeometries.slice();
   junctions.forEach((junction) => {
-    brushes.push(createSphereBrush(junction.position, junction.radius));
+    solids.push(createSphereGeometry(junction.position, junction.radius));
   });
-  if (brushes.length === 0) {
+  if (solids.length === 0) {
     return null;
   }
-  return unionBrushes(brushes, evaluator);
+  return unionGeometries(solids);
 }
 
 /** Builds the shared-node graph for one component: node positions/flags plus one edge per polyline segment. */
@@ -553,40 +547,30 @@ function collectJunctionNodes(graph: AirPathGraph): JunctionNode[] {
 }
 
 /** A solid sphere of `radius` centered at `position`, with its translation baked into the geometry. */
-function createSphereBrush(position: THREE.Vector3, radius: number): Brush {
+function createSphereGeometry(position: THREE.Vector3, radius: number): THREE.BufferGeometry {
   const geometry = new THREE.SphereGeometry(radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS);
   geometry.translate(position.x, position.y, position.z);
-  return makeBrush(geometry);
-}
-
-/** Wraps a geometry as a Brush with an up-to-date (identity) world matrix, as the evaluator expects. */
-function makeBrush(geometry: THREE.BufferGeometry): Brush {
-  const brush = new Brush(geometry);
-  brush.updateMatrixWorld();
-  return brush;
+  // Chain tubes carry only position+normal; dropping uv keeps every union input's attribute set
+  // identical, so the fallback merge below never rejects mixed attributes.
+  geometry.deleteAttribute("uv");
+  return geometry;
 }
 
 /**
- * Boolean-unions every brush into one geometry. Falls back to a plain merge (overlapping, so it can
- * double-blend) if the CSG pipeline throws on degenerate input, so a bad junction never blanks the layer.
+ * Boolean-unions every closed input solid into one interior-free geometry, in a single n-ary Manifold
+ * union. Falls back to a plain merge (overlapping, so it can double-blend) if Manifold rejects a
+ * degenerate input, so a bad junction never blanks the layer. The lit envelope material needs normals,
+ * which the position-only CSG result lacks, so they are recomputed here.
  */
-function unionBrushes(brushes: Brush[], evaluator: Evaluator): THREE.BufferGeometry | null {
+function unionGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
   try {
-    let accumulated = brushes[0];
-    for (let index = 1; index < brushes.length; index += 1) {
-      accumulated = evaluator.evaluate(accumulated, brushes[index], ADDITION);
-    }
-    const geometry = accumulated.geometry;
+    const geometry = csgUnion(geometries);
     geometry.computeVertexNormals();
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
     return geometry;
   } catch (error) {
     console.warn("Envelope CSG union failed; falling back to overlapping tubes for this component.", error);
-    const merged = mergeGeometries(
-      brushes.map((brush) => brush.geometry),
-      false,
-    );
-    return merged ?? null;
+    return mergeGeometries(geometries, false) ?? null;
   }
 }

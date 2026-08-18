@@ -14,7 +14,7 @@ The app picks a data source at startup:
 ## Stack
 
 - **Build/runtime:** Vite + TypeScript (native ES modules)
-- **Rendering:** Three.js (`three-mesh-bvh` / `three-bvh-csg` for geometry)
+- **Rendering:** Three.js (`manifold-3d` for build-time CSG)
 - **UI:** Tweakpane (control panel), `stats.js` (FPS overlay)
 - **Tests:** Vitest
 

@@ -2,6 +2,7 @@ import "./styles.css";
 import { createSceneData } from "./data/osm";
 import type { ConfigFileSelection, DemoPreset } from "./scene/control";
 import { FleetScene, loadUavModels, cloneUavModels, loadGroundIconTextures } from "./scene/FleetScene";
+import { initCsg } from "./geometry/csg";
 import type { UavModel } from "./geometry/drone";
 import type { GroundIconKey, GroundIconTextures } from "./geometry/groundIcon";
 
@@ -59,12 +60,14 @@ async function start(): Promise<void> {
   const loadingOverlay = showLoadingOverlay();
 
   try {
-    // The scene sources, UAV models, and icon textures are independent fetches; loading them
-    // concurrently keeps the model/icon requests entirely inside the (much larger) source fetch.
+    // The scene sources, UAV models, icon textures, and the envelope CSG module are independent
+    // loads; running them concurrently keeps the smaller requests entirely inside the (much larger)
+    // source fetch. The CSG module must be ready before the first FleetScene is built.
     [currentSources, uavModels, groundIconTextures] = await Promise.all([
       loadInitialSources(),
       loadUavModels(),
       loadGroundIconTextures(ACTIVE_GROUND_ICONS),
+      initCsg(),
     ]);
     activeScene = mountScene(createSceneData(
       currentSources.corridorOsm,
