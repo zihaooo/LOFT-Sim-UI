@@ -25,7 +25,7 @@ The app runs in one of two data modes (chosen at startup, see Phase A Step 2): *
 
 ### Step 3. Scene-data construction (`createSceneData` in `src/data/osm.ts`)
 - **Input**: the three text payloads.
-- **Action**: parses corridor and building OSM into `{nodes, ways, relations}` (`data/common.ts`), computes one shared `averageOrigin` from the corridor + building nodes, then builds:
+- **Action**: parses corridor and building OSM into `{nodes, ways, relations}` (`data/common.ts`), computes one shared `averageOrigin` from the corridor nodes (network-only, so scene coordinates do not depend on the background map), then builds:
   - `parseAirCorridors` → ways carrying a `corridor_id` (the airspace schema's gate tag), grouped into connected components by shared non-vertiport nodes (union-find).
   - `parseRoutes` → relations carrying a `route_id`, stitched into one polyline each (each route is its own component).
   - `parseBuildings`, `parseRoads`, `parseTrees`, `parseMapBounds` from the building OSM.

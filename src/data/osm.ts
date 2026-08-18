@@ -21,8 +21,9 @@ export function createSceneData(corridorOsm: string, buildingOsm: string, flowJs
   }
 
   const building = parseOsm(buildingOsm);
-  const buildingNodes = Array.from(building.nodes.values());
-  const origin = averageOrigin([...corridorNodes, ...buildingNodes]);
+  // The origin comes from the network's nodes alone, so scene coordinates are
+  // independent of whichever background-map variant the backend serves.
+  const origin = averageOrigin(corridorNodes);
   const sceneBounds = computeSceneBounds(corridorNodes, origin);
 
   return {

@@ -90,7 +90,7 @@ City-scale flat-earth projection:
 - Elevation → local `y`.
 - Longitude → local `z`.
 
-The shared `ProjectionOrigin` is the `averageOrigin` of the corridor + building OSM nodes, computed once in `createSceneData` and passed to every parser so all geometry aligns. Helpers live in `src/data/common.ts` (`projectGeoPoint`, `averageOrigin`) and `src/geometry/coordinates.ts` (`toVector3`, `toScreenPosition`).
+The shared `ProjectionOrigin` is the `averageOrigin` of the corridor OSM nodes (network-only, so scene coordinates do not depend on the background map), computed once in `createSceneData` and passed to every parser so all geometry aligns. Helpers live in `src/data/common.ts` (`projectGeoPoint`, `averageOrigin`) and `src/geometry/coordinates.ts` (`toVector3`, `toScreenPosition`).
 
 ## Runtime Flow
 

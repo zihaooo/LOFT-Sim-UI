@@ -107,4 +107,4 @@ Camera and selection:
 
 ## Coordinate system
 
-City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from corridor and map OSM nodes so all geometry aligns. The scene bounds and initial camera are derived from the airspace network — its node extent padded by 500 m on each side — and any base map is clipped to those bounds. The ground plane extends a further 150 m (`GROUND_PADDING_METERS`) so the clipped map sits inside a margin of bare ground. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
+City-scale flat-earth projection: latitude → `x`, altitude → `y`, longitude → `z`. The shared origin is computed from the airspace network's nodes alone, so all geometry aligns and scene coordinates do not depend on the background map. The scene bounds and initial camera are derived from the airspace network — its node extent padded by 500 m on each side — and any base map is clipped to those bounds. The ground plane extends a further 150 m (`GROUND_PADDING_METERS`) so the clipped map sits inside a margin of bare ground. Helpers live in `src/data/osm.ts` and `src/geometry/coordinates.ts`.
