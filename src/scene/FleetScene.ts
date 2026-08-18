@@ -209,6 +209,9 @@ export class FleetScene {
     this.routeGroup = createRouteGroup(this.sceneData.routes);
     this.routeGroup.visible = this.params.routesVisible;
     this.grid = createGrid(this.gridBounds, GRID_SPACING_TICKS[this.params.gridSpacingIndex]);
+    // Groups default to visible, but not every control default is "on" — the CNS layer starts in
+    // Coverage mode, which needs the intensity domes hidden — so apply the defaults once up front.
+    this.applyLayerVisibility(this.params);
     this.uavMeshes = this.createUavMeshes(options.uavModels ?? null);
     // One blob slot per possible drone across every type, so no written drone can ever lack a shadow.
     let blobCapacity = 0;
@@ -352,7 +355,7 @@ export class FleetScene {
       container: panel,
       state: this.params,
       availableLayers: {
-        cnsSites: this.cnsSiteLayer.root.children.length > 0,
+        cnsSites: this.cnsSiteLayer.iconGroups.length > 0,
         buildings: this.buildingGroup.children.length > 0,
         roads: this.roadGroup.children.length > 0,
         trees: this.treeGroup.children.length > 0,
@@ -393,7 +396,10 @@ export class FleetScene {
   /** Applies visibility toggles from the control panel to the corresponding scene groups. */
   private applyLayerVisibility(visibility: LayerVisibilityState): void {
     this.vertiportGroup.visible = visibility.vertiportsVisible;
-    this.cnsSiteLayer.root.visible = visibility.cnsSitesVisible;
+    // The CNS mode picks one dome treatment; markers and rings (directly on the root) serve both.
+    this.cnsSiteLayer.root.visible = visibility.cnsSitesMode !== "off";
+    this.cnsSiteLayer.intensityGroup.visible = visibility.cnsSitesMode === "intensity";
+    this.cnsSiteLayer.coverageGroup.visible = visibility.cnsSitesMode === "coverage";
     this.corridorGroup.visible = visibility.corridorsVisible;
     // Corridor envelope follows its own toggle but hides while routes are shown (the two are exclusive).
     this.envelopeGroup.visible = visibility.envelopesVisible && !visibility.routesVisible;

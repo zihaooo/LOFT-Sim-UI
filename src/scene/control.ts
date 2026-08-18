@@ -4,6 +4,12 @@ import { CAMERA_MODES, GRID_SPACING_TICKS, SIMULATION_SPEED_LEVELS } from "../co
 
 export type CameraMode = (typeof CAMERA_MODES)[keyof typeof CAMERA_MODES];
 export type DemoPreset = "twoCorridors" | "stressTest";
+/**
+ * How the CNS site layer renders: hidden, the signal-intensity fog domes, or the effective-range
+ * coverage shells. Intensity and coverage are exclusive readings of the same volume, so the layer is
+ * a mode, not a set of independent toggles; markers and extent rings accompany both visible modes.
+ */
+export type CnsSiteMode = "off" | "intensity" | "coverage";
 
 export type SimulationControlState = {
   running: boolean;
@@ -13,7 +19,7 @@ export type SimulationControlState = {
   demoPreset: DemoPreset | "";
   cameraMode: CameraMode;
   vertiportsVisible: boolean;
-  cnsSitesVisible: boolean;
+  cnsSitesMode: CnsSiteMode;
   corridorsVisible: boolean;
   routesVisible: boolean;
   envelopesVisible: boolean;
@@ -29,7 +35,7 @@ export type SimulationControlState = {
 
 export type LayerVisibilityState = Pick<
   SimulationControlState,
-  "vertiportsVisible" | "cnsSitesVisible" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
+  "vertiportsVisible" | "cnsSitesMode" | "corridorsVisible" | "routesVisible" | "envelopesVisible" | "buildingsVisible" | "roadsVisible" | "treesVisible" | "gridVisible"
 >;
 
 export type ConfigFileSelection = {
@@ -80,7 +86,9 @@ export function createDefaultControlState(activeDemoPreset: DemoPreset | null = 
     demoPreset: activeDemoPreset ?? "",
     cameraMode: CAMERA_MODES.FREE,
     vertiportsVisible: true,
-    cnsSitesVisible: true,
+    // Coverage is the default read: "is the corridor covered?" is the question planners bring to the
+    // CNS layer, so the effective-range shells greet them before the more analytic intensity fog.
+    cnsSitesMode: "coverage",
     corridorsVisible: true,
     routesVisible: false,
     envelopesVisible: true,
@@ -131,9 +139,16 @@ export function createSimulationControls(options: SimulationControlsOptions): Pa
     options.onLayerVisibilityChange(state);
   });
 
-  // One switch governs all three site categories — markers, coverage domes, and extent rings together.
-  controlFolder.addBinding(state, "cnsSitesVisible", {
+  // One selector governs all three site categories. A dropdown rather than two toggles because
+  // Intensity and Coverage are exclusive; the selector's shape states that rule instead of two
+  // checkboxes having to enforce it on each other. Markers and rings accompany both visible modes.
+  controlFolder.addBinding(state, "cnsSitesMode", {
     label: "CNS Sites",
+    options: {
+      Off: "off",
+      Intensity: "intensity",
+      Coverage: "coverage",
+    },
     disabled: !options.availableLayers.cnsSites,
   }).on("change", () => {
     options.onLayerVisibilityChange(state);

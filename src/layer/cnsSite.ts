@@ -1,16 +1,18 @@
 import * as THREE from "three";
+import { Brush, Evaluator, INTERSECTION } from "three-bvh-csg";
 import type { CnsSite, SceneBounds } from "../types";
 import {
+  CNS_DOME_HEIGHT_SEGMENTS,
+  CNS_DOME_RENDER_ORDER,
+  CNS_DOME_WIDTH_SEGMENTS,
   CNS_SITE_COLORS,
   CNS_SITE_ICON_SIZE_METERS,
   CNS_SITE_TYPES,
-  COVERAGE_DOME_HEIGHT_SEGMENTS,
-  COVERAGE_DOME_PEAK_ALPHA,
-  COVERAGE_DOME_RENDER_ORDER,
-  COVERAGE_DOME_WIDTH_SEGMENTS,
   COVERAGE_RING_SEGMENTS,
   COVERAGE_RING_Y_OFFSET_METERS,
+  COVERAGE_SHELL_OPACITY,
   GROUND_ICON_RENDER_ORDER,
+  INTENSITY_DOME_PEAK_ALPHA,
   type CnsSiteType,
 } from "../constant";
 import type { GroundIconKey, GroundIconTextures } from "../geometry/groundIcon";
@@ -23,14 +25,26 @@ const ICON_KEY_BY_SITE_TYPE: Record<CnsSiteType, GroundIconKey> = {
   surveillance_site: "survSite",
 };
 
+/**
+ * Vertical padding of the coverage shell's CSG box: the floor sinks below the renderer's global
+ * y ≥ −0.1 ground clip (so the boolean's floor cap never survives to z-fight the map) and the top
+ * clears the sphere apex (a box face tangent to the apex would make the boolean chew on degenerate
+ * slivers).
+ */
+const SHELL_BOX_MARGIN_METERS = 5;
+
 export type CnsSiteLayer = {
-  /** Every site marker, coverage dome, and extent ring; the CNS Sites toggle flips this one node. */
+  /** The whole layer — markers, rings, and both dome groups; the Off mode hides this one node. */
   root: THREE.Group;
   /** Flat marker groups (one per site category present) that need the per-frame billboard update. */
   iconGroups: THREE.Group[];
+  /** The signal-intensity fog domes; visible only in Intensity mode. */
+  intensityGroup: THREE.Group;
+  /** The effective-range shells; visible only in Coverage mode. */
+  coverageGroup: THREE.Group;
 };
 
-const COVERAGE_DOME_VERTEX_SHADER = /* glsl */ `
+const INTENSITY_DOME_VERTEX_SHADER = /* glsl */ `
   varying vec3 vWorldPosition;
   varying vec3 vCenter;
   varying float vRadius;
@@ -47,7 +61,7 @@ const COVERAGE_DOME_VERTEX_SHADER = /* glsl */ `
   }
 `;
 
-const COVERAGE_DOME_FRAGMENT_SHADER = /* glsl */ `
+const INTENSITY_DOME_FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 color;
   uniform float peakAlpha;
   uniform vec2 rectMin; // padded ground rectangle in world (x, z)
@@ -115,9 +129,12 @@ const COVERAGE_DOME_FRAGMENT_SHADER = /* glsl */ `
 
 /**
  * Builds the CNS site layer: one ground marker per site (the shared ground-icon treatment, grouped per
- * category so each keeps its own badge texture) plus, for every site with a coverage radius, a
- * translucent coverage dome and a ground ring marking the exact extent. Dome and ring take the
- * category's color so a site's three elements read as one object.
+ * category so each keeps its own badge texture) plus, for every site with a coverage radius, a ground
+ * ring marking the exact extent and two exclusive dome treatments of the same volume — the intensity
+ * fog (how strong is the signal here?) and the coverage shell (where does effective range end?). Each
+ * treatment lives in its own subgroup so the CNS Sites mode switches by flipping visibility flags,
+ * while markers and rings hang off the root and accompany both modes. Dome, shell, and ring take the
+ * category's color so a site's elements read as one object.
  *
  * A null texture map yields an empty layer rather than partial markers; the loader treats a missing
  * asset as fatal, so this only covers a scene constructed without the preload.
@@ -129,19 +146,29 @@ export function createCnsSiteLayer(
 ): CnsSiteLayer {
   const root = new THREE.Group();
   const iconGroups: THREE.Group[] = [];
+  const intensityGroup = new THREE.Group();
+  const coverageGroup = new THREE.Group();
+  root.add(intensityGroup, coverageGroup);
   if (sites.length === 0 || !textures) {
-    return { root, iconGroups };
+    return { root, iconGroups, intensityGroup, coverageGroup };
   }
 
-  // Unit-radius geometries shared by every site; each mesh scales itself to its coverage radius.
-  // The sphere is only a rasterization proxy: the shader defines the actual coverage volume
-  // analytically, so tessellation affects nothing but the silhouette's smoothness.
-  const domeGeometry = new THREE.SphereGeometry(1, COVERAGE_DOME_WIDTH_SEGMENTS, COVERAGE_DOME_HEIGHT_SEGMENTS);
+  // Unit-radius geometries shared by every site. The intensity dome scales the shared sphere per
+  // mesh and uses it as a rasterization proxy (its shader defines the coverage volume analytically,
+  // so tessellation affects nothing but the silhouette's smoothness); the coverage shell clones it
+  // as the source solid for its per-site CSG cut.
+  const domeGeometry = new THREE.SphereGeometry(1, CNS_DOME_WIDTH_SEGMENTS, CNS_DOME_HEIGHT_SEGMENTS);
   const ringGeometry = createUnitRingGeometry();
-  // Coverage from edge sites extends past the loaded map. The ring is cut by per-material clipping
-  // planes (needs renderer.localClippingEnabled); the dome cuts itself by clamping each ray's
-  // integration segment to the same rectangle inside its shader.
+  // Coverage from edge sites extends past the loaded map, and each element cuts at the map rectangle
+  // its own way: the ring by per-material clipping planes (needs renderer.localClippingEnabled), the
+  // intensity dome by clamping each ray's integration segment in its shader, and the coverage shell
+  // by baking the cut into its geometry as real walls (see createCoverageShellGeometry).
   const ringClippingPlanes = createGroundRectangleClippingPlanes(groundBounds);
+  // One evaluator serves every shell cut. useGroups off merges sphere and box faces into a
+  // single-material geometry; only positions survive, since the unlit shell has no use for normals.
+  const evaluator = new Evaluator();
+  evaluator.useGroups = false;
+  evaluator.attributes = ["position"];
 
   for (const type of CNS_SITE_TYPES) {
     const sitesOfType = sites.filter((site) => site.type === type);
@@ -162,7 +189,8 @@ export function createCnsSiteLayer(
     if (coveredSites.length === 0) {
       continue;
     }
-    const domeMaterial = createCoverageDomeMaterial(CNS_SITE_COLORS[type], groundBounds);
+    const domeMaterial = createIntensityDomeMaterial(CNS_SITE_COLORS[type], groundBounds);
+    const shellMaterial = createCoverageShellMaterial(CNS_SITE_COLORS[type]);
     const ringMaterial = new THREE.LineBasicMaterial({
       color: CNS_SITE_COLORS[type],
       // The ring's whole job is marking the exact coverage extent, so it must stay readable: fog
@@ -180,20 +208,27 @@ export function createCnsSiteLayer(
       dome.scale.setScalar(site.coverageRadius);
       // The fog is composited after every other transparent object (rotor discs, envelopes, blob
       // shadows), so they sit inside the veil like the opaque scene instead of painting over it.
-      dome.renderOrder = COVERAGE_DOME_RENDER_ORDER;
+      dome.renderOrder = CNS_DOME_RENDER_ORDER;
+      intensityGroup.add(dome);
+      // World position is baked into the shell's CSG geometry, so the mesh stays at the origin.
+      const shell = new THREE.Mesh(createCoverageShellGeometry(site, domeGeometry, groundBounds, evaluator), shellMaterial);
+      // Shares the fog's last-composited transparent slot; at this opacity the blend-order error
+      // against other translucent objects is imperceptible from either side of the shell wall.
+      shell.renderOrder = CNS_DOME_RENDER_ORDER;
+      coverageGroup.add(shell);
       const ring = new THREE.LineLoop(ringGeometry, ringMaterial);
       ring.position.set(site.position.x, site.position.y + COVERAGE_RING_Y_OFFSET_METERS, site.position.z);
       ring.scale.setScalar(site.coverageRadius);
       ring.renderOrder = GROUND_ICON_RENDER_ORDER;
-      root.add(dome, ring);
+      root.add(ring);
     }
   }
 
-  return { root, iconGroups };
+  return { root, iconGroups, intensityGroup, coverageGroup };
 }
 
 /**
- * The coverage dome material: a translucent volume whose alpha is the signal a view ray accumulates —
+ * The intensity dome material: a translucent volume whose alpha is the signal a view ray accumulates —
  * a dB-linear density (the remaining log-distance link margin, proportional to ln(radius / distance to
  * the site), zero at the coverage radius) integrated in closed form over the ray's segment through the
  * volume: ball ∩ above-ground ∩ the padded ground rectangle, so no coverage is counted below ground or
@@ -209,16 +244,16 @@ export function createCnsSiteLayer(
  * them almost always — and the exact fix (a depth-aware volumetric pass) costs far more than they
  * warrant.
  */
-function createCoverageDomeMaterial(color: string, groundBounds: SceneBounds): THREE.ShaderMaterial {
+function createIntensityDomeMaterial(color: string, groundBounds: SceneBounds): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       color: { value: new THREE.Color(color) },
-      peakAlpha: { value: COVERAGE_DOME_PEAK_ALPHA },
+      peakAlpha: { value: INTENSITY_DOME_PEAK_ALPHA },
       rectMin: { value: new THREE.Vector2(groundBounds.min.x, groundBounds.min.z) },
       rectMax: { value: new THREE.Vector2(groundBounds.max.x, groundBounds.max.z) },
     },
-    vertexShader: COVERAGE_DOME_VERTEX_SHADER,
-    fragmentShader: COVERAGE_DOME_FRAGMENT_SHADER,
+    vertexShader: INTENSITY_DOME_VERTEX_SHADER,
+    fragmentShader: INTENSITY_DOME_FRAGMENT_SHADER,
     transparent: true,
     // The dome is a see-through volume, so it neither writes depth nor tests it. Writing would
     // occlude the scene inside it; testing would discard the fog on every pixel covered by an object
@@ -228,6 +263,76 @@ function createCoverageDomeMaterial(color: string, groundBounds: SceneBounds): T
     depthTest: false,
     side: THREE.BackSide,
   });
+}
+
+/**
+ * The coverage shell material: a plain translucent surface over the effective-range solid — the
+ * yes/no companion to the intensity dome's how-strong read. The map-edge cut is baked into the
+ * geometry as real wall faces (see createCoverageShellGeometry), so no clipping planes apply here;
+ * only the renderer's global below-ground plane trims the strip the CSG box leaves under the ground.
+ * DoubleSide because the camera usually sits inside (coverage radii are scene-sized), where only
+ * interior faces show. Unlike the fog, the shell is a surface, so the ordinary depth test is
+ * correct — opaque geometry in front of the shell wall occludes it — and only depth writing is off,
+ * as for any translucent surface. Like the ring, it stays out of scene fog: a fog-faded wall would
+ * read as weaker coverage, not distance.
+ */
+function createCoverageShellMaterial(color: string): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: COVERAGE_SHELL_OPACITY,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    fog: false,
+  });
+}
+
+/**
+ * The coverage shell geometry: the site's range sphere intersected with a box over the padded ground
+ * rectangle, so where coverage crosses the map edge the shell closes with a flat vertical wall
+ * instead of an open rim exposing the interior. The box floor sits below the global ground clip
+ * (see SHELL_BOX_MARGIN_METERS), which trims the walls flush with the ground at render time and
+ * leaves no floor cap to z-fight the map. World position and radius are baked into the geometry —
+ * the evaluator expects world-space brushes — so the caller's mesh stays at the origin. Falls back
+ * to the uncut sphere (overhanging the map edge) if the boolean throws on degenerate input, so a bad
+ * site never blanks the layer.
+ */
+function createCoverageShellGeometry(
+  site: CnsSite,
+  unitSphere: THREE.SphereGeometry,
+  groundBounds: SceneBounds,
+  evaluator: Evaluator,
+): THREE.BufferGeometry {
+  const sphere = unitSphere.clone();
+  sphere.scale(site.coverageRadius, site.coverageRadius, site.coverageRadius);
+  sphere.translate(site.position.x, site.position.y, site.position.z);
+
+  const boxTop = site.position.y + site.coverageRadius + SHELL_BOX_MARGIN_METERS;
+  const boxBottom = -SHELL_BOX_MARGIN_METERS;
+  const box = new THREE.BoxGeometry(
+    groundBounds.max.x - groundBounds.min.x,
+    boxTop - boxBottom,
+    groundBounds.max.z - groundBounds.min.z,
+  );
+  box.translate(
+    (groundBounds.min.x + groundBounds.max.x) / 2,
+    (boxTop + boxBottom) / 2,
+    (groundBounds.min.z + groundBounds.max.z) / 2,
+  );
+
+  try {
+    const sphereBrush = new Brush(sphere);
+    sphereBrush.updateMatrixWorld();
+    const boxBrush = new Brush(box);
+    boxBrush.updateMatrixWorld();
+    const geometry = evaluator.evaluate(sphereBrush, boxBrush, INTERSECTION).geometry;
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  } catch (error) {
+    console.warn("Coverage shell CSG failed; falling back to the uncut sphere for this site.", error);
+    return sphere;
+  }
 }
 
 /** Four vertical planes keeping fragments inside the padded ground rectangle (n·p + c ≥ 0 is kept). */

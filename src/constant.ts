@@ -203,13 +203,14 @@ export const VERTIPORT_ICON_SIZE_METERS = 70;
  * Scene layering by render order. Map geometry (ground, buildings, roads, trees) stays at the default
  * 0; ground icons render just above it so buildings can't hide them; the airspace layer (drones,
  * corridors, routes, envelopes) renders above the icons so it occludes them when in front. The CNS
- * coverage domes composite last: they draw without a depth test, so paint order alone decides what
- * their fog veils — and everything, including the airspace layer's translucent parts (rotor discs,
- * envelopes), must be painted before the fog to sit inside it.
+ * domes (the intensity fog or the coverage shell, whichever mode is active) composite last: the fog
+ * draws without a depth test, so paint order alone decides what it veils — and everything, including
+ * the airspace layer's translucent parts (rotor discs, envelopes), must be painted before the fog to
+ * sit inside it.
  */
 export const GROUND_ICON_RENDER_ORDER = 1;
 export const AIRSPACE_RENDER_ORDER = 2;
-export const COVERAGE_DOME_RENDER_ORDER = 3;
+export const CNS_DOME_RENDER_ORDER = 3;
 
 // CNS sites (navigation / communication / surveillance ground stations)
 /**
@@ -228,15 +229,25 @@ export const CNS_SITE_TYPES = Object.keys(CNS_SITE_COLORS) as readonly CnsSiteTy
 /** Diameter of a CNS site icon disc, in meters (the same footprint as the vertiport disc). */
 export const CNS_SITE_ICON_SIZE_METERS = 70;
 /**
- * Coverage-dome alpha of the densest possible view ray (a ground-grazing ray through the site). The
+ * Intensity-dome alpha of the densest possible view ray (a ground-grazing ray through the site). The
  * dB-linear density concentrates alpha near the site, so most of the dome reads at a small fraction of
  * this. Kept moderate because coverage radii are scene-sized and the domes overlap — the camera usually
  * sits inside them, so their tint lies over everything.
  */
-export const COVERAGE_DOME_PEAK_ALPHA = 0.5;
-/** Proxy-sphere tessellation. The rim is the dome's silhouette at km scale, so it gets fine segments. */
-export const COVERAGE_DOME_WIDTH_SEGMENTS = 96;
-export const COVERAGE_DOME_HEIGHT_SEGMENTS = 48;
+export const INTENSITY_DOME_PEAK_ALPHA = 0.5;
+/**
+ * Coverage-shell opacity. The shell is a flat-alpha surface, not a signal read — its one job is
+ * marking the effective-range boundary — so it stays faint enough that overlapping shells and the
+ * shell wall (usually seen from inside, since radii are scene-sized) never bury the scene.
+ */
+export const COVERAGE_SHELL_OPACITY = 0.05;
+/**
+ * Unit-sphere tessellation shared by the intensity dome (a rasterization proxy, where only the
+ * silhouette shows segments) and the coverage shell (the CSG source of a real surface at the same
+ * radius). The rim is the dome's silhouette at km scale, so it gets fine segments.
+ */
+export const CNS_DOME_WIDTH_SEGMENTS = 96;
+export const CNS_DOME_HEIGHT_SEGMENTS = 48;
 /** Segments of the ground ring marking a site's exact coverage extent. */
 export const COVERAGE_RING_SEGMENTS = 128;
 /** Lifts the coverage ring above the ground plane (same clearance as the grid) to resolve z-fighting. */
