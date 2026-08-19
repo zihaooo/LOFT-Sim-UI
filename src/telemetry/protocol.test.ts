@@ -14,6 +14,14 @@ function makeFrame(droneCount: number): ArrayBuffer {
   view.setUint32(0, 7, true);
   view.setFloat64(4, 12.5, true);
   view.setUint32(12, droneCount, true);
+  view.setUint32(16, 1, true);
+  view.setUint32(20, 8, true);
+  view.setUint32(24, 2, true);
+  view.setUint32(28, 3, true);
+  view.setUint32(32, 4, true);
+  view.setUint32(36, 5, true);
+  view.setUint32(40, 30, true);
+  view.setFloat64(44, 65_520_000, true);
 
   for (let index = 0; index < droneCount; index += 1) {
     const offset = TELEMETRY_HEADER_BYTES + index * TELEMETRY_DRONE_RECORD_BYTES;
@@ -45,6 +53,16 @@ describe("telemetry binary protocol", () => {
 
     expect(snapshot.sequence).toBe(7);
     expect(snapshot.simTimeSeconds).toBe(12.5);
+    expect(snapshot.stats).toEqual({
+      takeoffCount: 1,
+      cruiseCount: 8,
+      landingCount: 2,
+      waitingCount: 3,
+      holdCount: 4,
+      arrivedCount: 5,
+      spawnedCount: 30,
+      totalEnergyJoules: 65_520_000,
+    });
     expect(snapshot.drones).toHaveLength(2);
     expect(snapshot.drones[0]).toMatchObject({
       handle: 1,

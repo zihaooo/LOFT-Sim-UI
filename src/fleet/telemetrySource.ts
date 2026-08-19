@@ -2,13 +2,14 @@ import * as THREE from "three";
 import type {AirCorridor, AirRoute, UavState} from "../types";
 import { setUavAttitudeQuaternion } from "../geometry/drone";
 import type { TelemetryClient } from "../telemetry/client";
-import type { TelemetryDroneState, TelemetrySnapshot } from "../telemetry/protocol";
+import { TELEMETRY_STATE_LABELS, type TelemetryDroneState, type TelemetrySnapshot } from "../telemetry/protocol";
 import {
   formatRouteSummary,
   type FleetFrame,
   type FleetFrameContext,
   type FleetSelection,
   type FleetSource,
+  type SelectedUavDetail,
   type TelemetryDebugReadout, formatCorridorSummary,
 } from "./source";
 
@@ -70,7 +71,6 @@ export class TelemetrySource implements FleetSource {
     let selectedRouteId: string | null = null;
     let selection: FleetSelection | null = null;
     let selectedUavState: UavState | null = null;
-    let activeCount = 0;
 
     for (const drone of snapshot.drones) {
       if (drone.stateCode === 0) {
@@ -94,7 +94,6 @@ export class TelemetrySource implements FleetSource {
       if (!written) {
         continue;
       }
-      activeCount += 1;
       this.recordSlotHandle(written.typeCode, written.slot, drone.handle);
 
       if (isSelected) {
@@ -113,15 +112,22 @@ export class TelemetrySource implements FleetSource {
 
     writer.commit();
 
+    const selectedDrone = this.findSelectedDrone(snapshot, selectedUavId);
+
     return {
-      activeCount,
+      // The simulator's running-vehicle count (idle-but-loaded drones included), matching its summary stats.
+      activeCount: snapshot.drones.length,
       scheduledCount: null,
       simTimeSeconds: snapshot.simTimeSeconds,
       selectedUavId,
       selectedRouteId,
       selection,
       selectedUavState,
-      selectedSummary: this.describeSelection(snapshot, selectedUavId),
+      selectedSummary: this.describeSelection(selectedDrone),
+      selectedRouteText: selectedDrone ? this.routeText(selectedDrone) : null,
+      selectedCorridorText: selectedDrone ? this.corridorText(selectedDrone) : null,
+      selectedDetail: this.describeSelectedDetail(selectedDrone),
+      fleetStats: snapshot.stats,
     };
   }
 
@@ -203,15 +209,19 @@ export class TelemetrySource implements FleetSource {
     return this.client.getRegistry().corridorsByHandle.get(drone.corridorHandle)?.id;
   }
 
-  private describeSelection(snapshot: TelemetrySnapshot, selectedUavId: string): string {
+  /** Locates the selected drone in this snapshot, or null when nothing is selected or it is absent. */
+  private findSelectedDrone(snapshot: TelemetrySnapshot, selectedUavId: string): TelemetryDroneState | null {
     // No selection: skip the per-drone scan below, which would do a registry lookup per drone per frame.
     if (selectedUavId === "" && this.selectedHandle === -1) {
-      return "none";
+      return null;
     }
 
-    const drone = snapshot.drones.find((candidate) => (
+    return snapshot.drones.find((candidate) => (
       candidate.handle === this.selectedHandle || this.getDroneId(candidate.handle) === selectedUavId
-    ));
+    )) ?? null;
+  }
+
+  private describeSelection(drone: TelemetryDroneState | null): string {
     if (!drone) {
       return "none";
     }
@@ -219,14 +229,38 @@ export class TelemetrySource implements FleetSource {
     const droneId = this.getDroneId(drone.handle);
     const droneType = this.client.getRegistry().dronesByHandle.get(drone.handle)?.vehicleType
       ?? `type ${drone.vehicleTypeCode}`;
+    return `${droneId} · ${droneType}`;
+  }
+
+  /** Display name for the drone's route; falls back to the raw id/handle behind the HUD's "Route:" label. */
+  private routeText(drone: TelemetryDroneState): string {
     const routeId = this.getRouteId(drone);
     const route = routeId ? this.routeById.get(routeId) : undefined;
-    const routeText = route ? formatRouteSummary(route) : `Route ${routeId ?? drone.routeHandle}`;
+    return route ? formatRouteSummary(route) : `${routeId ?? drone.routeHandle}`;
+  }
 
+  /** Display name for the drone's current corridor; falls back to the raw id/handle. */
+  private corridorText(drone: TelemetryDroneState): string {
     const corridorId = this.getCorridorId(drone);
     const corridor = corridorId ? this.corridorById.get(corridorId) : undefined;
-    const corridorText = corridor ? formatCorridorSummary(corridor) : `Corridor ${corridorId ?? drone.corridorHandle}`;
+    return corridor ? formatCorridorSummary(corridor) : `${corridorId ?? drone.corridorHandle}`;
+  }
 
-    return `${droneId} · ${droneType} · ${routeText} · ${corridorText}`;
+  private describeSelectedDetail(drone: TelemetryDroneState | null): SelectedUavDetail | null {
+    if (!drone) {
+      return null;
+    }
+
+    const registryDrone = this.client.getRegistry().dronesByHandle.get(drone.handle);
+    return {
+      stateLabel: TELEMETRY_STATE_LABELS[drone.stateCode] ?? `State ${drone.stateCode}`,
+      speedMetersPerSecond: drone.speedMetersPerSecond,
+      // Scene y is altitude (the simulator's z after axis mapping).
+      altitudeMeters: drone.position.y,
+      energyJoules: drone.energyJoules,
+      powerWatts: drone.powerWatts,
+      origin: registryDrone?.origin ?? "",
+      destination: registryDrone?.destination ?? "",
+    };
   }
 }

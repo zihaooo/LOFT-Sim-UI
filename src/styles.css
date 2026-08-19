@@ -138,6 +138,35 @@ select {
   color: rgba(246, 251, 255, 0.78);
 }
 
+.hud-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hud-section + .hud-section {
+  margin-top: 5px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hud-section__title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(246, 251, 255, 0.5);
+}
+
+/* Renders as if its rows were direct section children, so the section's gap keeps applying. */
+.hud-selected-detail {
+  display: contents;
+}
+
+.hud-selected-detail.is-hidden {
+  display: none;
+}
+
 .hud-line {
   display: flex;
   flex-wrap: wrap;
@@ -165,7 +194,7 @@ select {
   color: #f5c469;
 }
 
-.hud-value--selected.is-empty {
+.hud-value.is-empty {
   color: rgba(246, 251, 255, 0.4);
 }
 

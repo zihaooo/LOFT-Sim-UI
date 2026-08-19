@@ -1,5 +1,23 @@
 import type * as THREE from "three";
 import type { AirRoute, AirCorridor, UavState } from "../types";
+import type { TelemetryFleetStats } from "../telemetry/protocol";
+
+/** Sim-computed fleet aggregates for the HUD's Fleet section; null for sources without them (demo). */
+export type FleetStats = TelemetryFleetStats;
+
+/** Per-UAV detail rows for the HUD's Selected section; null when nothing is selected or data is absent. */
+export type SelectedUavDetail = {
+  stateLabel: string;
+  speedMetersPerSecond: number;
+  altitudeMeters: number;
+  /** Cumulative energy consumed since spawn. */
+  energyJoules: number;
+  /** Instantaneous draw. */
+  powerWatts: number;
+  /** Origin/destination node ids; "" when unknown. */
+  origin: string;
+  destination: string;
+};
 
 /**
  * Writes UAV instances into per-vehicle-type InstancedMeshes for one frame. A source calls begin() once,
@@ -38,7 +56,10 @@ export type FleetSelection = {
 
 /** Everything FleetScene needs from a source after it has written this frame's instances into the mesh. */
 export type FleetFrame = {
-  /** Number of instances written into the mesh; the source has already set `mesh.count`. */
+  /**
+   * HUD "Active UAVs" count. Telemetry reports the simulator's running-vehicle count (every drone in
+   * the snapshot, matching the summary stats); the demo reports the instances it wrote into the mesh.
+   */
   activeCount: number;
   /** Total roster size for sources with a fixed schedule (demo); null for open-ended streams (telemetry). */
   scheduledCount: number | null;
@@ -52,8 +73,16 @@ export type FleetFrame = {
   selection: FleetSelection | null;
   /** State of the selected UAV while it is actively flying (drives its label), or null otherwise. */
   selectedUavState: UavState | null;
-  /** One-line HUD description of the selected UAV ("none" when nothing is selected). */
+  /** One-line HUD description of the selected UAV, "id · type" ("none" when nothing is selected). */
   selectedSummary: string;
+  /** Display name of the selected UAV's route, or null when nothing is selected. */
+  selectedRouteText: string | null;
+  /** Display name of the selected UAV's current corridor, or null when unknown (demo) or nothing selected. */
+  selectedCorridorText: string | null;
+  /** Detail rows for the HUD's Selected section, or null when nothing is selected or data is absent. */
+  selectedDetail: SelectedUavDetail | null;
+  /** Sim-computed fleet aggregates for the HUD's Fleet section; null when the source has none (demo). */
+  fleetStats: FleetStats | null;
 };
 
 /** Source-specific transport stats rendered in the telemetry debug readout panel. */

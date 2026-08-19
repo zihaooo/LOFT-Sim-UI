@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const HEADER_BYTES = 16;
+const HEADER_BYTES = 52;
 const RECORD_BYTES = 64;
+/** Nominal cruise draw per vehicle type code (quadrotor, fixed_wing, hybrid). */
+const POWER_WATTS_BY_TYPE = { 1: 2400, 2: 900, 3: 1600 };
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const VALID_HZ = new Set([30, 60, 120]);
 
@@ -106,11 +108,16 @@ function createRegistryMessage() {
     projection: mockData.projection,
     corridors: mockData.corridors.map((corridor) => ({ handle: corridor.handle, id: corridor.id })),
     routes: mockData.routes.map((route) => ({ handle: route.handle, id: route.id })),
-    drones: mockData.drones.map((drone) => ({
-      handle: drone.handle,
-      id: drone.id,
-      vehicleType: drone.vehicle_type,
-    })),
+    drones: mockData.drones.map((drone) => {
+      const route = routesByHandle.get(drone.route_handle);
+      return {
+        handle: drone.handle,
+        id: drone.id,
+        vehicleType: drone.vehicle_type,
+        origin: route?.origin ?? "",
+        destination: route?.destination ?? "",
+      };
+    }),
   };
 }
 
@@ -197,18 +204,23 @@ function readClientFrames(socket, chunk) {
 
 function createSnapshotPayload(snapshotSequence, snapshotTimeSeconds) {
   const buffer = Buffer.allocUnsafe(HEADER_BYTES + mockData.drones.length * RECORD_BYTES);
-  buffer.writeUInt32LE(snapshotSequence, 0);
-  buffer.writeDoubleLE(snapshotTimeSeconds, 4);
-  buffer.writeUInt32LE(mockData.drones.length, 12);
+  const stateCounts = { takeoff: 0, cruise: 0, landing: 0, waiting: 0 };
+  let arrived = 0;
+  let totalEnergyJoules = 0;
 
   for (let index = 0; index < mockData.drones.length; index += 1) {
     const drone = mockData.drones[index];
     const route = routesByHandle.get(drone.route_handle);
     const sampled = sampleRoute(route, drone, snapshotTimeSeconds);
+    const dynamics = droneDynamics(drone, route, snapshotTimeSeconds);
     const offset = HEADER_BYTES + index * RECORD_BYTES;
 
+    stateCounts[dynamics.stateName] += 1;
+    arrived += dynamics.lapCount;
+    totalEnergyJoules += dynamics.energyJoules;
+
     buffer.writeUInt32LE(drone.handle, offset);
-    buffer.writeUInt16LE(1, offset + 4);
+    buffer.writeUInt16LE(dynamics.stateCode, offset + 4);
     buffer.writeUInt16LE(drone.vehicle_type_code, offset + 6);
     buffer.writeUInt32LE(sampled.corridorHandle, offset + 8);
     buffer.writeUInt32LE(drone.route_handle, offset + 12);
@@ -222,11 +234,51 @@ function createSnapshotPayload(snapshotSequence, snapshotTimeSeconds) {
     buffer.writeFloatLE(0, offset + 44);
     buffer.writeFloatLE(0, offset + 48);
     buffer.writeFloatLE(drone.speed_mps, offset + 52);
-    buffer.writeFloatLE(0, offset + 56);
-    buffer.writeFloatLE(0, offset + 60);
+    buffer.writeFloatLE(dynamics.energyJoules, offset + 56);
+    buffer.writeFloatLE(dynamics.powerWatts, offset + 60);
   }
 
+  buffer.writeUInt32LE(snapshotSequence, 0);
+  buffer.writeDoubleLE(snapshotTimeSeconds, 4);
+  buffer.writeUInt32LE(mockData.drones.length, 12);
+  buffer.writeUInt32LE(stateCounts.takeoff, 16);
+  buffer.writeUInt32LE(stateCounts.cruise, 20);
+  buffer.writeUInt32LE(stateCounts.landing, 24);
+  buffer.writeUInt32LE(stateCounts.waiting, 28);
+  // The mock has no separate hold model: every waiting drone counts as a tactical hold.
+  buffer.writeUInt32LE(stateCounts.waiting, 32);
+  buffer.writeUInt32LE(arrived, 36);
+  // A drone completing a lap counts as one arrival plus one fresh spawn on the same route.
+  buffer.writeUInt32LE(mockData.drones.length + arrived, 40);
+  buffer.writeDoubleLE(totalEnergyJoules, 44);
+
   return buffer;
+}
+
+/**
+ * Flight state, energy and power for one drone at a given sim time. States derive from lap
+ * progress (takeoff at the start, landing at the end) plus a staggered periodic hold window;
+ * a "held" drone keeps moving — the mock only fakes the state, not the kinematics. Energy is
+ * the average draw times the time since this lap's (re)spawn, so it resets when the lap rolls
+ * over — matching the simulator, where a completed vehicle leaves and a fresh one departs.
+ */
+function droneDynamics(drone, route, timeSeconds) {
+  const routeLength = Math.max(route.length_m, 1);
+  const traveled = drone.offset_m + timeSeconds * drone.speed_mps;
+  const progress = (traveled % routeLength) / routeLength;
+  const lapCount = Math.floor(traveled / routeLength);
+  const holding = progress > 0.05 && progress < 0.95 && (timeSeconds + drone.noise_seed) % 90 < 2;
+  const stateName = holding ? "waiting" : progress < 0.04 ? "takeoff" : progress > 0.96 ? "landing" : "cruise";
+  const stateCode = { takeoff: 1, cruise: 2, landing: 3, waiting: 4 }[stateName];
+  const basePower = POWER_WATTS_BY_TYPE[drone.vehicle_type_code] ?? 1500;
+
+  return {
+    stateName,
+    stateCode,
+    lapCount,
+    powerWatts: basePower * (1 + 0.12 * Math.sin(drone.noise_seed + timeSeconds * 0.7)),
+    energyJoules: ((progress * routeLength) / Math.max(drone.speed_mps, 0.1)) * basePower,
+  };
 }
 
 function sampleRoute(route, drone, timeSeconds) {

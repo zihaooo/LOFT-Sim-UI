@@ -111,6 +111,11 @@ export class DemoFleetSource implements FleetSource {
       selection,
       selectedUavState,
       selectedSummary: this.describeSelection(selectedUavId),
+      selectedRouteText: this.selectedRouteText(selectedUavId),
+      // The demo fleet has no corridor concept, energy model, or sim-side aggregates; the HUD shows placeholders.
+      selectedCorridorText: null,
+      selectedDetail: null,
+      fleetStats: null,
     };
   }
 
@@ -166,8 +171,17 @@ export class DemoFleetSource implements FleetSource {
       return "none";
     }
 
+    return `${selectedUav.id} · ${selectedUav.type}`;
+  }
+
+  /** Display name for the selected UAV's route, or null when nothing is selected. */
+  private selectedRouteText(selectedUavId: string): string | null {
+    const selectedUav = this.fleetById.get(selectedUavId);
+    if (!selectedUav) {
+      return null;
+    }
+
     const route = this.routeById.get(selectedUav.routeId);
-    const routeText = route ? formatRouteSummary(route) : `Route ${selectedUav.routeId}`;
-    return `${selectedUav.id} · ${selectedUav.type} · ${routeText}`;
+    return route ? formatRouteSummary(route) : selectedUav.routeId;
   }
 }

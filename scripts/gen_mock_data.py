@@ -226,15 +226,23 @@ def main() -> int:
         node_refs, node_handles = merge_route_members(members)
         points = []
         point_handles = []
+        kept_refs = []
         for ref, handle in zip(node_refs, node_handles):
             node = node_elems.get(ref)
             if node is None:
                 continue
             points.append(project(node))
             point_handles.append(handle)
+            kept_refs.append(ref)
 
         if len(points) < 2:
             continue
+
+        def node_public_id(ref: str) -> str:
+            # The simulator reports origins/destinations by the schema's `node_id`
+            # tag (see `_public_node_id` in loft/telemetry/protocol.py); mirror it.
+            node = node_elems.get(ref)
+            return (osm_tags(node).get("node_id", "") if node is not None else "") or ref
 
         length_m, cumulative_lengths = polyline_length(points)
         # Id from the `route_id` tag so it matches parseRoutes.
@@ -245,6 +253,9 @@ def main() -> int:
                 "id": route_id,
                 "from": tags.get("from", ""),
                 "to": tags.get("to", ""),
+                # Endpoint node ids for the registry's per-drone origin/destination.
+                "origin": node_public_id(kept_refs[0]),
+                "destination": node_public_id(kept_refs[-1]),
                 "points": points,
                 "length_m": length_m,
                 "cumulative_lengths": cumulative_lengths,

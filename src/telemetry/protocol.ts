@@ -1,8 +1,17 @@
 import { METERS_PER_DEGREE_LAT } from "../constant";
 import type { ProjectionOrigin, ScenePoint } from "../types";
 
-export const TELEMETRY_HEADER_BYTES = 16;
+export const TELEMETRY_HEADER_BYTES = 52;
 export const TELEMETRY_DRONE_RECORD_BYTES = 64;
+
+/** Human-readable labels for the wire state codes (code 0 covers both IDLE and COMPLETED). */
+export const TELEMETRY_STATE_LABELS: Record<number, string> = {
+  0: "Idle",
+  1: "Takeoff",
+  2: "Cruise",
+  3: "Landing",
+  4: "Waiting",
+};
 
 export type SimulatorPoint = {
   x: number;
@@ -33,9 +42,27 @@ export type SimulatorTelemetryDrone = {
   powerWatts: number;
 };
 
+/**
+ * Sim-computed fleet aggregates carried in the snapshot header. Definitions match the
+ * simulator's SummaryWriter: counts cover the drones currently in the run (arrived/spawned
+ * are cumulative), holds are tactical holds, and total energy sums the current drones only —
+ * it dips when a vehicle completes, exactly as in the summary output file.
+ */
+export type TelemetryFleetStats = {
+  takeoffCount: number;
+  cruiseCount: number;
+  landingCount: number;
+  waitingCount: number;
+  holdCount: number;
+  arrivedCount: number;
+  spawnedCount: number;
+  totalEnergyJoules: number;
+};
+
 export type SimulatorTelemetrySnapshot = {
   sequence: number;
   simTimeSeconds: number;
+  stats: TelemetryFleetStats;
   drones: SimulatorTelemetryDrone[];
 };
 
@@ -48,6 +75,7 @@ export type TelemetrySnapshot = {
   sequence: number;
   simTimeSeconds: number;
   receivedAtMs: number;
+  stats: TelemetryFleetStats;
   drones: TelemetryDroneState[];
 };
 
@@ -55,6 +83,9 @@ export type TelemetryRegistryDrone = {
   handle: number;
   id: string;
   vehicleType: string;
+  /** Node ids of the drone's start/end nodes; optional at the wire boundary, "" when unknown. */
+  origin?: string;
+  destination?: string;
 };
 
 export type TelemetryRegistryCorridor = {
@@ -83,6 +114,16 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
   const sequence = view.getUint32(0, true);
   const simTimeSeconds = view.getFloat64(4, true);
   const droneCount = view.getUint32(12, true);
+  const stats: TelemetryFleetStats = {
+    takeoffCount: view.getUint32(16, true),
+    cruiseCount: view.getUint32(20, true),
+    landingCount: view.getUint32(24, true),
+    waitingCount: view.getUint32(28, true),
+    holdCount: view.getUint32(32, true),
+    arrivedCount: view.getUint32(36, true),
+    spawnedCount: view.getUint32(40, true),
+    totalEnergyJoules: view.getFloat64(44, true),
+  };
   const expectedBytes = TELEMETRY_HEADER_BYTES + droneCount * TELEMETRY_DRONE_RECORD_BYTES;
 
   if (frame.byteLength !== expectedBytes) {
@@ -130,7 +171,7 @@ export function parseTelemetrySnapshotFrame(frame: ArrayBuffer): SimulatorTeleme
     offset += TELEMETRY_DRONE_RECORD_BYTES;
   }
 
-  return { sequence, simTimeSeconds, drones };
+  return { sequence, simTimeSeconds, stats, drones };
 }
 
 /** Converts simulator coordinates (east, north, altitude) into the frontend's (north, altitude, east) scene frame. */
@@ -169,6 +210,7 @@ export function convertTelemetrySnapshotToScene(
     sequence: snapshot.sequence,
     simTimeSeconds: snapshot.simTimeSeconds,
     receivedAtMs,
+    stats: snapshot.stats,
     drones: snapshot.drones.map((drone) => ({
       ...drone,
       position: simulatorPointToScenePoint(drone.position, frontendOrigin, simulatorProjection),

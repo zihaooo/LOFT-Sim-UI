@@ -573,6 +573,10 @@ export class FleetScene {
       speed: this.getSimulationSpeed(),
       activeCount: frame?.activeCount ?? 0,
       selectedSummary: frame?.selectedSummary ?? null,
+      selectedRouteText: frame?.selectedRouteText ?? null,
+      selectedCorridorText: frame?.selectedCorridorText ?? null,
+      selectedDetail: frame?.selectedDetail ?? null,
+      fleetStats: frame?.fleetStats ?? null,
     });
   }
 
