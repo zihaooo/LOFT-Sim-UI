@@ -125,7 +125,6 @@ select {
   margin-bottom: 5px;
   font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -240,9 +239,7 @@ select {
   background:
     linear-gradient(rgba(220, 231, 239, 0.76), rgba(220, 231, 239, 0.76)),
     #dce7ef;
-  opacity: 1;
-  transition: opacity 220ms ease;
-  pointer-events: all;
+  transition: opacity 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .loading-overlay--hidden {
@@ -296,7 +293,6 @@ select {
   transform: translate3d(-9999px, -9999px, 0);
   translate: -50% -100%;
   white-space: nowrap;
-  -webkit-font-smoothing: antialiased;
   will-change: transform;
 }
 
@@ -422,7 +418,6 @@ select {
   .hud,
   .help-panel {
     left: 12px;
-    right: 12px;
     max-width: none;
     width: min(calc(100vw - 24px), 366px);
     overflow-wrap: anywhere;
@@ -442,7 +437,6 @@ select {
   }
 
   .help-panel {
-    top: auto;
     bottom: 126px;
   }
 }
@@ -473,7 +467,8 @@ select {
   animation: overlay-enter 380ms cubic-bezier(0.2, 0, 0, 1) 80ms both;
 }
 
-.app-shell.is-ready .help-panel {
+.app-shell.is-ready .help-panel,
+.app-shell.is-ready .stats-panel {
   animation: overlay-enter 380ms cubic-bezier(0.2, 0, 0, 1) 160ms both;
 }
 
@@ -492,7 +487,8 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .app-shell.is-ready .control-panel,
   .app-shell.is-ready .hud,
-  .app-shell.is-ready .help-panel {
+  .app-shell.is-ready .help-panel,
+  .app-shell.is-ready .stats-panel {
     animation: none;
   }
 
