@@ -69,7 +69,7 @@ async function start(): Promise<void> {
       loadGroundIconTextures(ACTIVE_GROUND_ICONS),
       initCsg(),
     ]);
-    activeScene = mountScene(createSceneData(
+    activeScene = await mountScene(createSceneData(
       currentSources.corridorOsm,
       currentSources.buildingOsm,
       currentSources.flowJson,
@@ -103,7 +103,7 @@ async function handleReloadScene(files: ConfigFileSelection): Promise<void> {
     activeDemoPreset = null;
     activeScene?.dispose();
     activeScene = null;
-    activeScene = mountScene(sceneData);
+    activeScene = await mountScene(sceneData);
     currentSources = nextSources;
   } catch (error) {
     stats.textContent = `Failed to reload scene: ${formatError(error)}`;
@@ -136,7 +136,7 @@ async function handleLoadDemoPreset(preset: DemoPreset | null): Promise<void> {
     activeDemoPreset = preset;
     activeScene?.dispose();
     activeScene = null;
-    activeScene = mountScene(sceneData);
+    activeScene = await mountScene(sceneData);
     currentSources = nextSources;
   } catch (error) {
     stats.textContent = `Failed to load ${preset ? "demo" : "default scene"}: ${formatError(error)}`;
@@ -156,8 +156,8 @@ function telemetryWebSocketUrl(): string {
   return `${protocol}//${window.location.host}/ws`;
 }
 
-/** Builds and starts a FleetScene against the current shared DOM hosts. */
-function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
+/** Builds a FleetScene against the current shared DOM hosts, warms its shaders, and starts it. */
+async function mountScene(sceneData: ReturnType<typeof createSceneData>): Promise<FleetScene> {
   const host = requireElement<HTMLDivElement>("#scene-host");
   const panel = requireElement<HTMLDivElement>("#control-panel");
   const labelLayer = requireElement<HTMLDivElement>("#label-layer");
@@ -177,6 +177,9 @@ function mountScene(sceneData: ReturnType<typeof createSceneData>): FleetScene {
     telemetryUrl: activeDemoPreset === null ? telemetryWebSocketUrl() : undefined,
   });
 
+  // Compile the scene's shader programs in parallel on the driver's threads before the first frame;
+  // started afterwards, that frame draws with every program already linked instead of stalling per program.
+  await fleetScene.prepare();
   fleetScene.start();
   return fleetScene;
 }
