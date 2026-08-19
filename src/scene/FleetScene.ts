@@ -54,7 +54,8 @@ import { createCorridorLabels, createUavLabels, updateLabels, type CorridorLabel
 import {
   createReadoutPanels,
   mountStatsPanel,
-  updateReadoutPanels,
+  setDebugInstrumentationVisible,
+  updateDebugReadoutPanels,
   writeStaticSceneReadouts,
   type ReadoutPanels,
 } from "./readouts";
@@ -239,6 +240,7 @@ export class FleetScene {
 
     this.buildScene();
     mountStatsPanel(this.host, this.performanceStats);
+    setDebugInstrumentationVisible(this.panel, this.performanceStats, this.params.debugVisible);
     this.resize();
   }
 
@@ -383,6 +385,7 @@ export class FleetScene {
       onLoadDemoPreset: this.onLoadDemoPreset,
       onShadowsToggle: (enabled) => this.applyShadowsEnabled(enabled),
       onGridSpacingChange: (spacingMeters) => this.setGridSpacing(spacingMeters),
+      onDebugToggle: (visible) => setDebugInstrumentationVisible(this.panel, this.performanceStats, visible),
     });
   }
 
@@ -420,11 +423,15 @@ export class FleetScene {
     this.buildingGroup.visible = visibility.buildingsVisible;
     this.roadGroup.visible = visibility.roadsVisible;
     this.treeGroup.visible = visibility.treesVisible;
-    this.grid.visible = visibility.gridVisible;
   }
 
-  /** Rebuilds the grid's line geometry at a new spacing (meters), disposing the old geometry. */
+  /** Rebuilds the grid's line geometry at a new spacing (meters); 0 is the slider's Off tick and hides the grid. */
   private setGridSpacing(spacingMeters: number): void {
+    this.grid.visible = spacingMeters > 0;
+    if (spacingMeters === 0) {
+      // Keep the last-built geometry; buildGridGeometry requires spacing > 0.
+      return;
+    }
     this.grid.geometry.dispose();
     this.grid.geometry = buildGridGeometry(this.gridBounds, spacingMeters);
   }
@@ -478,12 +485,14 @@ export class FleetScene {
     this.updateLabels();
     this.renderer.render(this.scene, this.camera);
     this.updateHudStats();
-    updateReadoutPanels(this.readouts, {
-      simTimeSeconds: this.lastFrame?.simTimeSeconds ?? this.elapsedSeconds,
-      cameraPosition: this.camera.position,
-      cameraTarget: this.controls.target,
-      telemetry: this.telemetrySource?.debugReadout() ?? null,
-    });
+    // The debug rows' per-frame DOM writes are skipped while hidden, not just invisible.
+    if (this.params.debugVisible) {
+      updateDebugReadoutPanels(this.readouts, {
+        cameraPosition: this.camera.position,
+        cameraTarget: this.controls.target,
+        telemetry: this.telemetrySource?.debugReadout() ?? null,
+      });
+    }
     this.performanceStats.end();
   };
 
@@ -569,6 +578,7 @@ export class FleetScene {
   private updateHudStats(): void {
     const frame = this.lastFrame;
     updateHud(this.hud, {
+      simTimeSeconds: frame?.simTimeSeconds ?? this.elapsedSeconds,
       running: this.params.running,
       speed: this.getSimulationSpeed(),
       activeCount: frame?.activeCount ?? 0,

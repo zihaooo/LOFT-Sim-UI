@@ -2,10 +2,9 @@ import * as THREE from "three";
 import Stats from "stats.js";
 import type { SceneData } from "../types";
 import type { TelemetryDebugReadout } from "../fleet/source";
-import { STATS_PANEL_LEFT_PX, STATS_PANEL_TOP_PX, STATS_PANEL_Z_INDEX, SUPPORTED_VEHICLE_TYPE_NAMES, type CnsSiteType } from "../constant";
+import { SUPPORTED_VEHICLE_TYPE_NAMES, type CnsSiteType } from "../constant";
 
 export type ReadoutPanels = {
-  simulationClockValue: HTMLElement;
   sceneCorridorsValue: HTMLElement;
   sceneRoutesValue: HTMLElement;
   sceneVertiportsValue: HTMLElement;
@@ -26,30 +25,28 @@ export type ReadoutPanels = {
   telemetryErrorValue: HTMLElement;
 };
 
-/** Mounts the stats.js FPS panel above the scene host with the configured offsets. */
+/** Mounts the stats.js FPS panel above the scene host; the .stats-panel stylesheet rules position it. */
 export function mountStatsPanel(host: HTMLElement, performanceStats: Stats): void {
   performanceStats.showPanel(0);
+  // stats.js hardcodes fixed top-left placement as inline styles, which would beat any stylesheet
+  // rule. Strip them so .stats-panel (and its mobile breakpoint override) governs the position.
+  for (const property of ["position", "top", "left", "z-index"]) {
+    performanceStats.dom.style.removeProperty(property);
+  }
   performanceStats.dom.classList.add("stats-panel");
-  Object.assign(performanceStats.dom.style, {
-    position: "absolute",
-    top: STATS_PANEL_TOP_PX,
-    left: STATS_PANEL_LEFT_PX,
-    zIndex: STATS_PANEL_Z_INDEX,
-  });
   host.parentElement?.appendChild(performanceStats.dom);
 }
 
-/** Builds the simulation and debug readout DOM into the control panel and returns their value nodes. */
-export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
-  const simulationPanel = document.createElement("section");
-  simulationPanel.className = "control-readout";
-  simulationPanel.innerHTML = `
-      <div class="control-readout__title">Simulation Clock</div>
-      <div class="control-readout__value" data-readout="simulation-clock">00:00:00.0</div>
-    `;
+/** Applies the "Debug" toggle: hides the FPS panel and the readout sections (all of which are debug). */
+export function setDebugInstrumentationVisible(panel: HTMLElement, performanceStats: Stats, visible: boolean): void {
+  panel.classList.toggle("control-panel--debug-hidden", !visible);
+  performanceStats.dom.style.display = visible ? "" : "none";
+}
 
+/** Builds the debug readout DOM into the control panel and returns their value nodes. */
+export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
   const sceneDebugPanel = document.createElement("section");
-  sceneDebugPanel.className = "control-readout control-readout--debug";
+  sceneDebugPanel.className = "control-readout";
   sceneDebugPanel.innerHTML = `
       <div class="control-readout__title">Scene Debug</div>
       <div class="control-readout__row">
@@ -91,7 +88,7 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
     `;
 
   const cameraDebugPanel = document.createElement("section");
-  cameraDebugPanel.className = "control-readout control-readout--debug";
+  cameraDebugPanel.className = "control-readout";
   cameraDebugPanel.innerHTML = `
       <div class="control-readout__title">Camera Debug</div>
       <div class="control-readout__row">
@@ -105,7 +102,7 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
     `;
 
   const telemetryDebugPanel = document.createElement("section");
-  telemetryDebugPanel.className = "control-readout control-readout--debug";
+  telemetryDebugPanel.className = "control-readout";
   telemetryDebugPanel.innerHTML = `
       <div class="control-readout__title">Telemetry Debug</div>
       <div class="control-readout__row">
@@ -138,10 +135,9 @@ export function createReadoutPanels(panel: HTMLElement): ReadoutPanels {
       </div>
     `;
 
-  panel.append(simulationPanel, sceneDebugPanel, cameraDebugPanel, telemetryDebugPanel);
+  panel.append(sceneDebugPanel, cameraDebugPanel, telemetryDebugPanel);
 
   return {
-    simulationClockValue: requireReadout(simulationPanel, "simulation-clock"),
     sceneCorridorsValue: requireReadout(sceneDebugPanel, "scene-corridors"),
     sceneRoutesValue: requireReadout(sceneDebugPanel, "scene-routes"),
     sceneVertiportsValue: requireReadout(sceneDebugPanel, "scene-vertiports"),
@@ -182,18 +178,16 @@ function formatCnsSiteCounts(sites: SceneData["sites"]): string {
   return `${countOf("comm_site")}/${countOf("nav_site")}/${countOf("surv_site")}`;
 }
 
-/** Live state the per-frame readout refresh consumes. */
-export type ReadoutUpdate = {
-  simTimeSeconds: number;
+/** Live state the per-frame debug readout refresh consumes. */
+export type DebugReadoutUpdate = {
   cameraPosition: THREE.Vector3;
   cameraTarget: THREE.Vector3;
   /** Transport stats from the telemetry source, or null when no telemetry is configured. */
   telemetry: TelemetryDebugReadout | null;
 };
 
-/** Refreshes the live readouts — simulation clock, camera pose, telemetry transport — each frame. */
-export function updateReadoutPanels(panels: ReadoutPanels, update: ReadoutUpdate): void {
-  panels.simulationClockValue.textContent = formatSimulationTime(update.simTimeSeconds);
+/** Refreshes the camera and telemetry debug readouts; callers skip this while the Debug toggle is off. */
+export function updateDebugReadoutPanels(panels: ReadoutPanels, update: DebugReadoutUpdate): void {
   panels.cameraPositionValue.textContent = formatVector(update.cameraPosition);
   panels.cameraLookAtValue.textContent = formatVector(update.cameraTarget);
   panels.telemetryConnectionValue.textContent = update.telemetry?.connection ?? "disabled";
@@ -205,24 +199,9 @@ export function updateReadoutPanels(panels: ReadoutPanels, update: ReadoutUpdate
   panels.telemetryErrorValue.textContent = update.telemetry?.error ?? "-";
 }
 
-/** Formats elapsed seconds as HH:MM:SS.t for the simulation clock readout. */
-function formatSimulationTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const wholeSeconds = Math.floor(seconds % 60);
-  const tenths = Math.floor((seconds % 1) * 10);
-
-  return `${pad2(hours)}:${pad2(minutes)}:${pad2(wholeSeconds)}.${tenths}`;
-}
-
 /** Pretty-prints a Vector3 as `(x ##, y ##, z ##)` for the camera debug readouts. */
 function formatVector(vector: THREE.Vector3): string {
   return `(${vector.x.toFixed(1)}, ${vector.y.toFixed(1)}, ${vector.z.toFixed(1)})`;
-}
-
-/** Left-pads an integer to 2 digits with a leading zero for clock formatting. */
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
 }
 
 /** Looks up a `[data-readout="..."]` value node in a panel and throws if it's missing. */

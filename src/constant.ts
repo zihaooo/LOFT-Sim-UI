@@ -130,8 +130,10 @@ export const GROUND_SEGMENTS = 24;
 export const GRID_COLOR = "#9da79b";
 export const GRID_Y_OFFSET_METERS = 0.04;
 export const GRID_OPACITY = 0.4;
-// Selectable grid-line spacings (meters) for the "Grid Size" slider; the initial pick is bbox-derived.
-export const GRID_SPACING_TICKS = [100, 200, 500, 1000, 2000, 5000, 10_000] as const;
+// Selectable grid-line spacings (meters) for the "Grid Size" slider. Spacing 0 is the "Off" tick:
+// it hides the grid layer entirely, replacing a separate visibility toggle. The initial pick is
+// bbox-derived and never Off.
+export const GRID_SPACING_TICKS = [0, 100, 200, 500, 1000, 2000, 5000, 10_000] as const;
 // Target number of grid cells across the scene's longest dimension when choosing the initial spacing.
 export const GRID_TARGET_CELL_COUNT = 15;
 
@@ -306,6 +308,3 @@ export const TELEMETRY_UAV_MESH_CAPACITY = 10_000;
 
 // Labels and readouts
 export const LABEL_SCREEN_Y_OFFSET_METERS = 16;
-export const STATS_PANEL_TOP_PX = "24px";
-export const STATS_PANEL_LEFT_PX = "24px";
-export const STATS_PANEL_Z_INDEX = "2";

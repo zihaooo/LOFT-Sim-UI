@@ -25,7 +25,7 @@ export function createBuildingGeometry(building: BuildingFootprint): THREE.Buffe
   return geometry;
 }
 
-/** Builds the grid's line-segment geometry: horizontal/vertical lines at `spacing` meters covering the scene bounds. */
+/** Builds the grid's line-segment geometry: horizontal/vertical lines at `spacing` meters (must be > 0) covering the scene bounds. */
 export function buildGridGeometry(bounds: SceneBounds, spacing: number): THREE.BufferGeometry {
   const positions: number[] = [];
   const y = GRID_Y_OFFSET_METERS;
@@ -48,13 +48,17 @@ export function buildGridGeometry(bounds: SceneBounds, spacing: number): THREE.B
 /**
  * Picks the initial "Grid Size" tick index from the scene bounds: the tick whose spacing lands nearest
  * to longestDimension / GRID_TARGET_CELL_COUNT. Choosing the nearest tick in the fixed array inherently
- * clamps both ends (tiny scenes get the smallest tick, huge scenes the largest).
+ * clamps both ends (tiny scenes get the smallest visible tick, huge scenes the largest). The Off tick
+ * (spacing 0) is a user choice only — the grid always starts visible.
  */
 export function initialGridSpacingIndex(bounds: SceneBounds): number {
   const target = Math.max(bounds.width, bounds.depth) / GRID_TARGET_CELL_COUNT;
   let bestIndex = 0;
   let bestDelta = Infinity;
   GRID_SPACING_TICKS.forEach((tick, index) => {
+    if (tick === 0) {
+      return;
+    }
     const delta = Math.abs(tick - target);
     if (delta < bestDelta) {
       bestDelta = delta;

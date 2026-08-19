@@ -18,9 +18,13 @@ describe("initialGridSpacingIndex", () => {
     expect(initialGridSpacingIndex(boundsOf(1_000, 7_500))).toBe(initialGridSpacingIndex(boundsOf(7_500, 1_000)));
   });
 
-  it("clamps to the smallest tick for tiny scenes", () => {
-    expect(initialGridSpacingIndex(boundsOf(750, 500))).toBe(0);
+  it("clamps to the smallest visible tick for tiny scenes", () => {
     expect(GRID_SPACING_TICKS[initialGridSpacingIndex(boundsOf(750, 500))]).toBe(100);
+  });
+
+  it("never picks the Off tick, even when 0 is the numerically nearest spacing", () => {
+    // target = 300 / 15 = 20 m, closer to the 0 (Off) tick than to 100 m.
+    expect(GRID_SPACING_TICKS[initialGridSpacingIndex(boundsOf(300, 200))]).toBe(100);
   });
 
   it("clamps to the largest tick for huge scenes", () => {

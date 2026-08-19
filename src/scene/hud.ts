@@ -2,6 +2,7 @@ import type { FleetStats, SelectedUavDetail } from "../fleet/source";
 
 /** Value nodes in the HUD stats block, updated in place each frame by updateHud(). */
 export type HudRefs = {
+  clockValue: HTMLElement;
   statusValue: HTMLElement;
   speedValue: HTMLElement;
   uavsValue: HTMLElement;
@@ -23,6 +24,8 @@ export type HudRefs = {
 
 /** Simulation-facing state the HUD renders each frame. */
 export type HudState = {
+  /** Elapsed simulation time (seconds), shown as the HH:MM:SS.t clock. */
+  simTimeSeconds: number;
   running: boolean;
   speed: number;
   activeCount: number;
@@ -46,6 +49,9 @@ export function createHud(host: HTMLElement): HudRefs {
   host.innerHTML = `
       <div class="hud-section">
         <div class="hud-section__title">Sim</div>
+        <div class="hud-line">
+          <span class="hud-field">Time: <span class="hud-value hud-num" data-hud="clock">00:00:00.0</span></span>
+        </div>
         <div class="hud-line">
           <span class="hud-field">Status: <span class="hud-value hud-value--status is-paused" data-hud="status">Paused</span></span>
           <span class="hud-sep" aria-hidden="true">|</span>
@@ -100,6 +106,7 @@ export function createHud(host: HTMLElement): HudRefs {
     `;
 
   return {
+    clockValue: requireHudNode(host, "clock"),
     statusValue: requireHudNode(host, "status"),
     speedValue: requireHudNode(host, "speed"),
     uavsValue: requireHudNode(host, "uavs"),
@@ -121,6 +128,8 @@ export function createHud(host: HTMLElement): HudRefs {
 
 /** Writes the current simulation state into the HUD value nodes. Called every frame; no dirty-checking. */
 export function updateHud(refs: HudRefs, state: HudState): void {
+  refs.clockValue.textContent = formatSimulationTime(state.simTimeSeconds);
+
   refs.statusValue.textContent = state.running ? "Playing" : "Paused";
   refs.statusValue.classList.toggle("is-playing", state.running);
   refs.statusValue.classList.toggle("is-paused", !state.running);
@@ -155,6 +164,21 @@ export function updateHud(refs: HudRefs, state: HudState): void {
     refs.fleetArrivedValue,
     stats && `${stats.arrivedCount.toLocaleString()} / ${stats.spawnedCount.toLocaleString()} spawned`,
   );
+}
+
+/** Formats elapsed seconds as HH:MM:SS.t for the simulation clock line. */
+function formatSimulationTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const wholeSeconds = Math.floor(seconds % 60);
+  const tenths = Math.floor((seconds % 1) * 10);
+
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(wholeSeconds)}.${tenths}`;
+}
+
+/** Left-pads an integer to 2 digits with a leading zero for clock formatting. */
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
 /** Writes a value node, falling back to a dimmed em dash when the value is unavailable. */

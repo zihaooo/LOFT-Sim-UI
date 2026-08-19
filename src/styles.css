@@ -106,7 +106,7 @@ select {
 .hud {
   position: absolute;
   left: 24px;
-  bottom: 24px;
+  top: 24px;
   z-index: 2;
   max-width: min(520px, calc(100vw - 380px));
   padding: 14px 16px;
@@ -196,6 +196,14 @@ select {
 
 .hud-value.is-empty {
   color: rgba(246, 251, 255, 0.4);
+}
+
+/* stats.js FPS meter; its hardcoded inline placement is stripped at mount so these rules govern. */
+.stats-panel {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  z-index: 2;
 }
 
 .help-panel {
@@ -357,8 +365,9 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-.control-readout--debug {
-  margin-top: 10px;
+/* Set by the "Debug" checkbox: every readout section is debug instrumentation. */
+.control-panel--debug-hidden .control-readout {
+  display: none;
 }
 
 .control-readout__title {
@@ -366,13 +375,6 @@ select {
   color: rgba(246, 251, 255, 0.95);
   font-weight: 800;
   line-height: 1;
-}
-
-.control-readout__value {
-  color: #f6fbff;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.1;
 }
 
 .control-readout__row {
@@ -426,13 +428,17 @@ select {
     overflow-wrap: anywhere;
   }
 
+  /* Narrow screens invert the desktop corners: the top strip belongs to the control panel,
+     so the HUD returns to the bottom and the FPS meter takes the freed top-left. */
   .hud {
+    top: auto;
     bottom: 12px;
   }
 
   .stats-panel {
     top: 12px;
     left: 12px;
+    bottom: auto;
   }
 
   .help-panel {
