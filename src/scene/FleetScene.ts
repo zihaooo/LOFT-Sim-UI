@@ -64,9 +64,6 @@ export { loadUavModels, cloneUavModels } from "../geometry/drone";
 export type { UavModel } from "../geometry/drone";
 export { loadGroundIconTextures } from "../geometry/groundIcon";
 
-/** Empty scene rendered once before shader warmup to prime the renderer's clipping state (see prepare). */
-const WARMUP_SCENE = new THREE.Scene();
-
 type FleetSceneOptions = {
   host: HTMLDivElement;
   panel: HTMLDivElement;
@@ -243,26 +240,6 @@ export class FleetScene {
     this.buildScene();
     mountStatsPanel(this.host, this.performanceStats);
     this.resize();
-  }
-
-  /**
-   * Warms every shader program the scene needs before the first visible frame. With the
-   * KHR_parallel_shader_compile extension the driver compiles programs on background threads while
-   * this promise polls their completion, so the main thread (and the loading spinner) stays live and
-   * the programs compile concurrently instead of serially blocking inside the first render. Without
-   * the extension it degrades to a synchronous compile — no worse than compiling on first use.
-   * Callers await this between construction and start().
-   */
-  async prepare(): Promise<void> {
-    if (this.disposed) {
-      return;
-    }
-    // compile() snapshots whatever clipping state the renderer last rendered with — three initializes
-    // that state only inside render() — so an empty-scene render first primes the global ground-plane
-    // count into the program parameters. Without it, every warmed program is a no-clipping variant
-    // that the first real frame discards and recompiles serially.
-    this.renderer.render(WARMUP_SCENE, this.camera);
-    await this.renderer.compileAsync(this.scene, this.camera);
   }
 
   /** Registers window/canvas event listeners and kicks off the render loop. */
